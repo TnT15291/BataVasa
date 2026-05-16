@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Remove-Item -Path 'd:\\\\Claude\\\\BataVasa\\\\skills\\\\' -Recurse -Force -Confirm:$false)",
+      "PowerShell(Get-ChildItem -Path 'd:\\\\Claude\\\\BataVasa\\\\' -Recurse -File | Where-Object { $_.Extension -eq '.md' -or $_.Name -eq 'CLAUDE.md' } | Select-Object FullName, Length | Format-Table -AutoSize)",
+      "Bash(ls \"d:\\\\Claude\\\\BataVasa\\\\\")",
+      "Read(//d/Claude/**)",
+      "PowerShell(npx --yes create-expo-app@latest _init --template blank-typescript --no-install)",
+      "PowerShell(Move-Item -Destination 'd:\\\\Claude\\\\BataVasa\\\\' -Force)",
+      "PowerShell(npm install --silent 2>&1)",
+      "PowerShell(if \\(Test-Path 'd:\\\\Claude\\\\BataVasa\\\\node_modules\\\\expo'\\) { Write-Output \"expo installed: $\\(\\(Get-Item 'd:\\\\Claude\\\\BataVasa\\\\node_modules\\\\expo\\\\package.json' | Get-Content | ConvertFrom-Json\\).version\\)\" } else { Write-Output \"expo NOT installed\" })",
+      "PowerShell(npx expo install expo-sqlite expo-secure-store expo-router expo-linking expo-constants react-native-safe-area-context react-native-screens react-native-gesture-handler react-native-reanimated zustand zod @shopify/flash-list date-fns 2>&1)",
+      "PowerShell(npx tsc --noEmit 2>&1)",
+      "PowerShell(npx tsc --noEmit; Write-Output \"EXIT=$LASTEXITCODE\")",
+      "PowerShell(npx expo start --port 8082 2>&1)",
+      "Bash(curl -s -o /dev/null -w \"HTTP=%{http_code} TIME=%{time_total}s\\\\n\" \"http://localhost:8082/index.bundle?platform=android&dev=true&minify=false\" --max-time 90)",
+      "Bash(curl -s -w \"\\\\nHTTP=%{http_code}\\\\n\" \"http://localhost:8082/\" --max-time 10)",
+      "Bash(curl -s -w \"\\\\nHTTP=%{http_code} TIME=%{time_total}s\\\\n\" -o /tmp/bundle-out.txt \"http://localhost:8082/node_modules/expo-router/entry.bundle?platform=android&dev=true&minify=false&modulesOnly=false&runModule=true\" --max-time 120)",
+      "Read(//tmp/**)"
+    ]
+  }
+}
