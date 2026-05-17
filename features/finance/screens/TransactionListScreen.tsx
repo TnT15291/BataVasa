@@ -23,6 +23,19 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 
 type Period = 'today' | 'week' | 'month' | 'all'
+type CurrencyTotals = { income: number; expense: number }
+type PeriodTotals = Map<string, CurrencyTotals>
+
+function emptyTotals(): PeriodTotals {
+  return new Map()
+}
+
+function addToTotals(totals: PeriodTotals, currency: string, signedCents: number) {
+  const entry = totals.get(currency) ?? { income: 0, expense: 0 }
+  if (signedCents > 0) entry.income += signedCents
+  else entry.expense += Math.abs(signedCents)
+  totals.set(currency, entry)
+}
 
 export function TransactionListScreen() {
   useFinanceBootstrap()
@@ -47,28 +60,25 @@ export function TransactionListScreen() {
   }, [])
 
   const totals = useMemo(() => {
-    const acc = {
-      today: { income: 0, expense: 0 },
-      week: { income: 0, expense: 0 },
-      month: { income: 0, expense: 0 },
-      all: { income: 0, expense: 0 },
+    const acc: Record<Period, PeriodTotals> = {
+      today: emptyTotals(),
+      week: emptyTotals(),
+      month: emptyTotals(),
+      all: emptyTotals(),
     }
     for (const tx of txs) {
       const d = new Date(tx.occurred_at)
-      const isIncome = tx.amount_cents > 0
-      const abs = Math.abs(tx.amount_cents)
-      const key = isIncome ? 'income' : 'expense'
-
+      const cur = tx.currency
       if (d >= ranges.month.from && d <= ranges.month.to) {
-        acc.month[key] += abs
+        addToTotals(acc.month, cur, tx.amount_cents)
         if (d >= ranges.week.from && d <= ranges.week.to) {
-          acc.week[key] += abs
+          addToTotals(acc.week, cur, tx.amount_cents)
           if (d >= ranges.today.from && d <= ranges.today.to) {
-            acc.today[key] += abs
+            addToTotals(acc.today, cur, tx.amount_cents)
           }
         }
       }
-      acc.all[key] += abs
+      addToTotals(acc.all, cur, tx.amount_cents)
     }
     return acc
   }, [txs, ranges])
@@ -131,17 +141,27 @@ export function TransactionListScreen() {
                 </Text>
               </View>
               <View style={styles.periodAmounts}>
-                <AmountText
-                  cents={data.income}
-                  showSign={false}
-                  style={{ color: theme.finance.income, fontSize: 13 }}
-                />
-                <Text style={{ color: theme.text.muted, fontSize: 12 }}>·</Text>
-                <AmountText
-                  cents={data.expense}
-                  showSign={false}
-                  style={{ color: theme.finance.expense, fontSize: 13 }}
-                />
+                {data.size === 0 ? (
+                  <Text style={{ color: theme.text.muted, fontSize: 13 }}>—</Text>
+                ) : (
+                  Array.from(data.entries()).map(([cur, td]) => (
+                    <View key={cur} style={styles.periodCurrencyLine}>
+                      <AmountText
+                        cents={td.income}
+                        currency={cur}
+                        showSign={false}
+                        style={{ color: theme.finance.income, fontSize: 13 }}
+                      />
+                      <Text style={{ color: theme.text.muted, fontSize: 12 }}>·</Text>
+                      <AmountText
+                        cents={td.expense}
+                        currency={cur}
+                        showSign={false}
+                        style={{ color: theme.finance.expense, fontSize: 13 }}
+                      />
+                    </View>
+                  ))
+                )}
               </View>
             </Pressable>
           )
@@ -221,7 +241,8 @@ const styles = StyleSheet.create({
   },
   periodLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   periodDot: { width: 8, height: 8, borderRadius: radius.full },
-  periodAmounts: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  periodAmounts: { flexDirection: 'column', alignItems: 'flex-end', gap: spacing[1] },
+  periodCurrencyLine: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   aiRow: {
     flexDirection: 'row',
     gap: spacing[2],

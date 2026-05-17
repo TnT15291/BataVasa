@@ -160,4 +160,6 @@ export const en: Translations = {
   ai_confirm_cancel: 'Cancel',
   ai_auto_confirm: 'Confirm AI parses',
   ai_auto_confirm_hint: 'Show a confirmation sheet after AI parses. Turn off to save directly (voice always confirms).',
+
+  currency_hint: 'Applies to new transactions only. Existing transactions keep their original currency.',
 }

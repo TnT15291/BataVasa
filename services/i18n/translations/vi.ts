@@ -174,6 +174,9 @@ export const vi = {
   ai_confirm_cancel: 'Hủy',
   ai_auto_confirm: 'Xác nhận trước khi lưu (AI)',
   ai_auto_confirm_hint: 'Hiện hộp xác nhận sau khi AI phân tích. Tắt để lưu trực tiếp (giọng nói luôn xác nhận).',
+
+  // Currency
+  currency_hint: 'Chỉ áp dụng cho giao dịch mới. Giao dịch cũ giữ nguyên đơn vị tiền tệ ban đầu.',
 }
 
 export type Translations = typeof vi

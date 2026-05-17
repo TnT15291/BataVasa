@@ -160,4 +160,6 @@ export const zh: Translations = {
   ai_confirm_cancel: '取消',
   ai_auto_confirm: '确认 AI 解析',
   ai_auto_confirm_hint: 'AI 解析后显示确认表单。关闭后直接保存（语音输入始终确认）。',
+
+  currency_hint: '仅适用于新交易。现有交易保留其原始货币。',
 }

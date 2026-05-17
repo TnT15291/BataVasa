@@ -25,6 +25,8 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
 import { generateReport, type ReportType } from '@services/ai/reports'
+import { getDateFnsLocale } from '@services/locale'
+import { useSettingsStore } from '@store/settingsStore'
 
 type Period = ReportType
 
@@ -58,6 +60,8 @@ export function ReportsScreen() {
   const { t } = useTranslation()
   const allTxs = useTransactions()
   const cats = useCategories()
+  const language = useSettingsStore((s) => s.language)
+  const dfLocale = getDateFnsLocale(language)
 
   const [period, setPeriod] = useState<Period>('monthly')
   const [anchorDate, setAnchorDate] = useState(new Date())
@@ -76,24 +80,28 @@ export function ReportsScreen() {
     if (period === 'weekly') {
       const from = startOfWeek(anchorDate, { weekStartsOn: 1 })
       const to = endOfWeek(anchorDate, { weekStartsOn: 1 })
-      return { from, to, label: `${format(from, 'dd/MM')} – ${format(to, 'dd/MM/yyyy')}` }
+      return {
+        from,
+        to,
+        label: `${format(from, 'dd/MM', { locale: dfLocale })} – ${format(to, 'dd/MM/yyyy', { locale: dfLocale })}`,
+      }
     }
     if (period === 'monthly') {
       const from = startOfMonth(anchorDate)
       const to = endOfMonth(anchorDate)
-      return { from, to, label: format(anchorDate, 'MMMM yyyy') }
+      return { from, to, label: format(anchorDate, 'MMMM yyyy', { locale: dfLocale }) }
     }
     if (period === 'yearly') {
       const from = startOfYear(anchorDate)
       const to = endOfYear(anchorDate)
-      return { from, to, label: format(anchorDate, 'yyyy') }
+      return { from, to, label: format(anchorDate, 'yyyy', { locale: dfLocale }) }
     }
     // custom
     const from = parseISO(customFrom)
     const to = parseISO(customTo)
     if (!isValid(from) || !isValid(to) || from > to) return null
     return { from, to, label: `${customFrom} – ${customTo}` }
-  }, [period, anchorDate, customFrom, customTo])
+  }, [period, anchorDate, customFrom, customTo, dfLocale])
 
   const navigate = (dir: 1 | -1) => {
     setReport(null)

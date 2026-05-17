@@ -160,4 +160,6 @@ export const ja: Translations = {
   ai_confirm_cancel: 'キャンセル',
   ai_auto_confirm: 'AI 解析を確認',
   ai_auto_confirm_hint: 'AI が解析した後に確認シートを表示します。オフにすると直接保存します（音声入力は常に確認）。',
+
+  currency_hint: '新しい取引にのみ適用されます。既存の取引は元の通貨を保持します。',
 }

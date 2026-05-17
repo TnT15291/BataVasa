@@ -160,4 +160,6 @@ export const ko: Translations = {
   ai_confirm_cancel: '취소',
   ai_auto_confirm: 'AI 분석 확인',
   ai_auto_confirm_hint: 'AI 분석 후 확인 시트를 표시합니다. 끄면 바로 저장합니다 (음성은 항상 확인).',
+
+  currency_hint: '새 거래에만 적용됩니다. 기존 거래는 원래 통화를 유지합니다.',
 }

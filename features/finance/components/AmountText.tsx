@@ -13,6 +13,7 @@ type Props = {
 export function AmountText({ cents, currency, showSign = true, style }: Props) {
   const theme = useTheme()
   const storeCurrency = useSettingsStore((s) => s.currency)
+  const language = useSettingsStore((s) => s.language)
   const c = currency ?? storeCurrency
   const isExpense = cents < 0
   const color = showSign
@@ -24,7 +25,7 @@ export function AmountText({ cents, currency, showSign = true, style }: Props) {
   return (
     <Text style={[{ color, fontVariant: ['tabular-nums'], fontWeight: '600' }, style]}>
       {prefix}
-      {formatAmount(cents, c)}
+      {formatAmount(cents, c, language)}
     </Text>
   )
 }

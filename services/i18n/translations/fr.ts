@@ -160,4 +160,6 @@ export const fr: Translations = {
   ai_confirm_cancel: 'Annuler',
   ai_auto_confirm: 'Confirmer l\'analyse IA',
   ai_auto_confirm_hint: 'Affiche une feuille de confirmation après l\'analyse IA. Désactivez pour enregistrer directement (la voix confirme toujours).',
+
+  currency_hint: 'S\'applique uniquement aux nouvelles transactions. Les transactions existantes conservent leur devise d\'origine.',
 }

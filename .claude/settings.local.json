@@ -42,7 +42,10 @@
       "Bash(git -C \"d:/Claude/BataVasa\" diff --stat)",
       "Bash(git -C \"d:/Claude/BataVasa\" log --oneline -10)",
       "Bash(git -C \"d:/Claude/BataVasa\" add CLAUDE.md app.json app/ database/ docs/ features/ services/ store/ components/ package.json package-lock.json .claude/settings.local.json)",
-      "Bash(git -C \"d:/Claude/BataVasa\" status --short)"
+      "Bash(git -C \"d:/Claude/BataVasa\" status --short)",
+      "Bash(git -C d:/Claude/BataVasa commit -m ' *)",
+      "Bash(git -C \"d:/Claude/BataVasa\" push)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 30; Write-Output \"EXIT=$LASTEXITCODE\")"
     ]
   }
 }

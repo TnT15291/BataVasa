@@ -33,6 +33,7 @@ import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySh
 import { translateCategoryName } from '../i18n'
 import { formatAmount } from '../services'
 import { format as formatDate } from 'date-fns'
+import { getDateFnsLocale } from '@services/locale'
 
 type Direction = 'expense' | 'income'
 
@@ -42,6 +43,7 @@ export function QuickAddScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const currency = useSettingsStore((s) => s.currency)
+  const language = useSettingsStore((s) => s.language)
   const locationAccess = useSettingsStore((s) => s.locationAccess)
   const categories = useCategories()
   const allTxs = useTransactions()
@@ -167,10 +169,15 @@ export function QuickAddScreen() {
         const fields: ConfirmField[] = [
           {
             label: parsed.direction === 'income' ? t.income : t.expense,
-            value: formatAmount(parsed.amount_cents, currency),
+            value: formatAmount(parsed.amount_cents, currency, language),
           },
           { label: t.category, value: translateCategoryName(fallbackCat, t) },
-          { label: t.date, value: formatDate(payload.occurredAt, 'EEE, dd MMM yyyy · HH:mm') },
+          {
+            label: t.date,
+            value: formatDate(payload.occurredAt, 'EEE, dd MMM yyyy · HH:mm', {
+              locale: getDateFnsLocale(language),
+            }),
+          },
         ]
         if (payload.merchant) fields.push({ label: t.merchant_optional.replace(/\s*\(.+\)/, ''), value: payload.merchant })
         if (payload.note) fields.push({ label: t.note_optional.replace(/\s*\(.+\)/, ''), value: payload.note })

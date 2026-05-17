@@ -165,12 +165,22 @@ export function isExpense(tx: Pick<Transaction, 'amount_cents'>): boolean {
   return tx.amount_cents < 0
 }
 
-export function formatAmount(cents: number, currency = 'VND'): string {
+import { getIntlLocale } from '@services/locale'
+
+// Format amount for display. `language` controls digit grouping & currency symbol placement
+// (e.g. fr: "1 234,56 €" vs en: "$1,234.56"). Defaults to 'en' if not provided.
+export function formatAmount(cents: number, currency = 'VND', language = 'en'): string {
   const abs = Math.abs(cents)
+  const locale = getIntlLocale(language)
+  // VND and other no-minor-unit currencies: integer amount, append symbol manually
+  // because some browsers' Intl.NumberFormat for VND adds odd spacing.
   if (currency === 'VND') {
-    return new Intl.NumberFormat('vi-VN').format(abs) + ' ₫'
+    return new Intl.NumberFormat(locale).format(abs) + ' ₫'
   }
-  return new Intl.NumberFormat('en-US', {
+  if (currency === 'JPY' || currency === 'KRW') {
+    return new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 0 }).format(abs)
+  }
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,

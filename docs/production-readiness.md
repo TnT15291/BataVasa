@@ -27,9 +27,8 @@
 - [ ] **H6. Smart Entry matching yếu** 🔁 cross-module (Rule 3) — nếu AI trả tên VN thay vì EN seed, match silent fail → category không set
   - Vị trí: `features/finance/screens/QuickAddScreen.tsx:73`
 - [ ] **H7. Date parser cho Smart Entry chưa làm** 🔁 cross-module (Rule 4) · `services/dateParser.ts` (chưa có)
-- [ ] **H8. Hardcoded English locale trong DateRow** 🔁 cross-module (Rule 2 extended) · `docs/design-system.md#locale-sensitive-formatters`
-  - Vị trí: `components/DateRow.tsx:25`
-- [ ] **H9. `formatAmount()` hardcode `vi-VN` locale** 🔁 cross-module (Rule 2 extended) · `services/locale.ts` (cần helper `getIntlLocale(language)`)
+- [x] **H8. Locale-aware DateRow — DONE 2026-05-18** — `services/locale.ts` thêm `getDateFnsLocale()`. DateRow + ReportsScreen + QuickAddScreen confirm sheet đều dùng locale từ `settingsStore.language`
+- [x] **H9. Locale-aware formatAmount — DONE 2026-05-18** — `services/locale.ts` thêm `getIntlLocale()`. `formatAmount(cents, currency, language)` + AmountText pass language. JPY/KRW thêm fractionDigits handling. `fmtAI()` cũng fix toLocaleString
 - [ ] **H10. Không có pagination** 🔁 cross-module · `docs/database.md#pagination` — default limit=100, UI fetch hết. >100 tx silent truncate
 - [x] **H11. Error Boundary spec'd** 🔁 cross-module (Rule 8) · `docs/architecture.md#rule-8` — chưa implement nhưng đã có quy chuẩn
 - [ ] **H12. Web SQLite không persist với Firefox** 🔁 cross-module · `docs/database.md#web-fallback` — đã document banner advice
@@ -54,6 +53,7 @@
 - [ ] **M26.** Không có loading state nhiều chỗ 🔁 cross-module · `docs/design-system.md#loading-empty-error-states`
 - [ ] **M27.** Sentry/PostHog chưa wire 🔁 cross-module (Rule 8) · `docs/architecture.md#rule-8`
 - [ ] **M28.** `wipeAllData` không có sync tombstone 🔁 cross-module (Rule 1) — đợi sync engine
+- [ ] **M29.** FX conversion (multi-currency reporting) — finance-specific. Hiện tại: mỗi tx hiện bằng currency của nó, summary group by currency (Option A). Future: tích hợp FX API (exchangerate.host / frankfurter.app) + cache + offline fallback → cho phép summary 1 currency duy nhất. Cần Settings tách "Display currency" vs "Default for new entries"
 
 ---
 

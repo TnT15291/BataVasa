@@ -4,6 +4,8 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { useTranslation } from '@services/i18n'
+import { getDateFnsLocale } from '@services/locale'
+import { useSettingsStore } from '@store/settingsStore'
 import { spacing, radius } from '@design/tokens'
 
 type Props = {
@@ -15,11 +17,12 @@ type Props = {
 export function DateRow({ value, onChange, label }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
+  const language = useSettingsStore((s) => s.language)
   const [showPicker, setShowPicker] = useState(false)
   const [mode, setMode] = useState<'date' | 'time'>('date')
 
   const displayLabel = label ?? (t as any).date ?? 'Date'
-  const formatted = format(value, 'EEE, dd MMM yyyy · HH:mm')
+  const formatted = format(value, 'EEE, dd MMM yyyy · HH:mm', { locale: getDateFnsLocale(language) })
 
   const handleNativeChange = (event: DateTimePickerEvent, selected?: Date) => {
     // Android closes the picker on selection; iOS keeps it open

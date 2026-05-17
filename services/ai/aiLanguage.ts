@@ -1,4 +1,5 @@
 import { useSettingsStore } from '@store/settingsStore'
+import { getIntlLocale } from '@services/locale'
 
 const LANGUAGE_NAMES: Record<string, string> = {
   vi: 'Vietnamese', en: 'English', zh: 'Chinese (Simplified)',
@@ -25,7 +26,9 @@ export function fmtAI(cents: number, currency: string): string {
     USD: '$', EUR: '€', GBP: '£', JPY: '¥', CNY: '¥', KRW: '₩', THB: '฿', SGD: 'S$',
   }
   const sym = SYM[currency] ?? ''
-  const formatted = amount % 1 === 0 ? amount.toLocaleString('en') : amount.toFixed(2)
+  const language = useSettingsStore.getState().language
+  const locale = getIntlLocale(language)
+  const formatted = amount % 1 === 0 ? amount.toLocaleString(locale) : amount.toFixed(2)
   return sym ? `${sym}${formatted}` : `${formatted} ${currency}`
 }
 

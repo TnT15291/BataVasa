@@ -37,6 +37,7 @@ export function CurrencyScreen() {
       contentContainerStyle={styles.container}
     >
       <Text style={[styles.subtitle, { color: theme.text.muted }]}>{t.select_currency}</Text>
+      <Text style={[styles.hint, { color: theme.text.muted }]}>{t.currency_hint}</Text>
       <View style={[styles.list, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         {CURRENCIES.map((c, i) => {
           const active = currency === c.code
@@ -71,6 +72,7 @@ export function CurrencyScreen() {
 const styles = StyleSheet.create({
   container: { padding: spacing[4], gap: spacing[3] },
   subtitle: { fontSize: 13, marginLeft: spacing[1] },
+  hint: { fontSize: 12, marginLeft: spacing[1], marginTop: -spacing[2], fontStyle: 'italic' },
   list: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
