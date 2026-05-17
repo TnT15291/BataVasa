@@ -1,6 +1,7 @@
 import { Text, type TextStyle } from 'react-native'
 import { formatAmount } from '../services'
 import { useTheme } from '@design/useTheme'
+import { useSettingsStore } from '@store/settingsStore'
 
 type Props = {
   cents: number
@@ -9,8 +10,10 @@ type Props = {
   style?: TextStyle
 }
 
-export function AmountText({ cents, currency = 'VND', showSign = true, style }: Props) {
+export function AmountText({ cents, currency, showSign = true, style }: Props) {
   const theme = useTheme()
+  const storeCurrency = useSettingsStore((s) => s.currency)
+  const c = currency ?? storeCurrency
   const isExpense = cents < 0
   const color = showSign
     ? isExpense
@@ -21,7 +24,7 @@ export function AmountText({ cents, currency = 'VND', showSign = true, style }: 
   return (
     <Text style={[{ color, fontVariant: ['tabular-nums'], fontWeight: '600' }, style]}>
       {prefix}
-      {formatAmount(cents, currency)}
+      {formatAmount(cents, c)}
     </Text>
   )
 }
