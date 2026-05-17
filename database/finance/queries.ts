@@ -8,8 +8,8 @@ export async function insertTransaction(row: TransactionRow): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO finance_transaction
-     (id, user_id, amount_cents, currency, category_id, merchant, note, occurred_at, mood, source, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, user_id, amount_cents, currency, category_id, merchant, note, occurred_at, mood, source, location_lat, location_lng, location_label, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       row.id,
       row.user_id,
@@ -21,6 +21,9 @@ export async function insertTransaction(row: TransactionRow): Promise<void> {
       row.occurred_at,
       row.mood,
       row.source,
+      row.location_lat,
+      row.location_lng,
+      row.location_label,
       row.created_at,
       row.updated_at,
     ]
@@ -105,6 +108,26 @@ export async function findDuplicateTransaction(
     [amountCents, merchant, merchant ?? '', since]
   )
   return row ?? null
+}
+
+// Hard-delete all finance data for the current user (Cross-Module Rule 1).
+// Wipes: all transactions + user-created categories. System categories stay
+// (they're seeded data, will re-show on next launch).
+// Returns count of deleted rows for confirmation toast.
+export async function wipeFinanceData(): Promise<{ transactions: number; categories: number }> {
+  const db = await getDb()
+  const txCount = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM finance_transaction'
+  )
+  const catCount = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM finance_category WHERE user_id IS NOT NULL'
+  )
+  await db.execAsync('DELETE FROM finance_transaction')
+  await db.execAsync('DELETE FROM finance_category WHERE user_id IS NOT NULL')
+  return {
+    transactions: txCount?.n ?? 0,
+    categories: catCount?.n ?? 0,
+  }
 }
 
 export async function listCategories(): Promise<CategoryRow[]> {

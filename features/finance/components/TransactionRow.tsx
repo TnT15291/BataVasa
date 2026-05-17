@@ -1,6 +1,8 @@
 import { Pressable, Text, View, StyleSheet } from 'react-native'
 import type { Transaction, Category } from '../types'
 import { AmountText } from './AmountText'
+import { translateCategoryName } from '../i18n'
+import { useTranslation } from '@services/i18n'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 
@@ -13,6 +15,8 @@ type Props = {
 
 export function TransactionRow({ tx, category, onPress, onLongPress }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
+  const displayName = category ? translateCategoryName(category, t) : '?'
   return (
     <Pressable
       onPress={onPress}
@@ -23,11 +27,11 @@ export function TransactionRow({ tx, category, onPress, onLongPress }: Props) {
       ]}
     >
       <View style={[styles.iconWrap, { backgroundColor: category?.color ?? theme.border.subtle }]}>
-        <Text style={styles.icon}>{(category?.name ?? '?').slice(0, 1).toUpperCase()}</Text>
+        <Text style={styles.icon}>{displayName.slice(0, 1).toUpperCase()}</Text>
       </View>
       <View style={styles.middle}>
         <Text style={[styles.title, { color: theme.text.primary }]} numberOfLines={1}>
-          {category?.name ?? 'Unknown'}
+          {displayName}
         </Text>
         {tx.merchant || tx.note ? (
           <Text style={[styles.sub, { color: theme.text.muted }]} numberOfLines={1}>

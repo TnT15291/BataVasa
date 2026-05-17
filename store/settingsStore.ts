@@ -14,6 +14,8 @@ type SettingsState = {
   colorMode: ColorMode
   themeName: ThemeName
   aiProvider: AIProvider
+  locationAccess: boolean
+  aiAutoConfirm: boolean
   loaded: boolean
 
   loadSettings: () => Promise<void>
@@ -22,6 +24,8 @@ type SettingsState = {
   setColorMode: (m: ColorMode) => Promise<void>
   setThemeName: (t: ThemeName) => Promise<void>
   setAIProvider: (p: AIProvider) => Promise<void>
+  setLocationAccess: (allowed: boolean) => Promise<void>
+  setAIAutoConfirm: (enabled: boolean) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -30,6 +34,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   colorMode: 'system',
   themeName: 'default',
   aiProvider: 'openai',
+  locationAccess: false,
+  aiAutoConfirm: true,
   loaded: false,
 
   async loadSettings() {
@@ -42,6 +48,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       colorMode: (all['color_mode'] as ColorMode) ?? 'system',
       themeName: (all['theme_name'] as ThemeName) ?? 'default',
       aiProvider: (all['ai_provider'] as AIProvider) ?? 'openai',
+      locationAccess: all['location_access'] === 'true',
+      // default true — only false if explicitly stored
+      aiAutoConfirm: all['ai_auto_confirm'] !== 'false',
       loaded: true,
     })
   },
@@ -71,5 +80,15 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   async setAIProvider(aiProvider) {
     set({ aiProvider })
     await db.setSetting('ai_provider', aiProvider)
+  },
+
+  async setLocationAccess(allowed) {
+    set({ locationAccess: allowed })
+    await db.setSetting('location_access', allowed ? 'true' : 'false')
+  },
+
+  async setAIAutoConfirm(enabled) {
+    set({ aiAutoConfirm: enabled })
+    await db.setSetting('ai_auto_confirm', enabled ? 'true' : 'false')
   },
 }))

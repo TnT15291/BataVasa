@@ -30,7 +30,14 @@
     "plugins": [
       "expo-sqlite",
       "expo-secure-store",
-      "expo-router"
+      "expo-router",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "BataVasa uses your location to tag transactions, journal entries, and other activities. You can disable this anytime in Settings."
+        }
+      ]
     ],
     "experiments": {
       "tsconfigPaths": true,

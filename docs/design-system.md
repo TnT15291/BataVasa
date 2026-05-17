@@ -58,11 +58,14 @@ Location: `components/` (shared) and `features/<module>/components/` (module-spe
 - `<Icon name="...">` — sprite from icon set (Lucide/Feather)
 - `<Pressable>` — Native Pressable + haptic feedback wrapper
 - `<Sheet>` — bottom sheet
-- `<Toast>` — non-blocking notifications
+- `<Toast>` — non-blocking notifications with optional Undo action (used by AI auto-confirm-off path)
 - `<Skeleton>` — loading placeholder
 - `<EmptyState image, title, body, cta>` — empty list placeholder
 - `<Badge variant="success|warning|danger|neutral">`
 - `<Divider>`
+- `<DateRow value, onChange>` — tappable date/time row used in every module's create/edit screen (Cross-Module Rule 4)
+- `<LocationRow value, onChange, autoFetch>` — tappable location row, used in every module's create/edit screen (Cross-Module Rule 6). Auto-fetches current GPS when `autoFetch` is true; clear button blanks the field so save persists `null`.
+- `<ConfirmEntrySheet rawInput, parsed, onSave, onEdit, onCancel>` — shown after AI parses input (Cross-Module Rule 5)
 
 **Finance-specific** (`features/finance/components/`):
 - `<AmountText cents, currency, signed?>` — locale-aware amount display
@@ -78,6 +81,40 @@ Location: `components/` (shared) and `features/<module>/components/` (module-spe
 - **Empty states** — always guide user to next action
 - **Animations** — < 200ms for transitions, use native driver
 - **Accessibility** — labels on every interactive element
+- **No hardcoded strings** (Cross-Module Rule 2) — every user-facing text via `t.<key>` from `useTranslation()`. Adding a new key requires updating all 6 language files in `services/i18n/translations/` in the same commit.
+- **Domain labels translate too** — system-seeded names (default categories, habit templates, mood labels) MUST go through per-module `translateX(row, t)` helpers (see `features/finance/i18n.ts`). Never render `row.name` directly for system rows.
+- **Locale-sensitive formatters** — date-fns `format()` and `Intl.*` MUST receive a locale derived from `settingsStore.language` (helpers in `services/locale.ts`). Never hardcode `'en-US'` or `'vi-VN'`.
+- **Universal "Add" FAB** (Cross-Module Rule 3) — single primary action on every main screen, opens text + voice input that AI routes to the correct module
+- **Tap-to-open** (Cross-Module Rule 7) — every list row's primary tap opens detail/edit. Never leave taps inert.
+
+## Accessibility (mandatory)
+
+Every interactive element MUST be reachable by screen reader + keyboard.
+
+- `<Pressable>` / `<Button>` → require `accessibilityLabel` (no emoji-only labels)
+- `<Switch>` → `accessibilityLabel` describing what it toggles
+- Icons-only buttons → `accessibilityLabel` describing action
+- Images → `alt`/`accessibilityLabel` or `accessibilityElementsHidden` if decorative
+- Form fields → `accessibilityLabel` matches visible label; group with `accessibilityRole="form"` where useful
+- Tap targets ≥ 44pt (already in UX Rules)
+- Color contrast ≥ WCAG AA (4.5:1 body, 3:1 large)
+- Dynamic Type respected — never lock font sizes
+
+## Loading + empty + error states (mandatory triad)
+
+Every async-bound UI surface MUST handle all four states explicitly:
+
+| State | Pattern |
+|---|---|
+| Loading (first paint) | `<Skeleton>` matching layout shape — never blocking spinner |
+| Loading (refetch) | inline subtle indicator (top spinner, pull-to-refresh) |
+| Empty | `<EmptyState>` with title + body + CTA to next action |
+| Error | inline error card with retry button — never blank screen (see Rule 8 + ErrorBoundary) |
+
+Anti-patterns:
+- Spinner on top of usable UI (blocks interaction)
+- Empty list with no message (looks broken)
+- Silent error (Result.err logged but not surfaced)
 
 ## Finance UI Patterns
 

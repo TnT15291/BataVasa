@@ -3,6 +3,14 @@ import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
 import { useMemo, useState, useCallback } from 'react'
 import {
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+} from 'date-fns'
+import {
   useFinanceBootstrap,
   useCategories,
   useTransactions,
@@ -14,6 +22,8 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 
+type Period = 'today' | 'week' | 'month' | 'all'
+
 export function TransactionListScreen() {
   useFinanceBootstrap()
   const theme = useTheme()
@@ -23,18 +33,54 @@ export function TransactionListScreen() {
   const cats = useCategories()
   const { remove, refresh } = useFinanceActions()
   const [refreshing, setRefreshing] = useState(false)
+  const [activePeriod, setActivePeriod] = useState<Period>('today')
 
   const catById = useMemo(() => new Map(cats.map((c) => [c.id, c])), [cats])
 
-  const totals = useMemo(() => {
-    let income = 0
-    let expense = 0
-    for (const tx of txs) {
-      if (tx.amount_cents > 0) income += tx.amount_cents
-      else expense += tx.amount_cents
+  const ranges = useMemo(() => {
+    const now = new Date()
+    return {
+      today: { from: startOfDay(now), to: endOfDay(now) },
+      week: { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) },
+      month: { from: startOfMonth(now), to: endOfMonth(now) },
     }
-    return { income, expense, net: income + expense }
-  }, [txs])
+  }, [])
+
+  const totals = useMemo(() => {
+    const acc = {
+      today: { income: 0, expense: 0 },
+      week: { income: 0, expense: 0 },
+      month: { income: 0, expense: 0 },
+      all: { income: 0, expense: 0 },
+    }
+    for (const tx of txs) {
+      const d = new Date(tx.occurred_at)
+      const isIncome = tx.amount_cents > 0
+      const abs = Math.abs(tx.amount_cents)
+      const key = isIncome ? 'income' : 'expense'
+
+      if (d >= ranges.month.from && d <= ranges.month.to) {
+        acc.month[key] += abs
+        if (d >= ranges.week.from && d <= ranges.week.to) {
+          acc.week[key] += abs
+          if (d >= ranges.today.from && d <= ranges.today.to) {
+            acc.today[key] += abs
+          }
+        }
+      }
+      acc.all[key] += abs
+    }
+    return acc
+  }, [txs, ranges])
+
+  const filteredTxs = useMemo(() => {
+    if (activePeriod === 'all') return txs
+    const r = ranges[activePeriod]
+    return txs.filter((tx) => {
+      const d = new Date(tx.occurred_at)
+      return d >= r.from && d <= r.to
+    })
+  }, [txs, ranges, activePeriod])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -42,25 +88,66 @@ export function TransactionListScreen() {
     setRefreshing(false)
   }, [refresh])
 
+  const PERIOD_ROWS: { key: Period; label: string }[] = [
+    { key: 'today', label: t.today },
+    { key: 'week', label: t.this_week },
+    { key: 'month', label: t.this_month },
+    { key: 'all', label: t.all_period },
+  ]
+
   return (
     <View style={[styles.container, { backgroundColor: theme.bg.primary }]}>
-      {/* Summary card */}
       <View style={[styles.summary, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: theme.text.muted }]}>{t.income}</Text>
-          <AmountText cents={totals.income} showSign={false} style={{ color: theme.finance.income }} />
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: theme.text.muted }]}>{t.expense}</Text>
-          <AmountText cents={Math.abs(totals.expense)} showSign={false} style={{ color: theme.finance.expense }} />
-        </View>
-        <View style={[styles.summaryRow, styles.netRow, { borderColor: theme.border.subtle }]}>
-          <Text style={[styles.summaryLabel, { color: theme.text.primary, fontWeight: '600' }]}>{t.net}</Text>
-          <AmountText cents={totals.net} />
-        </View>
+        {PERIOD_ROWS.map((row, idx) => {
+          const active = activePeriod === row.key
+          const data = totals[row.key]
+          const isLast = idx === PERIOD_ROWS.length - 1
+          return (
+            <Pressable
+              key={row.key}
+              onPress={() => setActivePeriod(row.key)}
+              style={({ pressed }) => [
+                styles.periodRow,
+                !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border.subtle },
+                active && { backgroundColor: theme.bg.secondary },
+                pressed && !active && { backgroundColor: theme.bg.secondary },
+              ]}
+            >
+              <View style={styles.periodLabelWrap}>
+                <View
+                  style={[
+                    styles.periodDot,
+                    { backgroundColor: active ? theme.brand.primary : 'transparent' },
+                  ]}
+                />
+                <Text
+                  style={{
+                    color: active ? theme.text.primary : theme.text.secondary,
+                    fontWeight: active ? '600' : '500',
+                    fontSize: 14,
+                  }}
+                >
+                  {row.label}
+                </Text>
+              </View>
+              <View style={styles.periodAmounts}>
+                <AmountText
+                  cents={data.income}
+                  showSign={false}
+                  style={{ color: theme.finance.income, fontSize: 13 }}
+                />
+                <Text style={{ color: theme.text.muted, fontSize: 12 }}>·</Text>
+                <AmountText
+                  cents={data.expense}
+                  showSign={false}
+                  style={{ color: theme.finance.expense, fontSize: 13 }}
+                />
+              </View>
+            </Pressable>
+          )
+        })}
       </View>
 
-      {/* AI actions */}
       <View style={styles.aiRow}>
         {[
           { label: '🧠', title: t.ai_insights, route: '/insights' },
@@ -85,12 +172,13 @@ export function TransactionListScreen() {
       </View>
 
       <FlashList
-        data={txs}
+        data={filteredTxs}
         keyExtractor={(tx) => tx.id}
         renderItem={({ item }) => (
           <TransactionRow
             tx={item}
             category={catById.get(item.category_id)}
+            onPress={() => router.push({ pathname: '/new', params: { id: item.id } } as any)}
             onLongPress={() => remove(item.id)}
           />
         )}
@@ -119,14 +207,21 @@ const styles = StyleSheet.create({
   summary: {
     margin: spacing[4],
     marginBottom: 0,
-    padding: spacing[4],
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: spacing[2],
+    overflow: 'hidden',
   },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  netRow: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: spacing[2], marginTop: spacing[1] },
-  summaryLabel: { fontSize: 13 },
+  periodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    gap: spacing[3],
+  },
+  periodLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  periodDot: { width: 8, height: 8, borderRadius: radius.full },
+  periodAmounts: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   aiRow: {
     flexDirection: 'row',
     gap: spacing[2],

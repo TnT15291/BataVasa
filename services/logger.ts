@@ -1,6 +1,16 @@
 type Level = 'debug' | 'info' | 'warn' | 'error'
 
-const PII_KEYS = ['amount_cents', 'merchant', 'note', 'body', 'email', 'phone'] as const
+const PII_KEYS = [
+  'amount_cents',
+  'merchant',
+  'note',
+  'body',
+  'email',
+  'phone',
+  'location_lat',
+  'location_lng',
+  'location_label',
+] as const
 
 function scrub(meta: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!meta) return undefined

@@ -1,10 +1,20 @@
 # Security
 
-## Authentication
+## Authentication (mandatory before any cloud feature)
 
-- Supabase Auth (email/password + OAuth providers)
-- JWT stored in Expo SecureStore (never AsyncStorage)
-- Token refresh handled by Supabase client
+Auth is a **hard prerequisite** for sync, RLS, multi-device, and any production deployment. Until it ships, all `user_id` columns are `null` and every cloud-tier feature is a stub.
+
+- **Provider:** Supabase Auth (email/password + Apple/Google OAuth)
+- **JWT storage:** Expo SecureStore on native, `localStorage` on web (via `services/secureStorage.ts` wrapper). Never AsyncStorage.
+- **Token refresh:** handled by Supabase client (auto + refresh on app foreground)
+- **Anonymous mode:** allowed for first-launch onboarding; all writes use a local-only `device_id`. On first login, migrate `device_id` rows to the authenticated `user_id` in a single transaction.
+- **Sign-out:** wipes JWT + clears Zustand state but does NOT touch SQLite (data remains for next sign-in on same device; user must explicitly use "Delete all data" to remove)
+- **Account deletion:** dedicated Settings → Account → "Delete account" → calls Supabase edge function that deletes the auth user + all owned rows (cascade via foreign keys + sync_queue purge)
+
+Cross-cutting requirements (every cloud-touching feature):
+- Every service write attaches `user_id = supabase.auth.user().id` (NOT the local `device_id` once authenticated)
+- All RLS policies in `docs/security.md#authorization` are required before that table syncs
+- Auth state changes (`onAuthStateChange`) must trigger re-load of all module stores
 
 ## Encryption
 
@@ -17,6 +27,24 @@
 - Financial amounts stored as integer (cents) — no floating point
 - Never log full transaction details (PII)
 - Never send raw merchant/account data to AI without anonymization (see `docs/ai-integration.md`)
+
+## AI write safeguards (Cross-Module Rule 5)
+
+- AI-parsed entries (Smart Entry, voice, Add-Activity) MUST surface `<ConfirmEntrySheet>` before persisting. This is a defense-in-depth safeguard: AI hallucinations or transcription errors should never silently mutate user financial data.
+- `settingsStore.aiAutoConfirm` defaults to `true` (sheet shown). User can opt out, but voice inputs ALWAYS confirm regardless of setting.
+- When `aiAutoConfirm === false`: save proceeds + show toast with **5s Undo window** before the row is committed to `sync_queue`. Undo within window discards the local row entirely.
+- Confirm sheet must echo the raw user input verbatim so the user can spot misinterpretations.
+
+## Location (Cross-Module Rule 6)
+
+- **Opt-in only:** `settingsStore.locationAccess` defaults to `false`. Never fetch GPS unless user explicitly enabled it
+- **OS permission** requested lazily — only when user toggles ON in Settings or attempts to use a feature that needs it
+- **PII handling:**
+  - `location_lat`, `location_lng`, `location_label` are PII — `services/logger.ts` MUST scrub them
+  - AI prompts: never include raw coords. Either pass `location_label` only, or round to 0.01° (~1km grid) if coords are needed
+  - Sync: location columns mirror to Supabase under same RLS policies (user-scoped)
+- **Wipe:** module wipe (Rule 1) clears location columns alongside other deletes
+- **Web fallback:** browser geolocation requires HTTPS + user permission prompt — degrade gracefully (return `null`, don't crash) if denied or unsupported
 
 ## Authorization
 
@@ -57,9 +85,10 @@ create policy "<table>_update_own" on <table>
 
 ## Data Deletion
 
-- Soft delete via `deleted_at`
-- Hard delete on user account removal — cascades through sync queue
+- **Soft delete** via `deleted_at` — used for normal UI deletes (recoverable until sync purges)
+- **Hard delete (wipe)** — per-module "Delete all data" action in Settings + on account removal. Cascades through `sync_queue` to also clear Supabase (Cross-Module Rule 1, see `docs/sync-offline.md`)
 - GDPR-compliant export: dump user's rows via service
+- Wipe MUST clear in-memory Zustand state too — never leave PII visible after the user asks for it gone
 
 ## Secrets
 

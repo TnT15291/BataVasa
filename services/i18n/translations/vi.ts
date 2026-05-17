@@ -108,6 +108,72 @@ export const vi = {
   this_month: 'Tháng này',
   smart_entry_hint: 'Nhập bằng ngôn ngữ tự nhiên, AI sẽ tự điền form',
   fill_from_ai: 'Điền từ AI',
+
+  // Period selection (Finance home)
+  today: 'Hôm nay',
+  all_period: 'Tất cả',
+
+  // Category kinds
+  kind_essential: 'Thiết yếu',
+  kind_discretionary: 'Tùy ý',
+  kind_income: 'Thu nhập',
+  kind_savings: 'Tiết kiệm',
+
+  // System category names (key = lowercase + underscore of English seed name)
+  cat_food_groceries: 'Ăn uống & Thực phẩm',
+  cat_transport: 'Di chuyển',
+  cat_housing: 'Nhà ở',
+  cat_utilities: 'Tiện ích',
+  cat_healthcare: 'Y tế',
+  cat_dining_out: 'Ăn ngoài',
+  cat_entertainment: 'Giải trí',
+  cat_shopping: 'Mua sắm',
+  cat_subscriptions: 'Đăng ký dịch vụ',
+  cat_salary: 'Lương',
+  cat_freelance: 'Tự do',
+  cat_other_income: 'Thu nhập khác',
+  cat_emergency_fund: 'Quỹ khẩn cấp',
+  cat_investments: 'Đầu tư',
+
+  // Date / Location (cross-module)
+  date: 'Ngày',
+  location: 'Vị trí',
+  location_empty: 'Nhấn để thêm',
+  location_placeholder: 'Nhập tên địa điểm',
+  fetching_location: 'Đang lấy vị trí…',
+
+  // Settings — Privacy
+  privacy: 'Quyền riêng tư',
+  location_access: 'Cho phép vị trí',
+  location_access_hint: 'Tự động đính kèm vị trí hiện tại vào giao dịch, nhật ký, nhắc nhở. Có thể tắt bất cứ lúc nào.',
+  location_permission_denied: 'Quyền vị trí bị từ chối',
+  location_permission_denied_msg: 'Mở cài đặt hệ điều hành để cấp lại quyền vị trí cho BataVasa.',
+
+  // Wipe / Delete all data
+  delete_all_data: 'Xóa toàn bộ dữ liệu',
+  delete_all_data_hint: 'Xóa vĩnh viễn tất cả giao dịch và danh mục tự tạo trên thiết bị này.',
+  confirm_wipe_title: 'Xóa toàn bộ dữ liệu tài chính?',
+  confirm_wipe_msg: 'Hành động này sẽ xóa vĩnh viễn tất cả giao dịch và danh mục bạn đã tạo. Không thể hoàn tác.',
+  confirm_wipe_final_title: 'Bạn chắc chắn chứ?',
+  confirm_wipe_final_msg: 'Bấm "Xóa" để xác nhận. Dữ liệu sẽ biến mất vĩnh viễn.',
+  wipe_success: 'Đã xóa {{count}} mục',
+  delete: 'Xóa',
+  cancel: 'Hủy',
+
+  // Edit transaction
+  edit_transaction: 'Sửa giao dịch',
+  update: 'Cập nhật',
+  confirm_delete_msg: 'Xóa giao dịch này? Hành động có thể hoàn tác khi đồng bộ.',
+
+  // AI confirm sheet (Cross-Module Rule 5)
+  ai_confirm_title: 'Xác nhận trước khi lưu',
+  ai_confirm_you_said: 'Bạn nói:',
+  ai_confirm_parsed: 'AI hiểu là:',
+  ai_confirm_save: 'Lưu',
+  ai_confirm_edit: 'Sửa',
+  ai_confirm_cancel: 'Hủy',
+  ai_auto_confirm: 'Xác nhận trước khi lưu (AI)',
+  ai_auto_confirm_hint: 'Hiện hộp xác nhận sau khi AI phân tích. Tắt để lưu trực tiếp (giọng nói luôn xác nhận).',
 }
 
 export type Translations = typeof vi

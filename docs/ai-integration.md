@@ -8,6 +8,40 @@
 User data (SQLite) → Anonymizer → Prompt builder → OpenAI → Parser → Insight store
 ```
 
+## Mandatory prompt contract (Cross-Module Rules 2 + 4)
+
+Every AI call MUST include in system prompt:
+
+1. **Language directive** — `Respond in ${getAILanguage()}.` Translates user setting (`vi`/`en`/`ja`/`ko`/`fr`/`zh`) to model-friendly name ("Vietnamese", etc). All AI output (insights, reports, chat, parsed summaries) appears in user's language.
+2. **Today's date** — `Today is ${YYYY-MM-DD} (${weekday}).` So relative phrases like "hôm qua" / "tomorrow" / "tuần trước" resolve correctly. Pair with deterministic `services/dateParser.ts` — never trust the model alone with dates.
+
+Both are non-negotiable defaults — encode in a shared `buildSystemPrompt()` helper, never inline per-feature.
+
+## Smart-Entry / Add-Activity flow (Cross-Module Rules 3 + 5)
+
+Universal entry pipeline lives at `services/ai/`:
+
+```
+raw text/voice
+   ↓
+preParse (regex)         ← amount, date, intent hints
+   ↓
+intentClassifier (AI)    ← { module, confidence, fields }
+   ↓
+[confidence < 0.6?] → chip selector (user picks module)
+   ↓
+ConfirmEntrySheet        ← UNLESS settingsStore.aiAutoConfirm === false
+   ↓
+<module>.create service
+   ↓
+SQLite + sync_queue
+```
+
+Rules:
+- **Voice always confirms** even if `aiAutoConfirm === false` (STT errors common)
+- **Deterministic > AI** for: amount math, date parsing, currency conversion. AI only does semantic classification + free-text fields.
+- If pre-parser disagrees with AI by ≥10× on amount → override with pre-parsed value (pattern from `smartEntry.ts`)
+
 ## Prompt Templates
 
 All prompts live in `ai/prompts/`. Each exports `{ system, buildUser(input), responseSchema }`.
@@ -98,6 +132,32 @@ Storage: `database/ai_memory/` table, scoped by user + module.
 4. If no cache: return canned summary built from raw aggregates (no AI)
 
 **Caching key:** `(user_id, module, kind, period_start, data_hash)`. Invalidate when source data hash changes.
+
+## Feature gating — no AI buttons without a key
+
+Any UI surface that requires the AI provider MUST hide or disable itself when no API key is configured:
+
+- Smart Entry button (in QuickAdd) → hide entirely if `getKeysStatus()` shows all providers empty
+- AI Insights / Reports / Chat home-row buttons → render but tap shows `Alert` linking to `/ai-settings`
+- Generate / Refresh buttons inside AI screens → disabled state with "Setup API key" CTA
+
+Rationale: dangling buttons that fail after a 1-second loading state feel broken. Better to surface the setup affordance directly.
+
+## API key validation
+
+`saveProviderKey()` MUST perform a lightweight test call before persisting:
+
+```ts
+async function saveProviderKey(provider, key) {
+  const ok = await testProviderKey(provider, key) // tiny "ping" chat completion
+  if (!ok) throw new Error('INVALID_KEY')
+  await setSecure(AI_PROVIDERS[provider].keyStore, key.trim())
+}
+```
+
+- Test endpoint: smallest possible chat completion (e.g. `[{role:'user', content:'ping'}]`, max_tokens=1)
+- Timeout: 10s; on timeout → show "Couldn't verify, save anyway?" prompt
+- Pre-validation prevents silent failure later when user actually uses Smart Entry / Insight
 
 ## Privacy
 

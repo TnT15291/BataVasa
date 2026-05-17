@@ -1,5 +1,7 @@
 import { ScrollView, Pressable, Text, View, StyleSheet } from 'react-native'
 import type { Category, CategoryKind } from '../types'
+import { translateCategoryName, translateKind } from '../i18n'
+import { useTranslation } from '@services/i18n'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 
@@ -10,15 +12,9 @@ type Props = {
   filterKind?: CategoryKind
 }
 
-const KIND_LABEL: Record<CategoryKind, string> = {
-  essential: 'Essential',
-  discretionary: 'Discretionary',
-  income: 'Income',
-  savings: 'Savings',
-}
-
 export function CategoryPicker({ categories, selectedId, onSelect, filterKind }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const list = filterKind ? categories.filter((c) => c.kind === filterKind) : categories
 
   const grouped = list.reduce<Record<CategoryKind, Category[]>>(
@@ -34,7 +30,7 @@ export function CategoryPicker({ categories, selectedId, onSelect, filterKind }:
       {(Object.keys(grouped) as CategoryKind[]).map((kind) =>
         grouped[kind].length === 0 ? null : (
           <View key={kind} style={styles.group}>
-            <Text style={[styles.groupTitle, { color: theme.text.muted }]}>{KIND_LABEL[kind]}</Text>
+            <Text style={[styles.groupTitle, { color: theme.text.muted }]}>{translateKind(kind, t)}</Text>
             <View style={styles.chips}>
               {grouped[kind].map((c) => {
                 const active = selectedId === c.id
@@ -56,7 +52,7 @@ export function CategoryPicker({ categories, selectedId, onSelect, filterKind }:
                         fontWeight: active ? '600' : '500',
                       }}
                     >
-                      {c.name}
+                      {translateCategoryName(c, t)}
                     </Text>
                   </Pressable>
                 )

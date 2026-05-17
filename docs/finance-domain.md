@@ -53,6 +53,7 @@ System defaults seeded on first launch. Users can disable, rename, add custom â€
 - **Soft delete only.** Hard delete restricted to account-deletion flow.
 - **Mood link:** optional but encouraged for emotional-spending analysis. UI surfaces mood selector for discretionary categories.
 - **Duplicate detection:** on create, warn if same `amount_cents` + `merchant` + within 60s of last entry.
+- **AI-parsed entries require confirmation** (Cross-Module Rule 5). Smart Entry / voice / Add-Activity flow MUST surface `<ConfirmEntrySheet>` before persisting, unless user has explicitly set `settingsStore.aiAutoConfirm = false`. Even then, voice inputs always confirm (STT errors common). Confirm sheet shows: echo of raw input + parsed summary (amount, category, date) + Save/Edit/Cancel buttons. Edit opens the full quick-add form pre-filled; Cancel discards the parse.
 
 ## Insights & Analytics
 

@@ -1,19 +1,19 @@
-import * as SecureStore from 'expo-secure-store'
+import { getSecure, setSecure, deleteSecure } from '@services/secureStorage'
 import { AI_PROVIDERS, type AIProvider } from './providers'
 import { useSettingsStore } from '@store/settingsStore'
 
 // ── Key management (per-provider) ─────────────────────────────────────────
 
 export async function getProviderKey(provider: AIProvider): Promise<string | null> {
-  return SecureStore.getItemAsync(AI_PROVIDERS[provider].keyStore)
+  return getSecure(AI_PROVIDERS[provider].keyStore)
 }
 
 export async function saveProviderKey(provider: AIProvider, key: string): Promise<void> {
-  await SecureStore.setItemAsync(AI_PROVIDERS[provider].keyStore, key.trim())
+  await setSecure(AI_PROVIDERS[provider].keyStore, key.trim())
 }
 
 export async function deleteProviderKey(provider: AIProvider): Promise<void> {
-  await SecureStore.deleteItemAsync(AI_PROVIDERS[provider].keyStore)
+  await deleteSecure(AI_PROVIDERS[provider].keyStore)
 }
 
 export async function getKeysStatus(): Promise<Record<AIProvider, boolean>> {

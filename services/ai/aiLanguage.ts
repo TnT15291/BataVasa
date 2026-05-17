@@ -29,6 +29,23 @@ export function fmtAI(cents: number, currency: string): string {
   return sym ? `${sym}${formatted}` : `${formatted} ${currency}`
 }
 
+// Currencies without minor units — amount_cents stores raw whole units.
+const NO_MINOR_UNIT = new Set(['VND', 'JPY', 'KRW'])
+
+// Convert stored amount_cents → display number for input fields.
+// e.g. VND 50000 → 50000 ; USD 5000 (cents) → 50
+export function centsToDisplay(cents: number, currency: string): number {
+  if (NO_MINOR_UNIT.has(currency)) return cents
+  return Math.round(cents / 100)
+}
+
+// Convert display number (from input field) → amount_cents for storage.
+// e.g. VND 50000 → 50000 ; USD 50 → 5000 (cents)
+export function displayToCents(display: number, currency: string): number {
+  if (NO_MINOR_UNIT.has(currency)) return display
+  return Math.round(display * 100)
+}
+
 // Tells the AI how to interpret amount_cents for the active currency
 export function getAmountRule(currency: string): string {
   if (currency === 'VND') {

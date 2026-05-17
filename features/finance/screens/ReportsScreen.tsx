@@ -136,7 +136,11 @@ export function ReportsScreen() {
 
   const shareReport = useCallback(async () => {
     if (!report) return
-    await Share.share({ message: report })
+    try {
+      await Share.share({ message: report })
+    } catch {
+      /* user cancelled or share unavailable — silent */
+    }
   }, [report])
 
   const TABS: { key: Period; label: string }[] = [

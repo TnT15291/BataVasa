@@ -35,6 +35,9 @@ export type Transaction = {
   occurred_at: string
   mood: Mood | null
   source: TransactionSource
+  location_lat: number | null
+  location_lng: number | null
+  location_label: string | null
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -50,6 +53,9 @@ const TransactionInputBaseSchema = z.object({
   occurred_at: z.string().datetime(),
   mood: MoodSchema.optional(),
   source: TransactionSourceSchema.default('manual'),
+  location_lat: z.number().min(-90).max(90).optional(),
+  location_lng: z.number().min(-180).max(180).optional(),
+  location_label: z.string().max(200).optional(),
 })
 
 const futureDateGuard = (v: { occurred_at: string }) => {

@@ -1,7 +1,39 @@
+import type { SQLiteDatabase } from 'expo-sqlite'
 import { getDb } from './db'
 import { initFinanceSchema } from '../finance/schema'
 import { initSettingsSchema } from '../settings/schema'
 import { logger } from '@services/logger'
+
+// Each entry creates one schema version. user_version starts at 0 (fresh DB)
+// and increments by 1 per applied migration.
+const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
+  // v1 — initial schemas (idempotent CREATE IF NOT EXISTS)
+  async (db) => {
+    await initFinanceSchema(db)
+    await initSettingsSchema(db)
+  },
+  // v2 — location columns on finance_transaction (Cross-Module Rule 6)
+  async (db) => {
+    await safeAddColumn(db, 'finance_transaction', 'location_lat', 'REAL')
+    await safeAddColumn(db, 'finance_transaction', 'location_lng', 'REAL')
+    await safeAddColumn(db, 'finance_transaction', 'location_label', 'TEXT')
+  },
+]
+
+async function safeAddColumn(
+  db: SQLiteDatabase,
+  table: string,
+  column: string,
+  type: string
+): Promise<void> {
+  try {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`)
+  } catch (e) {
+    // SQLite throws if column exists. Ignore — idempotent migration.
+    const msg = String(e)
+    if (!msg.includes('duplicate column')) throw e
+  }
+}
 
 let migrationPromise: Promise<void> | null = null
 
@@ -13,7 +45,11 @@ export function runMigrations(): Promise<void> {
 
 async function doMigrate(): Promise<void> {
   const db = await getDb()
-  await initFinanceSchema(db)
-  await initSettingsSchema(db)
-  logger.info('migrate', 'all schemas initialized')
+  const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version')
+  const current = row?.user_version ?? 0
+  for (let i = current; i < MIGRATIONS.length; i++) {
+    await MIGRATIONS[i]!(db)
+    await db.execAsync(`PRAGMA user_version = ${i + 1}`)
+    logger.info('migrate', `applied v${i + 1}`)
+  }
 }

@@ -6,7 +6,33 @@
 
 - Tables in `snake_case`, columns in `snake_case`
 - Every table has: `id` (uuid), `created_at`, `updated_at`, `deleted_at` (soft delete), `synced_at`
+- **`occurred_at` vs `created_at`** (Cross-Module Rule 4): every entry table that represents a user-meaningful event MUST have both. `occurred_at` = when the event happened (user-editable, supports backdating); `created_at` = system insert time (immutable). Lists, reports, and AI insights group by `occurred_at`, audit logs by `created_at`.
 - Foreign keys explicit, no implicit cascades
+- **Soft delete** = regular delete via UI (sets `deleted_at`). **Hard delete** = only via `wipeAllData()` from Settings → "Delete all data" (see `docs/sync-offline.md`).
+
+### Location columns (Cross-Module Rule 6)
+
+Every entry table that represents a user activity (transactions, habit logs, journal entries, reminders, …) MUST include three nullable location columns:
+
+```sql
+location_lat   REAL    -- WGS84, nullable
+location_lng   REAL    -- WGS84, nullable
+location_label TEXT    -- reverse-geocoded or user-typed, nullable
+```
+
+All three are independently nullable. At save time, an empty `location_label` from the form means store `NULL` for **all three** columns — respect user intent if they clear it.
+
+### Translatable seed data (Cross-Module Rule 2)
+
+System-seeded rows (default categories, habit templates, mood labels, …) store their canonical **English** `name` in the DB. Translation happens at the UI layer via a per-module lookup helper:
+
+- `features/<module>/i18n.ts` exports `translateX(row, t)` that:
+  - Returns `t.<key>` if `row.user_id == null` and `row.name` matches a known seed
+  - Returns `row.name` as-is for user-created rows
+- AI prompts and matching logic use the English `name` for stability (don't break when user switches language)
+- Adding a new seed row: insert canonical English name + add translation key to all 6 language files + register in `<module>/i18n.ts`
+
+Why not store a translation key in the DB? Schema stays language-agnostic, no migration needed when adding languages or renaming labels, and user-created rows naturally fall through.
 
 ## Tables
 
@@ -131,6 +157,25 @@ Indexes: `(user_id, occurred_at DESC)`, `(user_id, category_id, occurred_at DESC
 - All queries typed via generated types from schema
 - No raw SQL in feature code — go through `database/<module>/queries.ts`
 - Reads can be cached in-memory; writes always hit SQLite immediately
+
+### Pagination (mandatory for unbounded lists)
+
+Any table that grows unboundedly (transactions, habit logs, journal entries, …) MUST paginate at the query layer:
+
+- Query exposes `{ limit?: number; offset?: number }` or `{ cursor?: string; limit?: number }`
+- Default `limit = 50`, hard cap `200`
+- UI uses `FlashList` `onEndReached` to load next page; store accumulates pages in memory
+- "Load older" CTA + skeleton at list bottom while fetching
+- Counts (for summary cards) use a separate `SELECT COUNT(*)` / `SUM(...)` query — never `.length` on a paginated list
+
+Anti-pattern: `listX()` with no limit + UI shows `data.slice(0, 100)` → silent truncation hides user data.
+
+## Web fallback
+
+`expo-sqlite` on web uses **wa-sqlite + OPFS** for persistence. Browser support:
+- ✅ Chrome 110+, Edge, Safari 17+ — full persistence
+- ⚠️ Firefox — falls back to in-memory; data lost on reload
+- Recommendation: show a non-blocking banner on web Firefox users: "Your browser doesn't support persistent storage. Use Chrome/Safari for best experience, or install the mobile app."
 
 ## Sync to Supabase
 

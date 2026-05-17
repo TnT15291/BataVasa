@@ -15,6 +15,11 @@
 | `SQLCIPHER_KEY_PEPPER` | App-level pepper mixed with device key | client (compiled, not env) |
 | `EAS_PROJECT_ID` | EAS build project | CI/EAS |
 
+**Native permissions (declared in `app.json`):**
+- iOS `NSLocationWhenInUseUsageDescription` — required by `expo-location` (Cross-Module Rule 6)
+- Android `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION` — same
+- Always request lazily at runtime when user opts in via Settings — never at startup
+
 - `.env.local` for dev, `.env.production` for prod build
 - Never commit `.env*`
 
@@ -34,21 +39,28 @@
 7. Tag commit: `git tag v<x.y.z>` and push
 8. Merge release branch back to `main`
 
-## Testing
+## Testing (mandatory — Cross-Module reliability)
+
+Tests are a hard requirement before any module ships to beta. Without them, refactor is gambling and bug regression is invisible.
 
 - **Unit:** Jest (services, hooks logic, pure functions)
 - **Component:** React Native Testing Library
 - **E2E:** **Maestro** (chosen — YAML flows, easier than Detox, no native build step)
-- **Coverage target:** 70% statements on `services/` and `database/`; UI coverage optional
+- **Coverage targets:**
+  - `services/` and `database/` → **70% statements** (hard gate in CI)
+  - Pure helpers (`services/ai/smartEntry.ts:extractAmount`, `services/dateParser.ts`, currency helpers) → **90%**
+  - UI → optional but recommended for forms with validation
 
-Run: `npm test` · CI: `npm run test:ci` · E2E: `maestro test .maestro/`
+Run: `npm test` · CI: `npm run test:ci` (fails on coverage regression) · E2E: `maestro test .maestro/`
 
-**What to test:**
-- Services: all `Result` branches (happy + error)
-- DB layer: round-trip insert/query/update/soft-delete
+**Per-module required test surface:**
+- Services: all `Result` branches (happy + error path for every public function)
+- DB layer: round-trip insert/query/update/soft-delete + migration up/down
 - Sync engine: conflict scenarios per table policy
-- AI: prompt builders (deterministic) + response parser (against fixture JSON)
-- E2E (Maestro): auth flow, create transaction, view weekly report, offline → online sync
+- AI: prompt builders (deterministic snapshot) + response parser (against fixture JSON, including malformed)
+- E2E (Maestro): create entry, edit, delete, wipe — happy path for each module
+
+**Fixtures:** keep small JSON in `__fixtures__/` next to the test. Never hit live AI / Supabase in CI.
 
 ## Performance Rules
 

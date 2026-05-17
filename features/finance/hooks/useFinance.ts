@@ -23,7 +23,8 @@ export function useTransactions() {
 
 export function useFinanceActions() {
   const create = useFinanceStore((s) => s.createTransaction)
+  const update = useFinanceStore((s) => s.updateTransaction)
   const remove = useFinanceStore((s) => s.deleteTransaction)
   const refresh = useFinanceStore((s) => s.loadTransactions)
-  return { create, remove, refresh }
+  return { create, update, remove, refresh }
 }

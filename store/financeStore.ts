@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import type { Category, Transaction, CreateTransactionInput } from '@features/finance/types'
+import type {
+  Category,
+  Transaction,
+  CreateTransactionInput,
+  UpdateTransactionInput,
+} from '@features/finance/types'
 import * as svc from '@features/finance/services'
 import { logger } from '@services/logger'
 
@@ -15,7 +20,9 @@ type FinanceState = {
   loadCategories: () => Promise<void>
   loadTransactions: () => Promise<void>
   createTransaction: (input: CreateTransactionInput) => Promise<{ ok: boolean; error?: string }>
+  updateTransaction: (input: UpdateTransactionInput) => Promise<{ ok: boolean; error?: string }>
   deleteTransaction: (id: string) => Promise<{ ok: boolean; error?: string }>
+  wipeAll: () => Promise<{ ok: boolean; deleted?: number; error?: string }>
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => ({
@@ -56,11 +63,36 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return { ok: false, error: r.error.message }
   },
 
+  async updateTransaction(input) {
+    const r = await svc.updateTransaction(input)
+    if (r.ok) {
+      const updated = r.value
+      set({
+        transactions: get().transactions.map((t) => (t.id === updated.id ? updated : t)),
+      })
+      return { ok: true }
+    }
+    return { ok: false, error: r.error.message }
+  },
+
   async deleteTransaction(id) {
     const r = await svc.deleteTransaction(id)
     if (r.ok) {
       set({ transactions: get().transactions.filter((t) => t.id !== id) })
       return { ok: true }
+    }
+    return { ok: false, error: r.error.message }
+  },
+
+  async wipeAll() {
+    const r = await svc.wipeAllData()
+    if (r.ok) {
+      // Clear in-memory state; re-trigger load so system categories re-show
+      set({ transactions: [], categories: [], catState: 'idle', txState: 'idle' })
+      // Re-load categories so the system seed re-populates the cache
+      await get().loadCategories()
+      await get().loadTransactions()
+      return { ok: true, deleted: r.value.deleted }
     }
     return { ok: false, error: r.error.message }
   },

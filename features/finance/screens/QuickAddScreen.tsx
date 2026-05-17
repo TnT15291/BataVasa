@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   View,
   Text,
@@ -11,10 +11,11 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import {
   useFinanceBootstrap,
   useCategories,
+  useTransactions,
   useFinanceActions,
 } from '../hooks/useFinance'
 import { CategoryPicker } from '../components/CategoryPicker'
@@ -24,7 +25,14 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { parseSmartEntry } from '@services/ai/smartEntry'
+import { centsToDisplay, displayToCents } from '@services/ai/aiLanguage'
 import { useSettingsStore } from '@store/settingsStore'
+import { DateRow } from '@components/DateRow'
+import { LocationRow, EMPTY_LOCATION, type LocationValue } from '@components/LocationRow'
+import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
+import { translateCategoryName } from '../i18n'
+import { formatAmount } from '../services'
+import { format as formatDate } from 'date-fns'
 
 type Direction = 'expense' | 'income'
 
@@ -34,8 +42,19 @@ export function QuickAddScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const currency = useSettingsStore((s) => s.currency)
+  const locationAccess = useSettingsStore((s) => s.locationAccess)
   const categories = useCategories()
-  const { create } = useFinanceActions()
+  const allTxs = useTransactions()
+  const { create, update, remove } = useFinanceActions()
+
+  // Edit mode if `id` query param present
+  const params = useLocalSearchParams<{ id?: string }>()
+  const editingId = typeof params.id === 'string' ? params.id : null
+  const editingTx = useMemo(
+    () => (editingId ? allTxs.find((t) => t.id === editingId) ?? null : null),
+    [editingId, allTxs]
+  )
+  const isEditing = !!editingId
 
   const [direction, setDirection] = useState<Direction>('expense')
   const [amountText, setAmountText] = useState('')
@@ -43,17 +62,71 @@ export function QuickAddScreen() {
   const [merchant, setMerchant] = useState('')
   const [note, setNote] = useState('')
   const [mood, setMood] = useState<Mood | null>(null)
+  const [occurredAt, setOccurredAt] = useState<Date>(() => new Date())
+  const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION)
   const [submitting, setSubmitting] = useState(false)
+  const [prefilled, setPrefilled] = useState(false)
+
+  // Pre-fill state when editing an existing transaction
+  useEffect(() => {
+    if (!editingTx || prefilled) return
+    const cat = categories.find((c) => c.id === editingTx.category_id) ?? null
+    setDirection(editingTx.amount_cents < 0 ? 'expense' : 'income')
+    setAmountText(String(centsToDisplay(Math.abs(editingTx.amount_cents), editingTx.currency)))
+    setCategory(cat)
+    setMerchant(editingTx.merchant ?? '')
+    setNote(editingTx.note ?? '')
+    setMood(editingTx.mood)
+    setOccurredAt(new Date(editingTx.occurred_at))
+    setLocation({
+      lat: editingTx.location_lat,
+      lng: editingTx.location_lng,
+      label: editingTx.location_label ?? '',
+    })
+    setPrefilled(true)
+  }, [editingTx, categories, prefilled])
 
   // Smart entry state
   const [smartText, setSmartText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [smartExpanded, setSmartExpanded] = useState(false)
+  const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
+  const [confirmSheet, setConfirmSheet] = useState<{
+    rawInput: string
+    fields: ConfirmField[]
+    payload: {
+      direction: Direction
+      amount_cents: number
+      category: Category
+      merchant: string
+      note: string
+      occurredAt: Date
+    }
+  } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
 
   const visibleCategories = useMemo(() => {
     if (direction === 'income') return categories.filter((c) => c.kind === 'income')
     return categories.filter((c) => c.kind !== 'income')
   }, [direction, categories])
+
+  // Apply a parsed result into the form state (used by both auto-fill path and "Edit" from confirm sheet)
+  const applyParsedToForm = (p: {
+    direction: Direction
+    amount_cents: number
+    category: Category
+    merchant: string
+    note: string
+    occurredAt: Date
+  }) => {
+    setAmountText(String(centsToDisplay(p.amount_cents, currency)))
+    setDirection(p.direction)
+    setCategory(p.category)
+    if (p.merchant) setMerchant(p.merchant)
+    if (p.note) setNote(p.note)
+    setOccurredAt(p.occurredAt)
+    setSmartExpanded(false)
+  }
 
   const onParseSmartEntry = async () => {
     const text = smartText.trim()
@@ -62,20 +135,49 @@ export function QuickAddScreen() {
     try {
       const parsed = await parseSmartEntry(text, categories)
       if (!parsed) {
-        Alert.alert(t.ai_error, 'Không thể phân tích. Thử nhập chi tiết hơn.')
+        Alert.alert(t.ai_error, t.smart_entry_hint)
         return
       }
-      setAmountText(String(Math.round(parsed.amount_cents / 100)))
-      setDirection(parsed.direction)
-      if (parsed.merchant) setMerchant(parsed.merchant)
-      if (parsed.note) setNote(parsed.note)
-      // Try to match category hint
-      const matched = categories.find((c) =>
-        c.name.toLowerCase().includes(parsed.category_hint.toLowerCase()) ||
-        parsed.category_hint.toLowerCase().includes(c.name.toLowerCase())
+      const matched = categories.find(
+        (c) =>
+          c.name.toLowerCase().includes(parsed.category_hint.toLowerCase()) ||
+          parsed.category_hint.toLowerCase().includes(c.name.toLowerCase())
       )
-      if (matched) setCategory(matched)
-      setSmartExpanded(false)
+      // Fallback: first category of the appropriate kind
+      const fallbackCat =
+        matched ??
+        categories.find((c) => (parsed.direction === 'income' ? c.kind === 'income' : c.kind !== 'income')) ??
+        null
+      if (!fallbackCat) {
+        Alert.alert(t.pick_category, t.pick_category_msg)
+        return
+      }
+
+      const payload = {
+        direction: parsed.direction as Direction,
+        amount_cents: parsed.amount_cents,
+        category: fallbackCat,
+        merchant: parsed.merchant ?? '',
+        note: parsed.note ?? '',
+        occurredAt: new Date(), // TODO: deterministic date parser (production-readiness H7)
+      }
+
+      // Rule 5: show confirm sheet unless user opted out
+      if (aiAutoConfirm) {
+        const fields: ConfirmField[] = [
+          {
+            label: parsed.direction === 'income' ? t.income : t.expense,
+            value: formatAmount(parsed.amount_cents, currency),
+          },
+          { label: t.category, value: translateCategoryName(fallbackCat, t) },
+          { label: t.date, value: formatDate(payload.occurredAt, 'EEE, dd MMM yyyy · HH:mm') },
+        ]
+        if (payload.merchant) fields.push({ label: t.merchant_optional.replace(/\s*\(.+\)/, ''), value: payload.merchant })
+        if (payload.note) fields.push({ label: t.note_optional.replace(/\s*\(.+\)/, ''), value: payload.note })
+        setConfirmSheet({ rawInput: text, fields, payload })
+      } else {
+        applyParsedToForm(payload)
+      }
     } catch (e: any) {
       if (e?.message === 'NO_API_KEY') {
         Alert.alert(t.no_api_key, t.no_api_key_msg)
@@ -86,6 +188,36 @@ export function QuickAddScreen() {
       setParsing(false)
     }
   }
+
+  // Confirm sheet handlers
+  const onSheetSave = async () => {
+    if (!confirmSheet) return
+    setConfirmBusy(true)
+    const p = confirmSheet.payload
+    const signed = p.direction === 'expense' ? -p.amount_cents : p.amount_cents
+    const res = await create({
+      amount_cents: signed,
+      currency,
+      category_id: p.category.id,
+      merchant: p.merchant || undefined,
+      note: p.note || undefined,
+      occurred_at: p.occurredAt.toISOString(),
+      source: 'manual',
+    })
+    setConfirmBusy(false)
+    if (res.ok) {
+      setConfirmSheet(null)
+      router.back()
+    } else {
+      Alert.alert(t.could_not_save, res.error ?? '')
+    }
+  }
+  const onSheetEdit = () => {
+    if (!confirmSheet) return
+    applyParsedToForm(confirmSheet.payload)
+    setConfirmSheet(null)
+  }
+  const onSheetCancel = () => setConfirmSheet(null)
 
   const onSave = async () => {
     const raw = parseInt(amountText.replace(/[^0-9]/g, ''), 10)
@@ -98,23 +230,47 @@ export function QuickAddScreen() {
       return
     }
     setSubmitting(true)
-    const signed = direction === 'expense' ? -raw : raw
-    const res = await create({
+    const cents = displayToCents(raw, currency)
+    const signed = direction === 'expense' ? -cents : cents
+    const trimmedLabel = location.label.trim()
+    const payload = {
       amount_cents: signed,
       currency,
       category_id: category.id,
       merchant: merchant.trim() || undefined,
       note: note.trim() || undefined,
-      occurred_at: new Date().toISOString(),
+      occurred_at: occurredAt.toISOString(),
       mood: mood ?? undefined,
-      source: 'manual',
-    })
+      source: 'manual' as const,
+      location_lat: trimmedLabel ? location.lat ?? undefined : undefined,
+      location_lng: trimmedLabel ? location.lng ?? undefined : undefined,
+      location_label: trimmedLabel || undefined,
+    }
+    const res = isEditing
+      ? await update({ id: editingId!, ...payload })
+      : await create(payload)
     setSubmitting(false)
     if (!res.ok) {
       Alert.alert(t.could_not_save, res.error ?? 'Unknown error')
       return
     }
     router.back()
+  }
+
+  const onDelete = () => {
+    if (!isEditing) return
+    Alert.alert(t.delete, t.confirm_delete_msg ?? '', [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete,
+        style: 'destructive',
+        onPress: async () => {
+          const r = await remove(editingId!)
+          if (r.ok) router.back()
+          else Alert.alert(t.could_not_save, r.error ?? '')
+        },
+      },
+    ])
   }
 
   return (
@@ -209,6 +365,15 @@ export function QuickAddScreen() {
         <Text style={[styles.label, { color: theme.text.muted }]}>{t.mood_label}</Text>
         <MoodSelector value={mood} onChange={setMood} />
 
+        <DateRow value={occurredAt} onChange={setOccurredAt} label={t.date} />
+
+        <LocationRow
+          value={location}
+          onChange={setLocation}
+          autoFetch={locationAccess}
+          label={t.location}
+        />
+
         <TextInput
           value={merchant}
           onChangeText={setMerchant}
@@ -226,17 +391,43 @@ export function QuickAddScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
-        <Pressable
-          onPress={onSave}
-          disabled={submitting}
-          style={[
-            styles.saveBtn,
-            { backgroundColor: submitting ? theme.text.muted : theme.brand.primary },
-          ]}
-        >
-          <Text style={styles.saveText}>{submitting ? t.saving : t.save}</Text>
-        </Pressable>
+        <View style={styles.footerRow}>
+          {isEditing && (
+            <Pressable
+              onPress={onDelete}
+              disabled={submitting}
+              style={[styles.deleteBtn, { borderColor: theme.text.danger }]}
+            >
+              <Text style={[styles.deleteText, { color: theme.text.danger }]}>{t.delete}</Text>
+            </Pressable>
+          )}
+          <Pressable
+            onPress={onSave}
+            disabled={submitting}
+            style={[
+              styles.saveBtn,
+              { backgroundColor: submitting ? theme.text.muted : theme.brand.primary },
+              isEditing && { flex: 1 },
+            ]}
+          >
+            <Text style={styles.saveText}>
+              {submitting ? t.saving : isEditing ? t.update : t.save}
+            </Text>
+          </Pressable>
+        </View>
       </View>
+
+      {confirmSheet && (
+        <ConfirmEntrySheet
+          visible={!!confirmSheet}
+          rawInput={confirmSheet.rawInput}
+          fields={confirmSheet.fields}
+          onSave={onSheetSave}
+          onEdit={onSheetEdit}
+          onCancel={onSheetCancel}
+          busy={confirmBusy}
+        />
+      )}
     </KeyboardAvoidingView>
   )
 }
@@ -307,6 +498,16 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
+  footerRow: { flexDirection: 'row', gap: spacing[2] },
+  saveBtn: { flex: 1, paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   saveText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  deleteBtn: {
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[5],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteText: { fontSize: 15, fontWeight: '600' },
 })
