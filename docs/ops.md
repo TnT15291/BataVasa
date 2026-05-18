@@ -10,7 +10,7 @@
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | client |
 | `EXPO_PUBLIC_SENTRY_DSN` | Sentry DSN (public) | client |
 | `EXPO_PUBLIC_ENV` | `dev` / `preview` / `prod` | client |
-| `OPENAI_API_KEY` | OpenAI API key | **server-only** (Supabase Edge Function secret) |
+| `OPENAI_API_KEY` | OpenAI API key | **user-supplied, stored in `expo-secure-store`** (not a build-time env var) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key | **server-only** |
 | `SQLCIPHER_KEY_PEPPER` | App-level pepper mixed with device key | client (compiled, not env) |
 | `EAS_PROJECT_ID` | EAS build project | CI/EAS |

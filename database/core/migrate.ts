@@ -3,6 +3,8 @@ import { getDb } from './db'
 import { initFinanceSchema } from '../finance/schema'
 import { initSettingsSchema } from '../settings/schema'
 import { createReminderSchema } from '../reminders/schema'
+import { createJournalSchema } from '../journals/schema'
+import { createHabitSchema } from '../habits/schema'
 import { logger } from '@services/logger'
 
 // Each entry creates one schema version. user_version starts at 0 (fresh DB)
@@ -26,6 +28,14 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   // v4 — reminders module
   async (db) => {
     await createReminderSchema(db)
+  },
+  // v5 — journals module
+  async (db) => {
+    await createJournalSchema(db)
+  },
+  // v6 — habits module
+  async (db) => {
+    await createHabitSchema(db)
   },
 ]
 

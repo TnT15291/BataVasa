@@ -1,7 +1,7 @@
 import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import {
   startOfDay,
   endOfDay,
@@ -21,6 +21,8 @@ import { AmountText } from '../components/AmountText'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
+import { useSettingsStore } from '@store/settingsStore'
+import { getRates, convertCents } from '@services/fx'
 
 type Period = 'today' | 'week' | 'month' | 'all'
 type CurrencyTotals = { income: number; expense: number }
@@ -47,6 +49,12 @@ export function TransactionListScreen() {
   const { remove, refresh, loadMore, hasMore, loadingMore } = useFinanceActions()
   const [refreshing, setRefreshing] = useState(false)
   const [activePeriod, setActivePeriod] = useState<Period>('today')
+  const displayCurrency = useSettingsStore((s) => s.displayCurrency)
+  const [fxRates, setFxRates] = useState<Record<string, number> | null>(null)
+
+  useEffect(() => {
+    getRates(displayCurrency).then(setFxRates)
+  }, [displayCurrency])
 
   const catById = useMemo(() => new Map(cats.map((c) => [c.id, c])), [cats])
 
@@ -82,6 +90,32 @@ export function TransactionListScreen() {
     }
     return acc
   }, [txs, ranges])
+
+  // When FX rates are available and displayCurrency is set, merge multi-currency totals into one
+  const displayTotals = useMemo<Record<Period, { income: number; expense: number; mixed: boolean } | null>>(() => {
+    const periods: Period[] = ['today', 'week', 'month', 'all']
+    const result: Record<string, { income: number; expense: number; mixed: boolean } | null> = {}
+    for (const p of periods) {
+      const data = totals[p]
+      if (data.size === 0) { result[p] = null; continue }
+      const currencies = Array.from(data.keys())
+      const alreadySingle = currencies.length === 1 && currencies[0] === displayCurrency
+      if (alreadySingle) { result[p] = null; continue }
+      if (!fxRates) { result[p] = null; continue }
+      let totalIncome = 0
+      let totalExpense = 0
+      let canConvert = true
+      for (const [cur, td] of data.entries()) {
+        const inc = convertCents(td.income, cur, displayCurrency, fxRates)
+        const exp = convertCents(td.expense, cur, displayCurrency, fxRates)
+        if (inc === td.income && cur !== displayCurrency) { canConvert = false; break }
+        totalIncome += inc
+        totalExpense += exp
+      }
+      result[p] = canConvert ? { income: totalIncome, expense: totalExpense, mixed: currencies.length > 1 } : null
+    }
+    return result as Record<Period, { income: number; expense: number; mixed: boolean } | null>
+  }, [totals, displayCurrency, fxRates])
 
   const filteredTxs = useMemo(() => {
     if (activePeriod === 'all') return txs
@@ -146,6 +180,27 @@ export function TransactionListScreen() {
               <View style={styles.periodAmounts}>
                 {data.size === 0 ? (
                   <Text style={{ color: theme.text.muted, fontSize: 13 }}>—</Text>
+                ) : displayTotals[row.key] ? (
+                  <View style={styles.periodCurrencyLine}>
+                    {displayTotals[row.key]!.mixed && (
+                      <Text style={{ color: theme.text.muted, fontSize: 10 }}>≈</Text>
+                    )}
+                    <AmountText
+                      cents={displayTotals[row.key]!.income}
+                      currency={displayCurrency}
+                      showSign={false}
+                      color={theme.finance.income}
+                      style={{ fontSize: 13 }}
+                    />
+                    <Text style={{ color: theme.text.muted, fontSize: 12 }}>·</Text>
+                    <AmountText
+                      cents={displayTotals[row.key]!.expense}
+                      currency={displayCurrency}
+                      showSign={false}
+                      color={theme.finance.expense}
+                      style={{ fontSize: 13 }}
+                    />
+                  </View>
                 ) : (
                   Array.from(data.entries()).map(([cur, td]) => (
                     <View key={cur} style={styles.periodCurrencyLine}>

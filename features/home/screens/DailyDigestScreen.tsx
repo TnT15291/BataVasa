@@ -9,6 +9,7 @@ import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { useFinanceBootstrap, useTransactions, useCategories } from '@features/finance/hooks/useFinance'
 import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
+import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
 import { formatAmount } from '@features/finance/services'
 import { UniversalAddSheet } from '../components/UniversalAddSheet'
 
@@ -57,6 +58,7 @@ function ModuleCard({ icon, title, subtitle, hint, accentColor, onPress }: CardP
 export function DailyDigestScreen() {
   useFinanceBootstrap()
   useRemindersBootstrap()
+  useHabitsBootstrap()
   const theme = useTheme()
   const router = useRouter()
   const { t } = useTranslation()
@@ -65,6 +67,7 @@ export function DailyDigestScreen() {
   const txs = useTransactions()
   const cats = useCategories()
   const reminders = useReminders()
+  const habits = useHabits()
   const [showAdd, setShowAdd] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -82,9 +85,9 @@ export function DailyDigestScreen() {
       .reduce((sum, tx) => sum + Math.abs(tx.amount_cents), 0)
   }, [txs, currency, now])
 
-  // Reminders: next upcoming today
+  // Reminders: next upcoming today (include overdue earlier today too)
   const nextReminder = useMemo(() => {
-    const from = now
+    const from = startOfDay(now)
     const to = endOfDay(now)
     return reminders
       .filter((r) => r.completed === 0)
@@ -111,6 +114,13 @@ export function DailyDigestScreen() {
       : t.reminder_today_none
 
   const reminderHint = !nextReminder && !nextFutureReminder ? t.reminder_add_hint : undefined
+
+  // Habits: today's progress
+  const habitsDoneCount = habits.filter((h) => h.todayCount >= h.target_per_period).length
+  const habitsTotal = habits.length
+  const habitsSubtitle = habitsTotal === 0
+    ? t.habits_card_subtitle
+    : t.habits_done_today.replace('{{done}}', String(habitsDoneCount)).replace('{{total}}', String(habitsTotal))
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
@@ -144,24 +154,22 @@ export function DailyDigestScreen() {
           onPress={() => router.push('/reminders' as any)}
         />
 
-        {/* Journal Card — placeholder */}
+        {/* Journal Card */}
         <ModuleCard
           icon="📖"
-          title="Journal"
+          title={t.nav_journal}
           subtitle={t.journal_card_subtitle}
-          hint={t.coming_soon}
           accentColor="#9C27B0"
-          onPress={() => {}}
+          onPress={() => router.push('/journals' as any)}
         />
 
-        {/* Habits Card — placeholder */}
+        {/* Habits Card */}
         <ModuleCard
           icon="💪"
-          title="Habits"
-          subtitle={t.habits_card_subtitle}
-          hint={t.coming_soon}
+          title={t.habits}
+          subtitle={habitsSubtitle}
           accentColor="#FF9800"
-          onPress={() => {}}
+          onPress={() => router.push('/habits' as any)}
         />
       </ScrollView>
 

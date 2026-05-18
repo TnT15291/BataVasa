@@ -11,6 +11,7 @@ export type { AIProvider }
 type SettingsState = {
   language: Language
   currency: string
+  displayCurrency: string
   colorMode: ColorMode
   themeName: ThemeName
   aiProvider: AIProvider
@@ -21,6 +22,7 @@ type SettingsState = {
   loadSettings: () => Promise<void>
   setLanguage: (l: Language) => Promise<void>
   setCurrency: (c: string) => Promise<void>
+  setDisplayCurrency: (c: string) => Promise<void>
   setColorMode: (m: ColorMode) => Promise<void>
   setThemeName: (t: ThemeName) => Promise<void>
   setAIProvider: (p: AIProvider) => Promise<void>
@@ -31,6 +33,7 @@ type SettingsState = {
 export const useSettingsStore = create<SettingsState>((set) => ({
   language: 'vi',
   currency: 'VND',
+  displayCurrency: 'VND',
   colorMode: 'system',
   themeName: 'default',
   aiProvider: 'openai',
@@ -45,6 +48,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({
       language,
       currency,
+      displayCurrency: all['display_currency'] ?? currency,
       colorMode: (all['color_mode'] as ColorMode) ?? 'system',
       themeName: (all['theme_name'] as ThemeName) ?? 'default',
       aiProvider: (all['ai_provider'] as AIProvider) ?? 'openai',
@@ -57,14 +61,20 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   async setLanguage(language) {
     const currency = LANGUAGE_CURRENCY[language] ?? 'USD'
-    set({ language, currency })
+    set({ language, currency, displayCurrency: currency })
     await db.setSetting('language', language)
     await db.setSetting('currency', currency)
+    await db.setSetting('display_currency', currency)
   },
 
   async setCurrency(currency) {
     set({ currency })
     await db.setSetting('currency', currency)
+  },
+
+  async setDisplayCurrency(displayCurrency) {
+    set({ displayCurrency })
+    await db.setSetting('display_currency', displayCurrency)
   },
 
   async setColorMode(colorMode) {

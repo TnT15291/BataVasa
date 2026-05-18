@@ -1,6 +1,6 @@
-# Production Readiness — Finance Module
+# Production Readiness — BataVasa
 
-> Tracking checklist for moving Finance from MVP → production. Tick boxes as items are fixed. Audit date: 2026-05-18.
+> Tracking checklist for moving all modules from MVP → production. Last updated: 2026-05-18.
 
 **Current state:** 🟢 MVP cá nhân dùng được · 🔴 chưa thể public launch.
 
@@ -16,7 +16,7 @@
 
 - [ ] **B1. Không có auth** 🔁 cross-module · `docs/security.md#authentication` — `user_id: null` mọi nơi → multi-user impossible, RLS Supabase vô nghĩa
 - [ ] **B2. Không có cloud sync** 🔁 cross-module (Rule 1) · `docs/sync-offline.md` — `sync_queue` table chưa tồn tại, Supabase chưa wire → mất phone = mất sạch data
-- [x] **B3. Rule 5 (ConfirmEntrySheet) — DONE 2026-05-18** — `<ConfirmEntrySheet>` + `aiAutoConfirm` setting wired vào Smart Entry. Edit/Save/Cancel buttons, echo raw input, parsed summary
+- [x] **B3. Rule 5 (ConfirmEntrySheet) — DONE 2026-05-18** — Confirmation step built inside `UniversalAddSheet`. Edit/Save/Cancel buttons, echo raw input, parsed summary per module. `aiAutoConfirm` toggle in Settings.
 - [x] **B4. Edit transaction — DONE 2026-05-18** — Generalized as Rule 7 (CRUD completeness) in CLAUDE.md + architecture.md
 - [ ] **B5. Không có tests** 🔁 cross-module · `docs/ops.md#testing` — 0% coverage → refactor là gambling. Coverage gate 70%/90% spec'd
 
@@ -40,6 +40,11 @@
 ## 🟡 MEDIUM
 
 - [x] **M16. Category management UI — DONE 2026-05-18** — `CategoryListScreen`: list nhóm theo kind, budget progress bar (green/orange/red), system badge, FAB → create. `CategoryFormScreen`: create/edit form (name, kind chips, 15-color grid, budget input), `?id=` param cho edit mode, delete confirm. Routes: `app/categories.tsx`, `app/category.tsx`. `SettingsScreen` → "Categories" row. `useCategoryActions()` hook trong `useFinance.ts`.
+- [x] **M30. Reminders module — DONE 2026-05-18** — Full CRUD: `ReminderListScreen` (grouped upcoming/completed), `ReminderFormScreen` (title, note, date+time pickers, recurrence chips). `expo-notifications` local push scheduled on create/update, cancelled on delete. `store/remindersStore.ts` + `features/reminders/services.ts` + `database/reminders/` (schema v4). Settings: export JSON + wipe. 6-language i18n. FCM not required (local-only notifications).
+- [x] **M31. Journals module — DONE 2026-05-18** — Full CRUD: `JournalListScreen` (grouped by date, mood emoji, content preview), `JournalFormScreen` (content textarea, 5-level mood picker, date picker for backdating). `store/journalsStore.ts` + `features/journals/services.ts` + `database/journals/` (schema v5). Settings: export JSON + wipe. 6-language i18n.
+- [x] **M32. Daily Digest home screen — DONE 2026-05-18** — `DailyDigestScreen` replaces TransactionListScreen as app root. 4 module cards (Finance today-spend, Reminders next upcoming, Journal, Habits placeholder) with accent bars. Greeting by time-of-day. Universal Add FAB opens `UniversalAddSheet`.
+- [x] **M33. Universal Add Sheet — DONE 2026-05-18** — `features/home/components/UniversalAddSheet.tsx`. Free-text → `parseUniversalEntry()` AI classifier → confirm card → save to correct module. Timezone-aware prompts (fixes AI returning UTC times). Finance + Reminder save wired; Habits/Journal show "coming soon".
+- [x] **M34. AI timezone fix — DONE 2026-05-18** — `universalEntry.ts`: prompt includes `User timezone: UTC+HH:MM`, `Current local time: <localISO>`. `fixReminderTimezone()` post-processes Z-suffix datetimes to local wall-clock time. Fixes "18h00 → next day 01:00" bug.
 - [x] **M17. Budget per category — DONE 2026-05-18** — Migration v3: `ALTER TABLE finance_category ADD COLUMN monthly_budget_cents INTEGER`. `Category` type + `CreateCategoryInput`/`UpdateCategoryInput` schemas updated. Budget bar trong `CategoryListScreen`: pct = spent/budget, màu theo 80%/100% threshold. `displayToCents`/`centsToDisplay` trong form input.
 - [x] **M18. Reports/Insights key gate — DONE 2026-05-18** — `InsightsScreen` + `ReportsScreen`: check key on mount, show 🔑 empty state + "Go to Settings →" button khi không có key. `NO_API_KEY` error gracefully flips UI thay vì alert.
 - [ ] **M19.** Duplicate detection có thể false positive — finance-specific
@@ -60,16 +65,21 @@
 
 - ✅ Folder structure & layer separation (UI → hooks → services → DB)
 - ✅ `Result<T, AppError>` pattern, no-throw across boundaries
-- ✅ SQLite setup: WAL + FK ON + migration với `PRAGMA user_version`
-- ✅ i18n 6 ngôn ngữ + category translation
-- ✅ Currency-aware helpers (`centsToDisplay` / `displayToCents`)
+- ✅ SQLite setup: WAL + FK ON + migration với `PRAGMA user_version` (v5)
+- ✅ i18n 6 ngôn ngữ (vi/en/zh/ja/ko/fr) + category translation
+- ✅ Multi-provider AI (OpenAI, Groq, Gemini, Ollama) via unified `chatCompletion()`
+- ✅ AI prompts: language directive + local datetime + timezone offset
+- ✅ Currency-aware helpers (`centsToDisplay` / `displayToCents` / `formatAmount`)
 - ✅ Wipe pattern: double-confirm + clear store + re-seed
-- ✅ Location wrapper cross-platform + null-safe
+- ✅ Location wrapper cross-platform + null-safe (`services/location.ts`)
 - ✅ TypeScript strict, EXIT 0
-- ✅ Logger PII scrub
+- ✅ Logger PII scrub + Sentry forwarding
 - ✅ Zod validation cho all writes
 - ✅ Period summary với click-filter (Today/Week/Month/All)
-- ✅ Theme system (light/dark + brand)
+- ✅ Theme system (5 themes × light/dark)
+- ✅ Finance, Reminders, Journals modules: full CRUD + export + wipe
+- ✅ Daily Digest home screen + Universal Add Sheet
+- ✅ Local push notifications (Reminders, expo-notifications)
 
 ---
 
@@ -99,10 +109,12 @@
 1. B1 — Auth (Supabase email/OAuth)
 2. B2 — Sync engine (sync_queue + Supabase mirror)
 3. B5 — Tests cho service + DB layer (target 70%)
-4. M22, M23 — Accessibility audit
 
-**Sprint 3 — Public launch prep:**
-1. M16 — Category management UI
-2. M17 — Budget feature
-3. M20, M21 — Export + backup
-4. Public launch checklist
+**Sprint 3 — Module completion + public prep:**
+1. Habits module (full CRUD + streak tracking + AI insight)
+2. Journal AI insight (`generateJournalReflection()` — mood trends, recurring themes, gentle prompts)
+3. Cross-module AI correlations (finance × mood × habits)
+4. M21 — Backup/restore (liên quan B1+B2)
+5. M28 — wipeAllData sync tombstone
+6. M29 — FX conversion display currency
+7. Public launch checklist

@@ -1,50 +1,76 @@
 # AI Integration
 
-> OpenAI API usage, prompt design, memory, and finance-specific AI features.
+> Multi-provider AI (OpenAI-compatible), prompt design, and AI features.
 
 ## Architecture
 
 ```
-User data (SQLite) → Anonymizer → Prompt builder → OpenAI → Parser → Insight store
+User data (SQLite) → Prompt builder → chatCompletion() → Provider API → Parser → Store / UI
 ```
+
+## Provider abstraction (`services/ai/openai.ts`)
+
+BataVasa uses a **multi-provider** AI layer — not locked to OpenAI. All providers expose an OpenAI-compatible chat completions endpoint.
+
+```ts
+export async function chatCompletion(
+  messages: Message[],
+  options?: { temperature?, max_tokens? }
+): Promise<string>
+```
+
+Supported providers (configured in `services/ai/providers.ts`):
+| Provider | Model | Key prefix | Notes |
+|---|---|---|---|
+| OpenAI | gpt-4o-mini (default) | `sk-` | Original provider |
+| Groq | llama-3.3-70b | — | Free tier, fast |
+| Gemini | gemini-pro | `AIza` | Free tier 15 req/min |
+| Ollama | local model | — | Self-hosted |
+
+Active provider stored in `settingsStore.aiProvider`. Keys stored in `expo-secure-store` per provider. Settings UI: `app/ai-settings.tsx` → `AISettingsScreen`.
 
 ## Mandatory prompt contract (Cross-Module Rules 2 + 4)
 
 Every AI call MUST include in system prompt:
 
-1. **Language directive** — `Respond in ${getAILanguage()}.` Translates user setting (`vi`/`en`/`ja`/`ko`/`fr`/`zh`) to model-friendly name ("Vietnamese", etc). All AI output (insights, reports, chat, parsed summaries) appears in user's language.
-2. **Today's date** — `Today is ${YYYY-MM-DD} (${weekday}).` So relative phrases like "hôm qua" / "tomorrow" / "tuần trước" resolve correctly. Pair with deterministic `services/dateParser.ts` — never trust the model alone with dates.
+1. **Language directive** — `Respond in ${getAILanguage()}.` — `services/ai/aiLanguage.ts:getAILanguage()` translates user setting (`vi`/`en`/`ja`/`ko`/`fr`/`zh`) to model-friendly name ("Vietnamese", etc). All AI output appears in user's language.
+2. **Local datetime + timezone** — `Current local time: ${localISO}` and `User timezone: UTC+07:00`. So relative phrases resolve correctly AND returned datetimes use local offset, not UTC. Critical: AI returning `"18:00Z"` for Vietnam → JavaScript parses as next-day `01:00` — the prompt must prevent this.
+3. **Currency** — `Currency: ${getAICurrency()}` for finance-related prompts.
 
-Both are non-negotiable defaults — encode in a shared `buildSystemPrompt()` helper, never inline per-feature.
+Use `services/ai/aiLanguage.ts` helpers: `getAILanguage()`, `getAICurrency()`.
 
-## Smart-Entry / Add-Activity flow (Cross-Module Rules 3 + 5)
+Both language and timezone are non-negotiable — encode in the prompt builder per feature, never skip.
 
-Universal entry pipeline lives at `services/ai/`:
+## Universal Add flow — implemented (Cross-Module Rules 3 + 5)
+
+Pipeline (`features/home/components/UniversalAddSheet.tsx` + `services/ai/universalEntry.ts`):
 
 ```
-raw text/voice
+user types text
    ↓
-preParse (regex)         ← amount, date, intent hints
+extractAmount() — services/ai/smartEntry.ts   ← deterministic amount extraction
    ↓
-intentClassifier (AI)    ← { module, confidence, fields }
+parseUniversalEntry(text) — services/ai/universalEntry.ts
+  • builds prompt with language + local datetime + timezone offset
+  • chatCompletion() at temperature: 0.1
+  • returns typed UniversalEntry (finance | reminder | habits | journal)
+  • post-processes: fixReminderTimezone() reinterprets Z-suffix datetimes as local
    ↓
-[confidence < 0.6?] → chip selector (user picks module)
+UniversalAddSheet Step 2 — confirm card (module icon, parsed fields)
    ↓
-ConfirmEntrySheet        ← UNLESS settingsStore.aiAutoConfirm === false
+Save → module store action (createTransaction / createReminder / …)
    ↓
-<module>.create service
-   ↓
-SQLite + sync_queue
+SQLite write [→ sync_queue when sync engine built]
 ```
 
 Rules:
-- **Voice always confirms** even if `aiAutoConfirm === false` (STT errors common)
-- **Deterministic > AI** for: amount math, date parsing, currency conversion. AI only does semantic classification + free-text fields.
-- If pre-parser disagrees with AI by ≥10× on amount → override with pre-parsed value (pattern from `smartEntry.ts`)
+- **Deterministic > AI** for amount: if AI result diverges ≥10× from `extractAmount()` → enforce pre-parsed value
+- **Timezone correction**: `parseUniversalEntry` includes `UTC+HH:MM` offset in prompt AND post-processes UTC Z-suffix times to local wall-clock time
+- Habits/Journal from sheet → planned: currently shows "coming soon" alert; full CRUD via dedicated screens
 
 ## Prompt Templates
 
-All prompts live in `ai/prompts/`. Each exports `{ system, buildUser(input), responseSchema }`.
+Prompt builders live in `services/ai/`. Each file owns its own prompt construction inline (no shared `ai/prompts/` directory yet — consolidation is a future refactor).
 
 ### Weekly Finance Report
 

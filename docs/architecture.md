@@ -43,10 +43,13 @@ ai/<module>Insight.ts  ← AI analysis for this module
 
 ### Current Modules
 
-- **Finance** — UI: `features/finance/screens/` · Store: `store/financeStore.ts` · DB: `database/finance/` · AI: `ai/financeInsight.ts`
-- **Habit** — UI: `features/habit/screens/` · Store: `store/habitStore.ts` · DB: `database/habit/` · AI: `ai/habitInsight.ts`
-- **Journal** — UI: `features/journal/screens/` · Store: `store/journalStore.ts` · DB: `database/journal/` · AI: `ai/journalInsight.ts`
-- **Reminder** — UI: `features/reminder/screens/` · Store: `store/reminderStore.ts` · DB: `database/reminder/` · AI: _(none — pure CRUD)_
+| Module | Status | UI | Store | DB | AI |
+|---|---|---|---|---|---|
+| **Finance** | ✅ Built | `features/finance/screens/` | `store/financeStore.ts` | `database/finance/` | `services/ai/financeInsight.ts` |
+| **Reminders** | ✅ Built | `features/reminders/screens/` | `store/remindersStore.ts` | `database/reminders/` | _(none — pure CRUD)_ |
+| **Journals** | ✅ Built | `features/journals/screens/` | `store/journalsStore.ts` | `database/journals/` | _(planned — Journal Reflection)_ |
+| **Habits** | ⬜ Planned | — | — | — | _(planned)_ |
+| **Home (Daily Digest)** | ✅ Built | `features/home/screens/DailyDigestScreen.tsx` | _(reads from all module stores)_ | — | — |
 
 ## Data Flow
 
@@ -58,18 +61,16 @@ ai/<module>Insight.ts  ← AI analysis for this module
 4. Service validates (zod) → writes to SQLite (sync) → queues Supabase sync (async)
 5. AI insights regenerated via `ai/<module>Insight.ts` on schedule or event
 
-### AI-parsed entry (text or voice)
+### AI-parsed entry (Universal Add Sheet)
 
-1. User taps universal **Add Activity** FAB → chooses text or voice
-2. Voice → `expo-speech-recognition` → transcribed text (locale = `settingsStore.language`)
-3. Text goes through **deterministic pre-parser** (`services/ai/preParse.ts`):
-   - Extract amount (regex — see `smartEntry.ts:extractAmount`)
-   - Extract date (regex + `date-fns` — "hôm qua", "13/2", etc.)
-   - Detect intent hints (currency symbol, duration unit, feeling words)
-4. Pre-parsed values + raw text → AI classifier → returns `{ module, fields }`
-5. **Confirmation sheet** shown (unless `settingsStore.aiAutoConfirm === false`)
-6. On confirm → route to the appropriate module's `create` service
-7. Same SQLite-first → Supabase sync flow as manual entry
+1. User taps **+** FAB on home screen → `UniversalAddSheet` opens (`features/home/components/UniversalAddSheet.tsx`)
+2. User types free text (voice planned for V2)
+3. Text goes through **deterministic pre-parser** (`services/ai/smartEntry.ts:extractAmount`) for amount extraction
+4. Pre-parsed text → `services/ai/universalEntry.ts:parseUniversalEntry()` → AI intent classifier → returns typed `UniversalEntry`
+5. Prompt includes: language directive, current local datetime, user timezone offset (so "18h00" → `18:00+07:00` not `18:00Z`)
+6. **Confirmation sheet** shown inline (module icon, parsed fields, Save/Edit/Cancel)
+7. On Save → calls the appropriate module's store action (`createTransaction` / `createReminder` / …)
+8. `settingsStore.aiAutoConfirm` toggle (default `true`) controls whether sheet is shown; voice always confirms
 
 ## Cross-Module Rules
 
@@ -110,23 +111,24 @@ UI: `features/settings/screens/<Module>DataScreen.tsx` → destructive button wi
 
 ### Rule 3 — Universal "Add Activity"
 
-**Location:** `features/activity/screens/AddActivityScreen.tsx` (to build)
+**Implemented:** `features/home/components/UniversalAddSheet.tsx` — bottom sheet Modal on DailyDigestScreen.
 
-**Intent classifier:** `services/ai/intentClassifier.ts`
+**Intent classifier:** `services/ai/universalEntry.ts:parseUniversalEntry(text)`
 
 ```ts
-type Intent = 'finance' | 'habit' | 'journal' | 'reminder'
-type Classification = {
-  intent: Intent
-  confidence: number       // 0–1
-  fields: Record<string, unknown>
-}
+export type UniversalEntry =
+  | { module: 'finance';  amount_cents, direction, category_hint, merchant, note, occurred_at }
+  | { module: 'reminder'; title, remind_at, recurrence, note }
+  | { module: 'habits';   title, frequency }
+  | { module: 'journal';  content }
 ```
 
-- Confidence < 0.6 → show chip selector for user to pick module
-- Same prompt-template pattern as `smartEntry.ts` (deterministic pre-parse + AI synthesis)
+- AI classifies via `chatCompletion()` (multi-provider) at `temperature: 0.1`
+- `extractAmount()` runs deterministically before AI call; enforced if AI result diverges ≥10×
+- All datetimes include user timezone offset in prompt and post-processed via `fixReminderTimezone()` to prevent UTC-vs-local bugs
+- Habits/Journal from sheet: classified and summarized, but save goes directly to module form (full CRUD screens handle the actual write)
 
-**Voice:** `expo-speech-recognition` (or `@react-native-voice/voice`) — wrap behind `services/voice.ts` so the UI doesn't import the native module directly (lets us swap impl on web fallback)
+**Voice:** planned for V2 — will wrap `expo-speech-recognition` behind `services/voice.ts`
 
 ### Rule 4 — Backdated entries
 
@@ -173,36 +175,26 @@ User's relative dates ("tomorrow", "hôm qua") should resolve against this.
 
 ### Rule 5 — AI parse → confirm before save
 
-**Component:** `features/activity/components/ConfirmEntrySheet.tsx`
+**Implemented** inside `features/home/components/UniversalAddSheet.tsx` as the Step 2 UI after `parseUniversalEntry()` returns.
 
-Props:
-```ts
-type Props = {
-  rawInput: string
-  parsed: ParsedEntry        // { module, fields }
-  onSave: () => Promise<void>
-  onEdit: () => void          // routes to full form pre-filled
-  onCancel: () => void
-}
-```
-
-Layout:
+Layout (Step 2):
 ```
 ┌─ Bạn nói: ─────────────────────────┐
 │ "hôm qua tôi nhậu hết 500k"        │
 ├─────────────────────────────────────┤
 │ 💰 Tài chính                        │
-│ 500.000 ₫ · Ăn uống · hôm qua       │
+│ - 500.000 ₫ · Ăn uống · hôm qua    │
 ├─────────────────────────────────────┤
 │ [ Cancel ]  [ Edit ]  [ Save ✓ ]    │
 └─────────────────────────────────────┘
 ```
 
 **Settings:**
-- `settingsStore.aiAutoConfirm: boolean` (default `true` = sheet shown)
-- When `false`: skip sheet → save directly → show toast `"✓ Saved · Undo"` (5s undo window before commit to sync_queue)
+- `settingsStore.aiAutoConfirm: boolean` (default `true` = step 2 shown)
+- "Edit" → resets to Step 1 (text input) with same text pre-filled
+- "Save" → calls module store action directly (no navigation)
 
-**Voice exception:** even if `aiAutoConfirm === false`, voice inputs ALWAYS show the sheet (speech-to-text errors are common).
+**Voice exception:** even if `aiAutoConfirm === false`, voice inputs ALWAYS show the sheet (speech-to-text errors are common). _Voice planned V2._
 
 ### Rule 7 — CRUD completeness
 

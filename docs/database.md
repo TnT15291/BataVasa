@@ -67,6 +67,7 @@ Indexes: `(user_id, occurred_at DESC)`, `(user_id, category_id, occurred_at DESC
 | icon | text | icon key |
 | color | text | hex |
 | kind | text | `essential` · `discretionary` · `income` · `savings` |
+| monthly_budget_cents | integer | nullable — null = no limit |
 | parent_id | uuid | nullable, FK self-ref for hierarchy |
 | sort_order | integer | |
 | ...timestamps | | |
@@ -92,30 +93,47 @@ Indexes: `(user_id, occurred_at DESC)`, `(user_id, category_id, occurred_at DESC
 | logged_at | timestamptz | |
 | ...timestamps | | |
 
-### journal_entry
+### journal
 
 | Column | Type | Notes |
 |---|---|---|
-| id | uuid | PK |
-| user_id | uuid | |
-| body | text | encrypted at field level |
-| mood | text | `great` · `good` · `neutral` · `low` · `bad` |
-| tags | text[] | |
-| occurred_at | timestamptz | entry date |
-| ...timestamps | | |
+| id | TEXT | PK (uuid) |
+| user_id | TEXT | nullable |
+| content | TEXT | required, free-form text (up to 10 000 chars) |
+| mood | INTEGER | nullable, 1–5 (1=very sad → 5=very happy) |
+| occurred_at | TEXT | ISO datetime — when the entry is about |
+| location_lat | REAL | nullable |
+| location_lng | REAL | nullable |
+| location_label | TEXT | nullable |
+| created_at | TEXT | required |
+| updated_at | TEXT | required |
+| deleted_at | TEXT | soft delete |
+| synced_at | TEXT | last Supabase sync |
+
+Index: `(user_id, occurred_at)` WHERE `deleted_at IS NULL`
 
 ### reminder
 
 | Column | Type | Notes |
 |---|---|---|
-| id | uuid | PK |
-| user_id | uuid | |
-| title | text | |
-| body | text | nullable |
-| trigger_at | timestamptz | next fire time |
-| recurrence | text | RRULE string, nullable |
-| notification_id | text | Expo notification handle |
-| ...timestamps | | |
+| id | TEXT | PK (uuid) |
+| user_id | TEXT | nullable |
+| title | TEXT | required |
+| note | TEXT | nullable |
+| remind_at | TEXT | ISO datetime — when to fire |
+| recurrence | TEXT | `none` · `daily` · `weekly` · `monthly` |
+| completed | INTEGER | 0 or 1 (SQLite boolean) |
+| location_lat | REAL | nullable |
+| location_lng | REAL | nullable |
+| location_label | TEXT | nullable |
+| created_at | TEXT | required |
+| updated_at | TEXT | required |
+| deleted_at | TEXT | soft delete |
+| synced_at | TEXT | last Supabase sync |
+
+Index: `(user_id, remind_at)` WHERE `deleted_at IS NULL`
+
+Note: notification scheduling is handled in-process via `expo-notifications` (`services/notifications.ts`). No `notification_id` column — IDs are cached in-memory via `notifCache: Map<reminderId, notifId>` in `features/reminders/services.ts`.
 
 ### ai_insight
 
@@ -148,9 +166,19 @@ Indexes: `(user_id, occurred_at DESC)`, `(user_id, category_id, occurred_at DESC
 
 ## Migrations
 
-- Migrations live in `database/migrations/`
-- Filename: `<timestamp>_<description>.sql`
-- Never edit a shipped migration — write a new one
+- Migration runner: `database/core/migrate.ts` — `runMigrations()` called once in `app/_layout.tsx` before settings load
+- Each migration is a function in the `MIGRATIONS` array (0-indexed), applied via `PRAGMA user_version`
+- All migrations use `CREATE TABLE IF NOT EXISTS` / `safeAddColumn()` — fully idempotent
+- Never remove or reorder a migration — only append new ones
+
+**Current schema versions:**
+| Version | Content |
+|---|---|
+| v1 | `finance_transaction`, `finance_category`, `settings` |
+| v2 | Location columns (`location_lat/lng/label`) on `finance_transaction` |
+| v3 | `monthly_budget_cents` on `finance_category` |
+| v4 | `reminder` table |
+| v5 | `journal` table |
 
 ## Query Patterns
 

@@ -9,6 +9,10 @@ import { requestLocationPermission } from '@services/location'
 import { exportAllData } from '@features/finance/services'
 import { useRemindersStore } from '@store/remindersStore'
 import { exportAllReminders } from '@features/reminders/services'
+import { useJournalsStore } from '@store/journalsStore'
+import { exportAllJournals } from '@features/journals/services'
+import { useHabitsStore } from '@store/habitsStore'
+import { exportAllHabits } from '@features/habits/services'
 
 type RowProps = {
   label: string
@@ -49,12 +53,15 @@ export function SettingsScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const currency = useSettingsStore((s) => s.currency)
+  const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const locationAccess = useSettingsStore((s) => s.locationAccess)
   const setLocationAccess = useSettingsStore((s) => s.setLocationAccess)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
   const setAIAutoConfirm = useSettingsStore((s) => s.setAIAutoConfirm)
   const wipeFinance = useFinanceStore((s) => s.wipeAll)
   const wipeReminders = useRemindersStore((s) => s.wipeAll)
+  const wipeJournals = useJournalsStore((s) => s.wipeAll)
+  const wipeHabits = useHabitsStore((s) => s.wipeAll)
 
   const onExportReminders = async () => {
     const r = await exportAllReminders()
@@ -69,6 +76,46 @@ export function SettingsScreen() {
         text: t.delete, style: 'destructive',
         onPress: async () => {
           const r = await wipeReminders()
+          if (r.ok) Alert.alert(t.wipe_success.replace('{{count}}', String(r.deleted ?? 0)))
+          else Alert.alert(t.could_not_save, r.error ?? '')
+        },
+      },
+    ])
+  }
+
+  const onExportJournals = async () => {
+    const r = await exportAllJournals()
+    if (!r.ok) { Alert.alert(t.could_not_save, r.error.message); return }
+    await Share.share({ message: r.value, title: 'BataVasa journals.json' })
+  }
+
+  const onDeleteJournals = () => {
+    Alert.alert(t.delete_all_journals, t.delete_all_journals_hint, [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete, style: 'destructive',
+        onPress: async () => {
+          const r = await wipeJournals()
+          if (r.ok) Alert.alert(t.wipe_success.replace('{{count}}', String(r.deleted ?? 0)))
+          else Alert.alert(t.could_not_save, r.error ?? '')
+        },
+      },
+    ])
+  }
+
+  const onExportHabits = async () => {
+    const r = await exportAllHabits()
+    if (!r.ok) { Alert.alert(t.could_not_save, r.error.message); return }
+    await Share.share({ message: r.value, title: 'BataVasa habits.json' })
+  }
+
+  const onDeleteHabits = () => {
+    Alert.alert(t.delete_all_habits, t.delete_all_habits_hint, [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete, style: 'destructive',
+        onPress: async () => {
+          const r = await wipeHabits()
           if (r.ok) Alert.alert(t.wipe_success.replace('{{count}}', String(r.deleted ?? 0)))
           else Alert.alert(t.could_not_save, r.error ?? '')
         },
@@ -135,6 +182,7 @@ export function SettingsScreen() {
       <SectionHeader label={t.finance_settings} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <SettingRow label={t.currency} value={currency} onPress={() => router.push('/currency')} />
+        <SettingRow label={t.display_currency} value={displayCurrency} onPress={() => router.push('/display-currency' as any)} />
         <SettingRow label={t.categories} onPress={() => router.push('/categories' as any)} />
         <Pressable
           onPress={onExportData}
@@ -189,6 +237,59 @@ export function SettingsScreen() {
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_reminders}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_reminders_hint}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      <SectionHeader label={t.habits} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <SettingRow label={t.habits} onPress={() => router.push('/habits' as any)} />
+        <Pressable
+          onPress={onExportHabits}
+          style={({ pressed }) => [styles.row, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_habits}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_habits_hint}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={onDeleteHabits}
+          style={({ pressed }) => [styles.row, styles.rowLast, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_habits}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_habits_hint}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      <SectionHeader label={t.nav_journal} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <SettingRow label={t.journals} onPress={() => router.push('/journals' as any)} />
+        <Pressable
+          onPress={onExportJournals}
+          style={({ pressed }) => [
+            styles.row,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_journals}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_journals_hint}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={onDeleteJournals}
+          style={({ pressed }) => [
+            styles.row,
+            styles.rowLast,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_journals}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_journals_hint}</Text>
           </View>
         </Pressable>
       </View>
