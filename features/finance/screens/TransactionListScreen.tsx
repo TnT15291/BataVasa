@@ -178,6 +178,7 @@ export function TransactionListScreen() {
           { label: '🧠', title: t.ai_insights, route: '/insights' },
           { label: '📊', title: t.nav_reports, route: '/reports' },
           { label: '💬', title: t.ai_chat, route: '/chat' },
+          { label: '🔔', title: t.nav_reminders, route: '/reminders' },
         ].map((item) => (
           <Pressable
             key={item.route}
