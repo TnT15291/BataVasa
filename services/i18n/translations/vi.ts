@@ -214,6 +214,27 @@ export const vi = {
   export_data: 'Xuất dữ liệu',
   export_data_hint: 'Chia sẻ tất cả giao dịch và danh mục dạng JSON',
 
+  // Daily Digest + Universal Add
+  greeting_morning: 'Chào buổi sáng',
+  greeting_afternoon: 'Chào buổi chiều',
+  greeting_evening: 'Chào buổi tối',
+  today_spent: 'Hôm nay đã chi',
+  today_no_spending: 'Chưa có giao dịch hôm nay',
+  reminder_today_none: 'Không có lịch hẹn hôm nay',
+  reminder_add_hint: 'Muốn đặt nhắc nhở?',
+  finance_add_hint: 'Bấm + để ghi lại chi tiêu',
+  journal_card_subtitle: 'Ghi lại kỷ niệm hôm nay',
+  habits_card_subtitle: 'Theo dõi thói quen tốt',
+  coming_soon: 'Sắp ra mắt',
+  universal_add_title: 'Thêm nhanh',
+  universal_add_hint: 'Tiêu 150k cafe, nhắc họp 9h sáng mai, tập gym mỗi ngày…',
+  universal_add_examples: 'AI sẽ tự phân loại vào đúng module',
+  classified_finance: 'Tài chính',
+  classified_reminder: 'Nhắc nhở',
+  classified_habits: 'Thói quen',
+  classified_journal: 'Nhật ký',
+  parse_failed: 'Không hiểu được. Thử diễn đạt khác nhé.',
+
   // Reminders module
   nav_reminders: 'Nhắc nhở',
   reminders: 'Nhắc nhở',

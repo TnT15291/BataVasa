@@ -197,6 +197,27 @@ export const ja: Translations = {
   export_data: 'データをエクスポート',
   export_data_hint: '全ての取引とカテゴリを JSON で共有',
 
+  // Daily Digest + Universal Add
+  greeting_morning: 'おはようございます',
+  greeting_afternoon: 'こんにちは',
+  greeting_evening: 'こんばんは',
+  today_spent: '今日の支出',
+  today_no_spending: '今日の取引はありません',
+  reminder_today_none: '今日のリマインダーなし',
+  reminder_add_hint: 'リマインダーを設定しますか？',
+  finance_add_hint: '+ をタップして記録',
+  journal_card_subtitle: '今日の思い出を記録',
+  habits_card_subtitle: '良い習慣を追跡',
+  coming_soon: '近日公開',
+  universal_add_title: 'クイック追加',
+  universal_add_hint: 'コーヒー500円、明日9時ミーティングリマインダー、毎日ジム…',
+  universal_add_examples: 'AIが自動で適切なモジュールに分類します',
+  classified_finance: '財務',
+  classified_reminder: 'リマインダー',
+  classified_habits: '習慣',
+  classified_journal: '日記',
+  parse_failed: '理解できませんでした。別の言い方を試してください。',
+
   // Reminders module
   nav_reminders: 'リマインダー',
   reminders: 'リマインダー',

@@ -197,6 +197,27 @@ export const zh: Translations = {
   export_data: '导出数据',
   export_data_hint: '以 JSON 格式分享所有交易和类别',
 
+  // Daily Digest + Universal Add
+  greeting_morning: '早上好',
+  greeting_afternoon: '下午好',
+  greeting_evening: '晚上好',
+  today_spent: '今日已花',
+  today_no_spending: '今日暂无交易',
+  reminder_today_none: '今日无提醒',
+  reminder_add_hint: '想设置提醒吗？',
+  finance_add_hint: '点 + 记录消费',
+  journal_card_subtitle: '记录今日回忆',
+  habits_card_subtitle: '追踪良好习惯',
+  coming_soon: '即将推出',
+  universal_add_title: '快速添加',
+  universal_add_hint: '花了50元买咖啡，明天9点会议提醒，每天健身…',
+  universal_add_examples: 'AI 将自动分类到对应模块',
+  classified_finance: '财务',
+  classified_reminder: '提醒',
+  classified_habits: '习惯',
+  classified_journal: '日记',
+  parse_failed: '无法理解，请换种说法。',
+
   // Reminders module
   nav_reminders: '提醒',
   reminders: '提醒',

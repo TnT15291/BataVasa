@@ -14,10 +14,15 @@ Notifications.setNotificationHandler({
 
 export async function requestNotificationPermission(): Promise<boolean> {
   if (Platform.OS === 'web') return false
-  const { status: existing } = await Notifications.getPermissionsAsync()
-  if (existing === 'granted') return true
-  const { status } = await Notifications.requestPermissionsAsync()
-  return status === 'granted'
+  try {
+    const { status: existing } = await Notifications.getPermissionsAsync()
+    if (existing === 'granted') return true
+    const { status } = await Notifications.requestPermissionsAsync()
+    return status === 'granted'
+  } catch {
+    // FCM not configured (Expo Go dev environment) — local notifications still work
+    return true
+  }
 }
 
 export async function scheduleReminderNotification(

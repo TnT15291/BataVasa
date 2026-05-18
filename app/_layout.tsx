@@ -98,6 +98,7 @@ export default function RootLayout() {
           <Stack.Screen name="category" options={{ title: t.new_category }} />
           <Stack.Screen name="reminders" options={{ title: t.nav_reminders }} />
           <Stack.Screen name="reminder" options={{ title: t.new_reminder }} />
+          <Stack.Screen name="finance" options={{ title: t.nav_finance }} />
         </Stack>
         </ErrorBoundary>
       </SafeAreaProvider>

@@ -1,5 +1,5 @@
-import { TransactionListScreen } from '@features/finance/screens/TransactionListScreen'
+import { DailyDigestScreen } from '@features/home/screens/DailyDigestScreen'
 
 export default function Index() {
-  return <TransactionListScreen />
+  return <DailyDigestScreen />
 }

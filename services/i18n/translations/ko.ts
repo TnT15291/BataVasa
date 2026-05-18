@@ -197,6 +197,27 @@ export const ko: Translations = {
   export_data: '데이터 내보내기',
   export_data_hint: '모든 거래와 카테고리를 JSON으로 공유',
 
+  // Daily Digest + Universal Add
+  greeting_morning: '좋은 아침이에요',
+  greeting_afternoon: '안녕하세요',
+  greeting_evening: '좋은 저녁이에요',
+  today_spent: '오늘 지출',
+  today_no_spending: '오늘 거래 없음',
+  reminder_today_none: '오늘 알림 없음',
+  reminder_add_hint: '알림을 설정할까요?',
+  finance_add_hint: '+ 눌러 지출 기록',
+  journal_card_subtitle: '오늘의 추억 기록',
+  habits_card_subtitle: '좋은 습관 추적',
+  coming_soon: '곧 출시',
+  universal_add_title: '빠른 추가',
+  universal_add_hint: '커피 5천원, 내일 9시 회의 알림, 매일 헬스…',
+  universal_add_examples: 'AI가 자동으로 올바른 모듈로 분류합니다',
+  classified_finance: '재정',
+  classified_reminder: '알림',
+  classified_habits: '습관',
+  classified_journal: '일기',
+  parse_failed: '이해하지 못했습니다. 다르게 표현해 보세요.',
+
   // Reminders module
   nav_reminders: '알림',
   reminders: '알림',

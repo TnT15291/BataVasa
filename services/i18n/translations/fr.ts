@@ -197,6 +197,27 @@ export const fr: Translations = {
   export_data: 'Exporter les données',
   export_data_hint: 'Partager toutes les transactions et catégories en JSON',
 
+  // Daily Digest + Universal Add
+  greeting_morning: 'Bonjour',
+  greeting_afternoon: 'Bon après-midi',
+  greeting_evening: 'Bonsoir',
+  today_spent: 'Dépensé aujourd\'hui',
+  today_no_spending: 'Aucune transaction aujourd\'hui',
+  reminder_today_none: 'Aucun rappel aujourd\'hui',
+  reminder_add_hint: 'Créer un rappel ?',
+  finance_add_hint: 'Appuyez sur + pour enregistrer',
+  journal_card_subtitle: 'Notez vos souvenirs du jour',
+  habits_card_subtitle: 'Suivez vos bonnes habitudes',
+  coming_soon: 'Bientôt disponible',
+  universal_add_title: 'Ajout rapide',
+  universal_add_hint: 'Dépensé 5€ café, rappel réunion demain 9h, gym chaque jour…',
+  universal_add_examples: 'L\'IA classe automatiquement dans le bon module',
+  classified_finance: 'Finances',
+  classified_reminder: 'Rappel',
+  classified_habits: 'Habitudes',
+  classified_journal: 'Journal',
+  parse_failed: 'Incompris. Essayez une autre formulation.',
+
   // Reminders module
   nav_reminders: 'Rappels',
   reminders: 'Rappels',
