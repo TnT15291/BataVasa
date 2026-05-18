@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, RefreshControl } from 'react-native'
+import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
 import { useMemo, useState, useCallback } from 'react'
@@ -38,13 +38,13 @@ function addToTotals(totals: PeriodTotals, currency: string, signedCents: number
 }
 
 export function TransactionListScreen() {
-  useFinanceBootstrap()
+  const isLoading = useFinanceBootstrap()
   const theme = useTheme()
   const router = useRouter()
   const { t } = useTranslation()
   const txs = useTransactions()
   const cats = useCategories()
-  const { remove, refresh } = useFinanceActions()
+  const { remove, refresh, loadMore, hasMore, loadingMore } = useFinanceActions()
   const [refreshing, setRefreshing] = useState(false)
   const [activePeriod, setActivePeriod] = useState<Period>('today')
 
@@ -116,6 +116,9 @@ export function TransactionListScreen() {
             <Pressable
               key={row.key}
               onPress={() => setActivePeriod(row.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={row.label}
               style={({ pressed }) => [
                 styles.periodRow,
                 !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border.subtle },
@@ -150,14 +153,16 @@ export function TransactionListScreen() {
                         cents={td.income}
                         currency={cur}
                         showSign={false}
-                        style={{ color: theme.finance.income, fontSize: 13 }}
+                        color={theme.finance.income}
+                        style={{ fontSize: 13 }}
                       />
                       <Text style={{ color: theme.text.muted, fontSize: 12 }}>·</Text>
                       <AmountText
                         cents={td.expense}
                         currency={cur}
                         showSign={false}
-                        style={{ color: theme.finance.expense, fontSize: 13 }}
+                        color={theme.finance.expense}
+                        style={{ fontSize: 13 }}
                       />
                     </View>
                   ))
@@ -177,6 +182,8 @@ export function TransactionListScreen() {
           <Pressable
             key={item.route}
             onPress={() => router.push(item.route as any)}
+            accessibilityRole="button"
+            accessibilityLabel={item.title}
             style={({ pressed }) => [
               styles.aiBtn,
               {
@@ -204,16 +211,39 @@ export function TransactionListScreen() {
         )}
         contentContainerStyle={{ padding: spacing[4] }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        onEndReached={activePeriod === 'all' && hasMore ? loadMore : undefined}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={
+          activePeriod === 'all' && (loadingMore || hasMore) ? (
+            <View style={styles.footer}>
+              {loadingMore ? (
+                <ActivityIndicator size="small" color={theme.brand.primary} />
+              ) : (
+                <Pressable onPress={loadMore} style={[styles.loadMoreBtn, { borderColor: theme.border.subtle }]}>
+                  <Text style={{ color: theme.text.secondary, fontSize: 13 }}>Load more</Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_transactions}</Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.tap_to_add}</Text>
-          </View>
+          isLoading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator size="large" color={theme.brand.primary} />
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_transactions}</Text>
+              <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.tap_to_add}</Text>
+            </View>
+          )
         }
       />
 
       <Pressable
         onPress={() => router.push('/new')}
+        accessibilityRole="button"
+        accessibilityLabel={t.nav_new_transaction}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}
       >
         <Text style={styles.fabIcon}>+</Text>
@@ -262,6 +292,13 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', marginTop: spacing[12] },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
   emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[8] },
+  footer: { alignItems: 'center', paddingVertical: spacing[4] },
+  loadMoreBtn: {
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   fab: {
     position: 'absolute',
     right: spacing[6],

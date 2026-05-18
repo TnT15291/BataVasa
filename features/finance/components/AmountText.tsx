@@ -7,23 +7,25 @@ type Props = {
   cents: number
   currency?: string
   showSign?: boolean
+  /** Explicit color override — takes priority over the sign-derived income/expense color. */
+  color?: string
   style?: TextStyle
 }
 
-export function AmountText({ cents, currency, showSign = true, style }: Props) {
+export function AmountText({ cents, currency, showSign = true, color, style }: Props) {
   const theme = useTheme()
   const storeCurrency = useSettingsStore((s) => s.currency)
   const language = useSettingsStore((s) => s.language)
   const c = currency ?? storeCurrency
   const isExpense = cents < 0
-  const color = showSign
-    ? isExpense
-      ? theme.finance.expense
-      : theme.finance.income
+  const signColor = showSign
+    ? isExpense ? theme.finance.expense : theme.finance.income
     : theme.text.primary
+  // color prop always wins; style can still override font size / weight / etc
+  const resolvedColor = color ?? signColor
   const prefix = showSign ? (isExpense ? '-' : '+') : ''
   return (
-    <Text style={[{ color, fontVariant: ['tabular-nums'], fontWeight: '600' }, style]}>
+    <Text style={[{ fontVariant: ['tabular-nums'], fontWeight: '600' }, style, { color: resolvedColor }]}>
       {prefix}
       {formatAmount(cents, c, language)}
     </Text>

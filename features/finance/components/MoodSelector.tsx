@@ -19,13 +19,16 @@ const MOODS: { value: Mood; emoji: string; label: string }[] = [
 export function MoodSelector({ value, onChange }: Props) {
   const theme = useTheme()
   return (
-    <View style={styles.row}>
+    <View style={styles.row} accessibilityRole="radiogroup">
       {MOODS.map((m) => {
         const active = value === m.value
         return (
           <Pressable
             key={m.value}
             onPress={() => onChange(active ? null : m.value)}
+            accessibilityRole="radio"
+            accessibilityLabel={m.label}
+            accessibilityState={{ checked: active }}
             style={[
               styles.item,
               {
@@ -34,8 +37,10 @@ export function MoodSelector({ value, onChange }: Props) {
               },
             ]}
           >
-            <Text style={styles.emoji}>{m.emoji}</Text>
-            <Text style={{ color: active ? '#fff' : theme.text.muted, fontSize: 11 }}>{m.label}</Text>
+            <Text style={styles.emoji} importantForAccessibility="no">{m.emoji}</Text>
+            <Text style={{ color: active ? '#fff' : theme.text.muted, fontSize: 11 }} importantForAccessibility="no">
+              {m.label}
+            </Text>
           </Pressable>
         )
       })}

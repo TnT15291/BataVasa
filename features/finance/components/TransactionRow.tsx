@@ -17,10 +17,20 @@ export function TransactionRow({ tx, category, onPress, onLongPress }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
   const displayName = category ? translateCategoryName(category, t) : '?'
+  const sign = tx.amount_cents < 0 ? '-' : '+'
+  const absAmount = Math.abs(tx.amount_cents)
+  const a11yLabel = [
+    displayName,
+    tx.merchant ?? tx.note,
+    `${sign}${absAmount} ${tx.currency}`,
+  ].filter(Boolean).join(', ')
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      accessibilityHint={t.edit_transaction}
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },

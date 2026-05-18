@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useFinanceStore } from '@store/financeStore'
 
-export function useFinanceBootstrap() {
+/** Triggers bootstrap and returns true while categories or transactions are still loading. */
+export function useFinanceBootstrap(): boolean {
   const loadCategories = useFinanceStore((s) => s.loadCategories)
   const loadTransactions = useFinanceStore((s) => s.loadTransactions)
   const catState = useFinanceStore((s) => s.catState)
@@ -11,6 +12,8 @@ export function useFinanceBootstrap() {
     if (catState === 'idle') loadCategories()
     if (txState === 'idle') loadTransactions()
   }, [catState, txState, loadCategories, loadTransactions])
+
+  return catState !== 'ready' || txState !== 'ready'
 }
 
 export function useCategories() {
@@ -26,5 +29,8 @@ export function useFinanceActions() {
   const update = useFinanceStore((s) => s.updateTransaction)
   const remove = useFinanceStore((s) => s.deleteTransaction)
   const refresh = useFinanceStore((s) => s.loadTransactions)
-  return { create, update, remove, refresh }
+  const loadMore = useFinanceStore((s) => s.loadMoreTransactions)
+  const hasMore = useFinanceStore((s) => s.txHasMore)
+  const loadingMore = useFinanceStore((s) => s.txLoadingMore)
+  return { create, update, remove, refresh, loadMore, hasMore, loadingMore }
 }
