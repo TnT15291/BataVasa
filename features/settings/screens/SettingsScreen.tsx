@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Share } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -6,6 +6,9 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { useFinanceStore } from '@store/financeStore'
 import { requestLocationPermission } from '@services/location'
+import { exportAllData } from '@features/finance/services'
+import { useRemindersStore } from '@store/remindersStore'
+import { exportAllReminders } from '@features/reminders/services'
 
 type RowProps = {
   label: string
@@ -51,6 +54,36 @@ export function SettingsScreen() {
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
   const setAIAutoConfirm = useSettingsStore((s) => s.setAIAutoConfirm)
   const wipeFinance = useFinanceStore((s) => s.wipeAll)
+  const wipeReminders = useRemindersStore((s) => s.wipeAll)
+
+  const onExportReminders = async () => {
+    const r = await exportAllReminders()
+    if (!r.ok) { Alert.alert(t.could_not_save, r.error.message); return }
+    await Share.share({ message: r.value, title: 'BataVasa reminders.json' })
+  }
+
+  const onDeleteReminders = () => {
+    Alert.alert(t.delete_all_reminders, t.delete_all_reminders_hint, [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete, style: 'destructive',
+        onPress: async () => {
+          const r = await wipeReminders()
+          if (r.ok) Alert.alert(t.wipe_success.replace('{{count}}', String(r.deleted ?? 0)))
+          else Alert.alert(t.could_not_save, r.error ?? '')
+        },
+      },
+    ])
+  }
+
+  const onExportData = async () => {
+    const r = await exportAllData()
+    if (!r.ok) {
+      Alert.alert(t.could_not_save, r.error.message)
+      return
+    }
+    await Share.share({ message: r.value, title: 'BataVasa export.json' })
+  }
 
   const toggleLocation = async (next: boolean) => {
     if (next) {
@@ -102,6 +135,19 @@ export function SettingsScreen() {
       <SectionHeader label={t.finance_settings} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <SettingRow label={t.currency} value={currency} onPress={() => router.push('/currency')} />
+        <SettingRow label={t.categories} onPress={() => router.push('/categories' as any)} />
+        <Pressable
+          onPress={onExportData}
+          style={({ pressed }) => [
+            styles.row,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_data_hint}</Text>
+          </View>
+        </Pressable>
         <Pressable
           onPress={onDeleteFinanceData}
           style={({ pressed }) => [
@@ -113,6 +159,36 @@ export function SettingsScreen() {
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_data}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_data_hint}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      <SectionHeader label={t.nav_reminders} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <SettingRow label={t.reminders} onPress={() => router.push('/reminders' as any)} />
+        <Pressable
+          onPress={onExportReminders}
+          style={({ pressed }) => [
+            styles.row,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_reminders}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_reminders_hint}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={onDeleteReminders}
+          style={({ pressed }) => [
+            styles.row,
+            styles.rowLast,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_reminders}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_reminders_hint}</Text>
           </View>
         </Pressable>
       </View>

@@ -18,11 +18,26 @@ export type Category = {
   kind: CategoryKind
   parent_id: string | null
   sort_order: number
+  monthly_budget_cents: number | null
   created_at: string
   updated_at: string
   deleted_at: string | null
   synced_at: string | null
 }
+
+export const CreateCategoryInputSchema = z.object({
+  name: z.string().min(1).max(60),
+  icon: z.string().default('tag'),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid hex color'),
+  kind: CategoryKindSchema,
+  monthly_budget_cents: z.number().int().positive().nullable().optional(),
+})
+export type CreateCategoryInput = z.infer<typeof CreateCategoryInputSchema>
+
+export const UpdateCategoryInputSchema = CreateCategoryInputSchema.partial().extend({
+  id: z.string().uuid(),
+})
+export type UpdateCategoryInput = z.infer<typeof UpdateCategoryInputSchema>
 
 export type Transaction = {
   id: string

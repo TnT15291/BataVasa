@@ -22,7 +22,12 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.batavasa.app",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,6 +36,7 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-router",
+      "expo-notifications",
       "@react-native-community/datetimepicker",
       [
         "expo-location",
@@ -42,6 +48,12 @@
     "experiments": {
       "tsconfigPaths": true,
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "be67fd7e-b54b-4646-92fb-04bd104919ee"
+      }
     }
   }
 }

@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/react-native'
+
 type Level = 'debug' | 'info' | 'warn' | 'error'
 
 const PII_KEYS = [
@@ -28,7 +30,13 @@ function log(level: Level, module: string, msg: string, meta?: Record<string, un
   if (level === 'error') console.error(tag, msg, safe ?? '')
   else if (level === 'warn') console.warn(tag, msg, safe ?? '')
   else console.log(tag, msg, safe ?? '')
-  // TODO V1: forward warn/error to Sentry
+
+  if (level === 'warn' || level === 'error') {
+    try {
+      Sentry.addBreadcrumb({ level: level === 'error' ? 'error' : 'warning', message: `${tag} ${msg}`, data: safe })
+      if (level === 'error') Sentry.captureMessage(`${tag} ${msg}`, 'error')
+    } catch {}
+  }
 }
 
 export const logger = {

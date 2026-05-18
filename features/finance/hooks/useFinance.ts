@@ -34,3 +34,10 @@ export function useFinanceActions() {
   const loadingMore = useFinanceStore((s) => s.txLoadingMore)
   return { create, update, remove, refresh, loadMore, hasMore, loadingMore }
 }
+
+export function useCategoryActions() {
+  const createCategory = useFinanceStore((s) => s.createCategory)
+  const updateCategory = useFinanceStore((s) => s.updateCategory)
+  const deleteCategory = useFinanceStore((s) => s.deleteCategory)
+  return { createCategory, updateCategory, deleteCategory }
+}

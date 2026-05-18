@@ -39,11 +39,11 @@
 
 ## 🟡 MEDIUM
 
-- [ ] **M16.** Không có category management — finance-specific
-- [ ] **M17.** Không có budget/limits per category — finance-specific
+- [x] **M16. Category management UI — DONE 2026-05-18** — `CategoryListScreen`: list nhóm theo kind, budget progress bar (green/orange/red), system badge, FAB → create. `CategoryFormScreen`: create/edit form (name, kind chips, 15-color grid, budget input), `?id=` param cho edit mode, delete confirm. Routes: `app/categories.tsx`, `app/category.tsx`. `SettingsScreen` → "Categories" row. `useCategoryActions()` hook trong `useFinance.ts`.
+- [x] **M17. Budget per category — DONE 2026-05-18** — Migration v3: `ALTER TABLE finance_category ADD COLUMN monthly_budget_cents INTEGER`. `Category` type + `CreateCategoryInput`/`UpdateCategoryInput` schemas updated. Budget bar trong `CategoryListScreen`: pct = spent/budget, màu theo 80%/100% threshold. `displayToCents`/`centsToDisplay` trong form input.
 - [x] **M18. Reports/Insights key gate — DONE 2026-05-18** — `InsightsScreen` + `ReportsScreen`: check key on mount, show 🔑 empty state + "Go to Settings →" button khi không có key. `NO_API_KEY` error gracefully flips UI thay vì alert.
 - [ ] **M19.** Duplicate detection có thể false positive — finance-specific
-- [ ] **M20.** Không có data export (GDPR) 🔁 cross-module (Rule 1 extended) · `exportAllData()` per module
+- [x] **M20. Data export — DONE 2026-05-18** — `exportFinanceData()` query trả raw rows. `exportAllData()` service serialize JSON (transactions + categories + exported_at). `SettingsScreen` → "Export Data" row gọi `Share.share()` với JSON string. Đúng GDPR right-to-portability (Cross-Module Rule 1).
 - [ ] **M21.** Không có backup/restore 🔁 cross-module · liên quan auth + sync
 - [x] **M22. Accessibility labels — DONE 2026-05-18** — `TransactionRow`: `accessibilityRole="button"` + `accessibilityLabel` (category + merchant + amount) + `accessibilityHint`. `TransactionListScreen`: period tabs `role="tab"` + `accessibilityState.selected`, AI buttons + FAB `role="button"` + label.
 - [x] **M23. MoodSelector accessibility — DONE 2026-05-18** — `accessibilityRole="radiogroup"` trên View, mỗi mood `role="radio"` + `accessibilityLabel={label}` + `accessibilityState.checked`. Emoji/label text đánh dấu `importantForAccessibility="no"` để tránh đọc đôi.

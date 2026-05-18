@@ -1,4 +1,5 @@
 import 'react-native-gesture-handler'
+import * as Sentry from '@sentry/react-native'
 import { useEffect, useState } from 'react'
 import { View, Text, ActivityIndicator, Pressable } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
@@ -8,6 +9,16 @@ import { runMigrations } from '@db/core/migrate'
 import { useTheme } from '@design/useTheme'
 import { useSettingsStore } from '@store/settingsStore'
 import { useTranslation } from '@services/i18n'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: __DEV__ ? 'development' : 'production',
+    tracesSampleRate: __DEV__ ? 0 : 0.2,
+  })
+}
 
 function SettingsButton() {
   const router = useRouter()
@@ -56,6 +67,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <ErrorBoundary>
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: theme.bg.elevated },
@@ -82,7 +94,12 @@ export default function RootLayout() {
           <Stack.Screen name="insights" options={{ title: t.nav_insights }} />
           <Stack.Screen name="reports" options={{ title: t.nav_reports }} />
           <Stack.Screen name="chat" options={{ title: t.nav_chat }} />
+          <Stack.Screen name="categories" options={{ title: t.nav_categories }} />
+          <Stack.Screen name="category" options={{ title: t.new_category }} />
+          <Stack.Screen name="reminders" options={{ title: t.nav_reminders }} />
+          <Stack.Screen name="reminder" options={{ title: t.new_reminder }} />
         </Stack>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )

@@ -6,8 +6,12 @@ import * as q from '@db/finance/queries'
 import {
   CreateTransactionInputSchema,
   UpdateTransactionInputSchema,
+  CreateCategoryInputSchema,
+  UpdateCategoryInputSchema,
   type CreateTransactionInput,
   type UpdateTransactionInput,
+  type CreateCategoryInput,
+  type UpdateCategoryInput,
   type Transaction,
   type Category,
 } from './types'
@@ -158,6 +162,99 @@ export async function wipeAllData(): Promise<Result<{ deleted: number }, AppErro
   } catch (e) {
     logger.error(MODULE, 'wipeAllData failed', { error: String(e) })
     return appErr('DB_ERROR', 'Failed to wipe finance data', e)
+  }
+}
+
+export async function createCategory(
+  input: CreateCategoryInput
+): Promise<Result<Category, AppError>> {
+  const parsed = CreateCategoryInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return appErr('VALIDATION_FAILED', parsed.error.issues[0]?.message ?? 'Invalid input', parsed.error)
+  }
+  const data = parsed.data
+  try {
+    const now = nowIso()
+    const existing = await q.listCategories()
+    const cat: Category = {
+      id: uuid(),
+      user_id: 'local',
+      name: data.name,
+      icon: data.icon ?? 'tag',
+      color: data.color,
+      kind: data.kind,
+      parent_id: null,
+      sort_order: existing.length,
+      monthly_budget_cents: data.monthly_budget_cents ?? null,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      synced_at: null,
+    }
+    await q.insertCategory(cat)
+    logger.info(MODULE, 'category created', { id: cat.id, name: cat.name })
+    return ok(cat)
+  } catch (e) {
+    logger.error(MODULE, 'createCategory failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to create category', e)
+  }
+}
+
+export async function updateCategory(
+  input: UpdateCategoryInput
+): Promise<Result<Category, AppError>> {
+  const parsed = UpdateCategoryInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return appErr('VALIDATION_FAILED', parsed.error.issues[0]?.message ?? 'Invalid input', parsed.error)
+  }
+  const data = parsed.data
+  try {
+    const existing = await q.getCategory(data.id)
+    if (!existing) return appErr('NOT_FOUND', 'Category not found')
+    if (existing.user_id === null) return appErr('AUTH_FORBIDDEN', 'Cannot edit system categories')
+    const patch: Partial<Category> = { updated_at: nowIso() }
+    if (data.name !== undefined) patch.name = data.name
+    if (data.icon !== undefined) patch.icon = data.icon
+    if (data.color !== undefined) patch.color = data.color
+    if (data.kind !== undefined) patch.kind = data.kind
+    if ('monthly_budget_cents' in data) patch.monthly_budget_cents = data.monthly_budget_cents ?? null
+    await q.updateCategory(data.id, patch)
+    const fresh = await q.getCategory(data.id)
+    if (!fresh) return appErr('INTERNAL', 'Updated category vanished')
+    return ok(fresh)
+  } catch (e) {
+    logger.error(MODULE, 'updateCategory failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to update category', e)
+  }
+}
+
+export async function deleteCategory(id: string): Promise<Result<void, AppError>> {
+  try {
+    const existing = await q.getCategory(id)
+    if (!existing) return appErr('NOT_FOUND', 'Category not found')
+    if (existing.user_id === null) return appErr('AUTH_FORBIDDEN', 'Cannot delete system categories')
+    await q.softDeleteCategory(id, nowIso())
+    logger.info(MODULE, 'category deleted', { id })
+    return ok(undefined)
+  } catch (e) {
+    logger.error(MODULE, 'deleteCategory failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to delete category', e)
+  }
+}
+
+export async function exportAllData(): Promise<Result<string, AppError>> {
+  try {
+    const { transactions, categories } = await q.exportFinanceData()
+    const payload = {
+      exported_at: new Date().toISOString(),
+      version: 1,
+      categories,
+      transactions,
+    }
+    return ok(JSON.stringify(payload, null, 2))
+  } catch (e) {
+    logger.error(MODULE, 'exportAllData failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to export data', e)
   }
 }
 

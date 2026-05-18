@@ -193,6 +193,53 @@ export const vi = {
 
   // Currency
   currency_hint: 'Chỉ áp dụng cho giao dịch mới. Giao dịch cũ giữ nguyên đơn vị tiền tệ ban đầu.',
+
+  // Categories (M16) + Budget (M17)
+  nav_categories: 'Danh mục',
+  categories: 'Danh mục',
+  new_category: 'Thêm danh mục',
+  edit_category: 'Sửa danh mục',
+  category_name_placeholder: 'Vd: Gym, Thú cưng, Sách…',
+  budget_monthly: 'Ngân sách tháng',
+  budget_optional: 'Để trống nếu không giới hạn',
+  budget_of: 'của',
+  budget_unlimited: 'Không giới hạn',
+  system_category: 'Hệ thống',
+  category_kind: 'Loại',
+  category_color: 'Màu sắc',
+  delete_category: 'Xoá danh mục',
+  delete_category_msg: 'Danh mục sẽ bị xoá. Các giao dịch hiện có vẫn lưu dữ liệu.',
+
+  // Export (M20)
+  export_data: 'Xuất dữ liệu',
+  export_data_hint: 'Chia sẻ tất cả giao dịch và danh mục dạng JSON',
+
+  // Reminders module
+  nav_reminders: 'Nhắc nhở',
+  reminders: 'Nhắc nhở',
+  new_reminder: 'Thêm nhắc nhở',
+  edit_reminder: 'Sửa nhắc nhở',
+  reminder_title_placeholder: 'Vd: Uống thuốc, Họp nhóm…',
+  reminder_note_placeholder: 'Ghi chú (tuỳ chọn)',
+  reminder_date_time: 'Ngày & Giờ',
+  reminder_recurrence: 'Lặp lại',
+  recurrence_none: 'Không lặp',
+  recurrence_daily: 'Hàng ngày',
+  recurrence_weekly: 'Hàng tuần',
+  recurrence_monthly: 'Hàng tháng',
+  reminder_upcoming: 'Sắp tới',
+  reminder_past: 'Đã qua',
+  reminder_completed: 'Đã xong',
+  no_reminders: 'Chưa có nhắc nhở',
+  no_reminders_msg: 'Nhấn + để thêm nhắc nhở đầu tiên.',
+  delete_reminder: 'Xoá nhắc nhở',
+  delete_reminder_msg: 'Nhắc nhở sẽ bị xoá vĩnh viễn.',
+  reminder_done_toggle: 'Đánh dấu hoàn thành',
+  mark_incomplete: 'Đánh dấu chưa xong',
+  delete_all_reminders: 'Xóa tất cả nhắc nhở',
+  delete_all_reminders_hint: 'Xóa vĩnh viễn tất cả nhắc nhở trên thiết bị này.',
+  export_reminders: 'Xuất nhắc nhở',
+  export_reminders_hint: 'Chia sẻ tất cả nhắc nhở dạng JSON',
 }
 
 export type Translations = typeof vi

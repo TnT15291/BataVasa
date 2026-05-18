@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite'
 import { getDb } from './db'
 import { initFinanceSchema } from '../finance/schema'
 import { initSettingsSchema } from '../settings/schema'
+import { createReminderSchema } from '../reminders/schema'
 import { logger } from '@services/logger'
 
 // Each entry creates one schema version. user_version starts at 0 (fresh DB)
@@ -17,6 +18,14 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
     await safeAddColumn(db, 'finance_transaction', 'location_lat', 'REAL')
     await safeAddColumn(db, 'finance_transaction', 'location_lng', 'REAL')
     await safeAddColumn(db, 'finance_transaction', 'location_label', 'TEXT')
+  },
+  // v3 — monthly budget per category (M17)
+  async (db) => {
+    await safeAddColumn(db, 'finance_category', 'monthly_budget_cents', 'INTEGER')
+  },
+  // v4 — reminders module
+  async (db) => {
+    await createReminderSchema(db)
   },
 ]
 

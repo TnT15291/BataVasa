@@ -147,3 +147,50 @@ export async function getCategory(id: string): Promise<CategoryRow | null> {
   )
   return row ?? null
 }
+
+export async function insertCategory(row: CategoryRow): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    `INSERT INTO finance_category
+     (id, user_id, name, icon, color, kind, parent_id, sort_order, monthly_budget_cents, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      row.id, row.user_id, row.name, row.icon, row.color,
+      row.kind, row.parent_id, row.sort_order,
+      row.monthly_budget_cents, row.created_at, row.updated_at,
+    ]
+  )
+}
+
+export async function updateCategory(id: string, patch: Partial<CategoryRow>): Promise<void> {
+  const db = await getDb()
+  const cols: string[] = []
+  const vals: (string | number | null)[] = []
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === 'id') continue
+    cols.push(`${k} = ?`)
+    vals.push(v as string | number | null)
+  }
+  if (cols.length === 0) return
+  vals.push(id)
+  await db.runAsync(`UPDATE finance_category SET ${cols.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function softDeleteCategory(id: string, deletedAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    'UPDATE finance_category SET deleted_at = ?, updated_at = ? WHERE id = ?',
+    [deletedAt, deletedAt, id]
+  )
+}
+
+export async function exportFinanceData(): Promise<{ transactions: TransactionRow[]; categories: CategoryRow[] }> {
+  const db = await getDb()
+  const transactions = await db.getAllAsync<TransactionRow>(
+    'SELECT * FROM finance_transaction WHERE deleted_at IS NULL ORDER BY occurred_at DESC'
+  )
+  const categories = await db.getAllAsync<CategoryRow>(
+    'SELECT * FROM finance_category WHERE deleted_at IS NULL ORDER BY kind, sort_order'
+  )
+  return { transactions, categories }
+}
