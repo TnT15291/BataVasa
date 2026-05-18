@@ -52,19 +52,23 @@ export async function parseSmartEntry(
   const catList = categories.map((c) => c.name).join(', ')
   const localAmount = extractAmount(text, currency)
 
+  const today = new Date().toISOString().split('T')[0]
   const content = `Parse this financial transaction and return JSON:
 "${text}"
 
-Available categories: ${catList}
+Today's date: ${today}
 Active currency: ${currency}
 Amount rule: ${amountRule}
 ${localAmount !== null ? `Pre-computed amount_cents: ${localAmount} — USE THIS VALUE.` : ''}
+Available categories (copy EXACTLY, do not translate): ${catList}
 
 Return ONLY valid JSON, no other text:
-{"amount_cents":<positive integer>,"direction":"<expense|income>","category_hint":"<category name>","merchant":"<store name or empty>","note":"<note or empty>"}
+{"amount_cents":<positive integer>,"direction":"<expense|income>","category_hint":"<must be one of the listed category names>","merchant":"<store name or empty>","note":"<note or empty>"}
 
-Default direction is expense unless clearly stated otherwise.
-Examples (VND): "50k cafe" → 50000. "1.5tr xe" → 1500000. "2 triệu" → 2000000.`
+Rules:
+- Default direction is expense unless income is clearly stated.
+- category_hint MUST be copied verbatim from the Available categories list above.
+- Examples (VND): "50k cafe" → 50000. "1.5tr xe" → 1500000. "2 triệu" → 2000000.`
 
   try {
     const raw = await chatCompletion(

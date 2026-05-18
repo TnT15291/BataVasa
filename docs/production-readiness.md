@@ -7,7 +7,7 @@
 | Tier | Definition | Status |
 |---|---|---|
 | MVP cá nhân | Dùng riêng cho mình | ✅ ready |
-| Beta closed | 10–50 friends/family | ❌ cần fix BLOCKER 3, 4, 5 + HIGH 6–9, 11, 14 |
+| Beta closed | 10–50 friends/family | ❌ cần fix BLOCKER 3, 4, 5 + HIGH 10, 12 |
 | Public launch | Open user base | ❌ cần thêm BLOCKER 1, 2 + tất cả HIGH + ≥50% MEDIUM |
 
 ---
@@ -24,16 +24,15 @@
 
 ## ⚠️ HIGH
 
-- [ ] **H6. Smart Entry matching yếu** 🔁 cross-module (Rule 3) — nếu AI trả tên VN thay vì EN seed, match silent fail → category không set
-  - Vị trí: `features/finance/screens/QuickAddScreen.tsx:73`
-- [ ] **H7. Date parser cho Smart Entry chưa làm** 🔁 cross-module (Rule 4) · `services/dateParser.ts` (chưa có)
+- [x] **H6. Smart Entry matching yếu — DONE 2026-05-18** — `matchCategory()` trong `features/finance/i18n.ts`: ưu tiên exact English DB name → exact translated name → substring fallback. AI prompt yêu cầu `category_hint` phải là exact string từ danh sách. Không còn silent fail.
+- [x] **H7. Date parser cho Smart Entry — DONE 2026-05-18** — `services/dateParser.ts`: `extractDateFromText()` xử lý ISO, DD/MM/YYYY, DD/MM, named months (EN/FR), CJK/Korean numeric, Vietnamese tháng/ngày, relative keywords 6 ngôn ngữ (hôm qua/yesterday/昨日/어제/hier/前天 + các variant). Chạy deterministic trước AI call, không phụ thuộc model.
 - [x] **H8. Locale-aware DateRow — DONE 2026-05-18** — `services/locale.ts` thêm `getDateFnsLocale()`. DateRow + ReportsScreen + QuickAddScreen confirm sheet đều dùng locale từ `settingsStore.language`
 - [x] **H9. Locale-aware formatAmount — DONE 2026-05-18** — `services/locale.ts` thêm `getIntlLocale()`. `formatAmount(cents, currency, language)` + AmountText pass language. JPY/KRW thêm fractionDigits handling. `fmtAI()` cũng fix toLocaleString
 - [ ] **H10. Không có pagination** 🔁 cross-module · `docs/database.md#pagination` — default limit=100, UI fetch hết. >100 tx silent truncate
 - [x] **H11. Error Boundary spec'd** 🔁 cross-module (Rule 8) · `docs/architecture.md#rule-8` — chưa implement nhưng đã có quy chuẩn
 - [ ] **H12. Web SQLite không persist với Firefox** 🔁 cross-module · `docs/database.md#web-fallback` — đã document banner advice
-- [ ] **H13. Smart Entry button hiện cả khi không có API key** 🔁 cross-module · `docs/ai-integration.md#feature-gating`
-- [ ] **H14. AISettings còn hardcoded VN string** 🔁 cross-module (Rule 2) — Vị trí: `features/settings/screens/AISettingsScreen.tsx:72-93`
+- [x] **H13. Smart Entry button hiện cả khi không có API key — DONE 2026-05-18** — `QuickAddScreen`: check key async on mount, button redirects to AI Settings when no key, panel hidden entirely.
+- [x] **H14. AISettings còn hardcoded VN string — DONE 2026-05-18** — tất cả string trong `AISettingsScreen` đi qua `t.<key>`, thêm `key_invalid_prefix` + các key mới vào 6 file ngôn ngữ.
 - [x] **H15. Tap row transaction = no action** 🔁 cross-module (Rule 7) · DONE 2026-05-18 — tap mở edit, applies to all modules
 
 ---
@@ -42,13 +41,13 @@
 
 - [ ] **M16.** Không có category management — finance-specific
 - [ ] **M17.** Không có budget/limits per category — finance-specific
-- [ ] **M18.** Reports/Insights screens fail silent khi không có API key 🔁 cross-module · `docs/ai-integration.md#feature-gating`
+- [x] **M18. Reports/Insights key gate — DONE 2026-05-18** — `InsightsScreen` + `ReportsScreen`: check key on mount, show 🔑 empty state + "Go to Settings →" button khi không có key. `NO_API_KEY` error gracefully flips UI thay vì alert.
 - [ ] **M19.** Duplicate detection có thể false positive — finance-specific
 - [ ] **M20.** Không có data export (GDPR) 🔁 cross-module (Rule 1 extended) · `exportAllData()` per module
 - [ ] **M21.** Không có backup/restore 🔁 cross-module · liên quan auth + sync
 - [ ] **M22.** Không có accessibility labels 🔁 cross-module · `docs/design-system.md#accessibility`
 - [ ] **M23.** Mood selector emoji thiếu `accessibilityLabel` — finance-specific áp dụng M22
-- [ ] **M24.** API key không validate 🔁 cross-module · `docs/ai-integration.md#api-key-validation`
+- [x] **M24. API key validation — DONE 2026-05-18** — `AISettingsScreen` validate keyPrefix trước khi save, alert rõ format đúng. `providers.ts`: Gemini prefix fix `'AI'` → `'AIza'`. Translation key `key_invalid_prefix` trong 6 ngôn ngữ.
 - [ ] **M25.** `AmountText` color override conflict — finance-specific
 - [ ] **M26.** Không có loading state nhiều chỗ 🔁 cross-module · `docs/design-system.md#loading-empty-error-states`
 - [ ] **M27.** Sentry/PostHog chưa wire 🔁 cross-module (Rule 8) · `docs/architecture.md#rule-8`

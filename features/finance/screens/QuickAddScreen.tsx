@@ -31,7 +31,8 @@ import { useSettingsStore } from '@store/settingsStore'
 import { DateRow } from '@components/DateRow'
 import { LocationRow, EMPTY_LOCATION, type LocationValue } from '@components/LocationRow'
 import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
-import { translateCategoryName } from '../i18n'
+import { translateCategoryName, matchCategory } from '../i18n'
+import { extractDateFromText } from '@services/dateParser'
 import { formatAmount } from '../services'
 import { format as formatDate } from 'date-fns'
 import { getDateFnsLocale } from '@services/locale'
@@ -139,6 +140,8 @@ export function QuickAddScreen() {
   const onParseSmartEntry = async () => {
     const text = smartText.trim()
     if (!text) return
+    // H7: parse date deterministically before AI call so result is never reliant on AI
+    const parsedDate = extractDateFromText(text)
     setParsing(true)
     try {
       const parsed = await parseSmartEntry(text, categories)
@@ -146,12 +149,8 @@ export function QuickAddScreen() {
         Alert.alert(t.ai_error, t.smart_entry_hint)
         return
       }
-      const matched = categories.find(
-        (c) =>
-          c.name.toLowerCase().includes(parsed.category_hint.toLowerCase()) ||
-          parsed.category_hint.toLowerCase().includes(c.name.toLowerCase())
-      )
-      // Fallback: first category of the appropriate kind
+      // H6: match using English exact → translated → substring, never silently fail
+      const matched = matchCategory(categories, parsed.category_hint, t)
       const fallbackCat =
         matched ??
         categories.find((c) => (parsed.direction === 'income' ? c.kind === 'income' : c.kind !== 'income')) ??
@@ -167,7 +166,7 @@ export function QuickAddScreen() {
         category: fallbackCat,
         merchant: parsed.merchant ?? '',
         note: parsed.note ?? '',
-        occurredAt: new Date(), // TODO: deterministic date parser (production-readiness H7)
+        occurredAt: parsedDate,
       }
 
       // Rule 5: show confirm sheet unless user opted out
