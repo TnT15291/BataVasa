@@ -69,7 +69,7 @@ export function AISettingsScreen() {
     if (!trimmed || keyMasked) return
     const config = AI_PROVIDERS[selectedTab]
     if (trimmed.length < 10) {
-      Alert.alert(t.ai_error, 'Key quá ngắn, kiểm tra lại.')
+      Alert.alert(t.ai_error, t.key_too_short)
       return
     }
     setSaving(true)
@@ -77,15 +77,15 @@ export function AISettingsScreen() {
     setSaving(false)
     setKeyMasked(true)
     await loadStatus()
-    Alert.alert('✓', `${config.name} API Key đã lưu`)
+    Alert.alert('✓', `${config.name} — ${t.key_saved_for}`)
   }
 
   const onDelete = () => {
     const config = AI_PROVIDERS[selectedTab]
-    Alert.alert(`Xóa ${config.name} Key?`, 'Key sẽ bị xóa khỏi thiết bị.', [
-      { text: 'Hủy', style: 'cancel' },
+    Alert.alert(`${t.delete} ${config.name} Key?`, t.delete_key_msg, [
+      { text: t.cancel, style: 'cancel' },
       {
-        text: 'Xóa',
+        text: t.delete,
         style: 'destructive',
         onPress: async () => {
           await deleteProviderKey(selectedTab)
@@ -100,11 +100,11 @@ export function AISettingsScreen() {
 
   const onSetActive = async () => {
     if (!keysStatus[selectedTab]) {
-      Alert.alert('Chưa có key', `Nhập ${AI_PROVIDERS[selectedTab].name} API Key trước.`)
+      Alert.alert(t.no_api_key, t.add_key_first)
       return
     }
     await setAIProvider(selectedTab)
-    Alert.alert('✓', `Đang dùng ${AI_PROVIDERS[selectedTab].name}`)
+    Alert.alert('✓', t.now_using_provider)
   }
 
   const currentConfig = AI_PROVIDERS[selectedTab]
@@ -155,7 +155,7 @@ export function AISettingsScreen() {
           </Text>
           {aiProvider === selectedTab && (
             <View style={[styles.chip, { backgroundColor: theme.semantic.success }]}>
-              <Text style={styles.chipText}>Đang dùng</Text>
+              <Text style={styles.chipText}>{t.active_label}</Text>
             </View>
           )}
         </View>
@@ -180,7 +180,7 @@ export function AISettingsScreen() {
         />
 
         <Text style={[styles.hint, { color: theme.text.muted }]}>
-          Đăng ký miễn phí tại: {currentConfig.registerUrl}
+          {t.register_free_at} {currentConfig.registerUrl}
         </Text>
 
         <View style={styles.btnRow}>
@@ -219,7 +219,7 @@ export function AISettingsScreen() {
               ]}
             >
               <Text style={styles.btnText}>
-                {aiProvider === selectedTab ? 'Đang dùng' : 'Dùng provider này'}
+                {aiProvider === selectedTab ? t.active_label : t.use_this_provider}
               </Text>
             </Pressable>
           )}
@@ -235,7 +235,7 @@ export function AISettingsScreen() {
       </View>
 
       {/* Status overview */}
-      <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>TRẠNG THÁI</Text>
+      <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.ai_status.toUpperCase()}</Text>
       <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         {PROVIDER_ORDER.map((p) => {
           const cfg = AI_PROVIDERS[p]
@@ -246,7 +246,7 @@ export function AISettingsScreen() {
               <Text style={styles.statusBadge}>{cfg.badge}</Text>
               <Text style={[styles.statusName, { color: theme.text.primary }]}>{cfg.name}</Text>
               <Text style={[styles.statusVal, { color: hasKey ? theme.semantic.success : theme.text.muted }]}>
-                {isUsing ? '✅ Đang dùng' : hasKey ? '🔑 Có key' : '○ Chưa có'}
+                {isUsing ? `✅ ${t.active_label}` : hasKey ? `🔑 ${t.has_key}` : `○ ${t.no_key}`}
               </Text>
             </View>
           )
@@ -255,12 +255,12 @@ export function AISettingsScreen() {
 
       {/* Free tier info */}
       <View style={[styles.infoBox, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
-        <Text style={[styles.infoTitle, { color: theme.text.primary }]}>💡 Gợi ý dùng miễn phí</Text>
+        <Text style={[styles.infoTitle, { color: theme.text.primary }]}>💡 {t.free_tier_title}</Text>
         <Text style={[styles.infoItem, { color: theme.text.secondary }]}>
-          🟡 <Text style={{ fontWeight: '600' }}>Groq</Text> — Llama 3.3 70B, miễn phí, không giới hạn thời gian, cực nhanh
+          🟡 <Text style={{ fontWeight: '600' }}>Groq</Text> — {t.free_tier_groq}
         </Text>
         <Text style={[styles.infoItem, { color: theme.text.secondary }]}>
-          🔵 <Text style={{ fontWeight: '600' }}>Gemini</Text> — Free tier 15 req/phút, đăng ký bằng Gmail
+          🔵 <Text style={{ fontWeight: '600' }}>Gemini</Text> — {t.free_tier_gemini}
         </Text>
       </View>
     </ScrollView>

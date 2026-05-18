@@ -25,6 +25,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { parseSmartEntry } from '@services/ai/smartEntry'
+import { getProviderKey } from '@services/ai/openai'
 import { centsToDisplay, displayToCents } from '@services/ai/aiLanguage'
 import { useSettingsStore } from '@store/settingsStore'
 import { DateRow } from '@components/DateRow'
@@ -45,6 +46,11 @@ export function QuickAddScreen() {
   const currency = useSettingsStore((s) => s.currency)
   const language = useSettingsStore((s) => s.language)
   const locationAccess = useSettingsStore((s) => s.locationAccess)
+  const aiProvider = useSettingsStore((s) => s.aiProvider)
+  const [hasApiKey, setHasApiKey] = useState(false)
+  useEffect(() => {
+    getProviderKey(aiProvider).then((k) => setHasApiKey(!!k))
+  }, [aiProvider])
   const categories = useCategories()
   const allTxs = useTransactions()
   const { create, update, remove } = useFinanceActions()
@@ -288,15 +294,33 @@ export function QuickAddScreen() {
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         {/* Smart Entry */}
         <Pressable
-          onPress={() => setSmartExpanded((v) => !v)}
-          style={[styles.smartToggle, { borderColor: theme.brand.primary, backgroundColor: theme.bg.elevated }]}
+          onPress={() => {
+            if (!hasApiKey) {
+              router.push('/ai-settings')
+              return
+            }
+            setSmartExpanded((v) => !v)
+          }}
+          style={[
+            styles.smartToggle,
+            {
+              borderColor: hasApiKey ? theme.brand.primary : theme.border.strong,
+              backgroundColor: theme.bg.elevated,
+            },
+          ]}
         >
           <Text style={{ fontSize: 16 }}>✨</Text>
-          <Text style={[styles.smartToggleText, { color: theme.brand.primary }]}>{t.smart_entry}</Text>
-          <Text style={{ color: theme.brand.primary, fontSize: 16 }}>{smartExpanded ? '▲' : '▼'}</Text>
+          <Text style={[styles.smartToggleText, { color: hasApiKey ? theme.brand.primary : theme.text.muted }]}>
+            {t.smart_entry}
+          </Text>
+          {hasApiKey ? (
+            <Text style={{ color: theme.brand.primary, fontSize: 16 }}>{smartExpanded ? '▲' : '▼'}</Text>
+          ) : (
+            <Text style={{ color: theme.text.muted, fontSize: 12 }}>{t.setup_ai_first} →</Text>
+          )}
         </Pressable>
 
-        {smartExpanded && (
+        {smartExpanded && hasApiKey && (
           <View style={[styles.smartBox, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
             <Text style={[styles.smartHint, { color: theme.text.muted }]}>{t.smart_entry_hint}</Text>
             <TextInput
