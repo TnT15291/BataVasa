@@ -78,7 +78,7 @@ export default function RootLayout() {
           <Stack.Screen
             name="index"
             options={{
-              title: t.nav_finance,
+              title: 'BataVasa',
               headerRight: () => <SettingsButton />,
             }}
           />
