@@ -65,6 +65,7 @@ export const zh: Translations = {
   api_key_required: '使用 AI 功能需要 API Key',
   delete_api_key: '删除 API Key',
   key_too_short: 'Key 太短，请检查。',
+  key_invalid_prefix: '密钥格式不正确。密钥必须以此开头：',
   key_saved_for: 'API Key 已保存',
   delete_key_msg: '密钥将从此设备中删除。',
   add_key_first: '请先输入此 provider 的 API Key。',

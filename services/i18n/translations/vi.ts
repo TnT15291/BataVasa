@@ -70,6 +70,7 @@ export const vi = {
   api_key_required: 'Cần nhập API Key để dùng tính năng AI',
   delete_api_key: 'Xóa API Key',
   key_too_short: 'Key quá ngắn, kiểm tra lại.',
+  key_invalid_prefix: 'Key không đúng định dạng. Key phải bắt đầu bằng',
   key_saved_for: 'API Key đã lưu',
   delete_key_msg: 'Key sẽ bị xóa khỏi thiết bị.',
   add_key_first: 'Nhập API Key của provider này trước.',

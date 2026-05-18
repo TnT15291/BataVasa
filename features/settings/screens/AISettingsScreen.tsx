@@ -72,6 +72,10 @@ export function AISettingsScreen() {
       Alert.alert(t.ai_error, t.key_too_short)
       return
     }
+    if (!trimmed.startsWith(config.keyPrefix)) {
+      Alert.alert(t.ai_error, `${t.key_invalid_prefix} "${config.keyPrefix}..."`)
+      return
+    }
     setSaving(true)
     await saveProviderKey(selectedTab, trimmed)
     setSaving(false)

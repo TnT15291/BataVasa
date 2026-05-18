@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/us
 import { generateReport, type ReportType } from '@services/ai/reports'
 import { getDateFnsLocale } from '@services/locale'
 import { useSettingsStore } from '@store/settingsStore'
+import { getProviderKey } from '@services/ai/openai'
 
 type Period = ReportType
 
@@ -61,14 +62,24 @@ export function ReportsScreen() {
   const allTxs = useTransactions()
   const cats = useCategories()
   const language = useSettingsStore((s) => s.language)
+  const aiProvider = useSettingsStore((s) => s.aiProvider)
   const dfLocale = getDateFnsLocale(language)
 
+  const [hasApiKey, setHasApiKey] = useState(false)
+  const [keyChecked, setKeyChecked] = useState(false)
   const [period, setPeriod] = useState<Period>('monthly')
   const [anchorDate, setAnchorDate] = useState(new Date())
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [report, setReport] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    getProviderKey(aiProvider).then((k) => {
+      setHasApiKey(!!k)
+      setKeyChecked(true)
+    })
+  }, [aiProvider])
 
   const onPeriodChange = (p: Period) => {
     setPeriod(p)
@@ -128,10 +139,7 @@ export function ReportsScreen() {
       setReport(text)
     } catch (e: any) {
       if (e?.message === 'NO_API_KEY') {
-        Alert.alert(t.no_api_key, t.no_api_key_msg, [
-          { text: t.go_to_settings, onPress: () => router.push('/ai-settings') },
-          { text: 'OK', style: 'cancel' },
-        ])
+        setHasApiKey(false)
       } else if (e?.message === 'NO_DATA') {
         Alert.alert(t.no_insights, t.no_insights_msg)
       } else {
@@ -232,36 +240,47 @@ export function ReportsScreen() {
           </>
         ) : !loading ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📊</Text>
+            <Text style={styles.emptyIcon}>{keyChecked && !hasApiKey ? '🔑' : '📊'}</Text>
             <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>
-              {range ? range.label : t.custom_range}
+              {keyChecked && !hasApiKey ? t.setup_ai_first : (range ? range.label : t.custom_range)}
             </Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.no_insights_msg}</Text>
+            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>
+              {keyChecked && !hasApiKey ? t.no_api_key_msg : t.no_insights_msg}
+            </Text>
           </View>
         ) : null}
       </ScrollView>
 
       {/* Generate button */}
       <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
-        <Pressable
-          onPress={generate}
-          disabled={loading || (period === 'custom' && !range)}
-          style={[
-            styles.btn,
-            {
-              backgroundColor:
-                loading || (period === 'custom' && !range)
-                  ? theme.border.strong
-                  : theme.brand.primary,
-            },
-          ]}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.btnText}>{report ? t.refresh : t.generate}</Text>
-          )}
-        </Pressable>
+        {keyChecked && !hasApiKey ? (
+          <Pressable
+            onPress={() => router.push('/ai-settings')}
+            style={[styles.btn, { backgroundColor: theme.brand.accent }]}
+          >
+            <Text style={styles.btnText}>{t.go_to_settings} →</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={generate}
+            disabled={loading || !keyChecked || (period === 'custom' && !range)}
+            style={[
+              styles.btn,
+              {
+                backgroundColor:
+                  loading || !keyChecked || (period === 'custom' && !range)
+                    ? theme.border.strong
+                    : theme.brand.primary,
+              },
+            ]}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.btnText}>{report ? t.refresh : t.generate}</Text>
+            )}
+          </Pressable>
+        )}
       </View>
     </View>
   )

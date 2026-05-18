@@ -65,6 +65,7 @@ export const fr: Translations = {
   api_key_required: 'Clé API requise pour les fonctions IA',
   delete_api_key: 'Supprimer la clé API',
   key_too_short: 'Clé trop courte, veuillez vérifier.',
+  key_invalid_prefix: 'Format de clé invalide. La clé doit commencer par',
   key_saved_for: 'Clé API enregistrée',
   delete_key_msg: 'La clé sera supprimée de cet appareil.',
   add_key_first: 'Entrez d\'abord la clé API de ce provider.',

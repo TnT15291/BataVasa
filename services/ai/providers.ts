@@ -37,7 +37,7 @@ export const AI_PROVIDERS: Record<AIProvider, ProviderConfig> = {
       { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (stable)' },
     ],
     keyStore: 'gemini_api_key',
-    keyPrefix: 'AI',
+    keyPrefix: 'AIza',
     registerUrl: 'aistudio.google.com',
     badge: '🔵',
   },

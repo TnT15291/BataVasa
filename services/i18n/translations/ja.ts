@@ -65,6 +65,7 @@ export const ja: Translations = {
   api_key_required: 'AI 機能には API Key が必要です',
   delete_api_key: 'API Key を削除',
   key_too_short: 'Key が短すぎます。確認してください。',
+  key_invalid_prefix: 'Key の形式が正しくありません。Key は次で始まる必要があります：',
   key_saved_for: 'API Key を保存しました',
   delete_key_msg: 'キーはこのデバイスから削除されます。',
   add_key_first: 'このプロバイダーの API Key を先に入力してください。',

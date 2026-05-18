@@ -65,6 +65,7 @@ export const en: Translations = {
   api_key_required: 'API Key required for AI features',
   delete_api_key: 'Delete API Key',
   key_too_short: 'Key is too short, please check again.',
+  key_invalid_prefix: 'Invalid key format. Key must start with',
   key_saved_for: 'API Key saved',
   delete_key_msg: 'The key will be removed from this device.',
   add_key_first: 'Enter the API Key for this provider first.',

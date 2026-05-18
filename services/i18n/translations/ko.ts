@@ -65,6 +65,7 @@ export const ko: Translations = {
   api_key_required: 'AI 기능에는 API Key가 필요합니다',
   delete_api_key: 'API Key 삭제',
   key_too_short: 'Key가 너무 짧습니다. 다시 확인하세요.',
+  key_invalid_prefix: '잘못된 키 형식입니다. 키는 다음으로 시작해야 합니다:',
   key_saved_for: 'API Key가 저장되었습니다',
   delete_key_msg: '이 기기에서 키가 삭제됩니다.',
   add_key_first: '먼저 이 제공업체의 API Key를 입력하세요.',
