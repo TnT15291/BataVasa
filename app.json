@@ -14,7 +14,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "BataVasa uses your microphone for voice input to quickly add transactions, habits, journal entries, and reminders."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -26,7 +29,8 @@
       "package": "com.batavasa.app",
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -34,6 +38,7 @@
     },
     "plugins": [
       "expo-sqlite",
+      "expo-av",
       "expo-secure-store",
       "expo-router",
       "expo-notifications",
@@ -43,7 +48,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "BataVasa uses your location to tag transactions, journal entries, and other activities. You can disable this anytime in Settings."
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
       "tsconfigPaths": true,

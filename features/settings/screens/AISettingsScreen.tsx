@@ -13,6 +13,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore, type AIProvider } from '@store/settingsStore'
+import { hapticSaveSuccess } from '@services/haptics'
 import {
   getProviderKey,
   saveProviderKey,
@@ -81,6 +82,7 @@ export function AISettingsScreen() {
     setSaving(false)
     setKeyMasked(true)
     await loadStatus()
+    void hapticSaveSuccess()
     Alert.alert('✓', `${config.name} — ${t.key_saved_for}`)
   }
 
@@ -108,6 +110,7 @@ export function AISettingsScreen() {
       return
     }
     await setAIProvider(selectedTab)
+    void hapticSaveSuccess()
     Alert.alert('✓', t.now_using_provider)
   }
 

@@ -12,6 +12,8 @@ import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { parseUniversalEntry, type UniversalEntry } from '@services/ai/universalEntry'
 import { getProviderKey } from '@services/ai/openai'
+import { hapticSaveSuccess } from '@services/haptics'
+import { VoiceButton } from '@components/VoiceButton'
 import { matchCategory } from '@features/finance/i18n'
 import { useCategories } from '@features/finance/hooks/useFinance'
 import { useFinanceStore } from '@store/financeStore'
@@ -51,27 +53,20 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
 
   const handleClose = () => { reset(); onClose() }
 
-  const onAnalyze = async () => {
-    if (!text.trim()) return
+  const onAnalyze = async (override?: string) => {
+    const input = (override ?? text).trim()
+    if (!input) return
     const provider = useSettingsStore.getState().aiProvider
     const key = await getProviderKey(provider)
-    if (!key) {
-      Alert.alert(t.api_key_required, t.no_api_key_msg)
-      return
-    }
+    if (!key) { Alert.alert(t.api_key_required, t.no_api_key_msg); return }
+    if (override) setText(override)
     setAnalyzing(true)
     try {
-      const parsed = await parseUniversalEntry(text.trim())
-      if (!parsed) {
-        Alert.alert(t.ai_error, t.parse_failed)
-      } else {
-        setResult(parsed)
-      }
-    } catch {
-      Alert.alert(t.ai_error, t.parse_failed)
-    } finally {
-      setAnalyzing(false)
-    }
+      const parsed = await parseUniversalEntry(input)
+      if (!parsed) { Alert.alert(t.ai_error, t.parse_failed) }
+      else { setResult(parsed) }
+    } catch { Alert.alert(t.ai_error, t.parse_failed) }
+    finally { setAnalyzing(false) }
   }
 
   const onSave = async () => {
@@ -96,6 +91,7 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
       })
       setSaving(false)
       if (!res.ok) { Alert.alert(t.could_not_save, res.error); return }
+      void hapticSaveSuccess()
       handleClose()
       return
     }
@@ -110,6 +106,7 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
       })
       setSaving(false)
       if (!res.ok) { Alert.alert(t.could_not_save, res.error); return }
+      void hapticSaveSuccess()
       handleClose()
       return
     }
@@ -190,15 +187,18 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
                 autoFocus
               />
               <Text style={[styles.examples, { color: theme.text.muted }]}>{t.universal_add_examples}</Text>
-              <Pressable
-                onPress={onAnalyze}
-                disabled={analyzing || !text.trim()}
-                style={[styles.analyzeBtn, { backgroundColor: analyzing || !text.trim() ? theme.text.muted : theme.brand.primary }]}
-              >
-                {analyzing
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.analyzeBtnText}>{t.parse_btn}</Text>}
-              </Pressable>
+              <View style={styles.analyzeRow}>
+                <VoiceButton onResult={(t) => onAnalyze(t)} disabled={analyzing} size={44} />
+                <Pressable
+                  onPress={() => onAnalyze()}
+                  disabled={analyzing || !text.trim()}
+                  style={[styles.analyzeBtn, { backgroundColor: analyzing || !text.trim() ? theme.text.muted : theme.brand.primary }]}
+                >
+                  {analyzing
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.analyzeBtnText}>{t.parse_btn}</Text>}
+                </Pressable>
+              </View>
             </>
           ) : (
             <>
@@ -246,7 +246,8 @@ const styles = StyleSheet.create({
     padding: spacing[3], fontSize: 15, minHeight: 80, textAlignVertical: 'top',
   },
   examples: { fontSize: 12, marginTop: -spacing[2] },
-  analyzeBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
+  analyzeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  analyzeBtn: { flex: 1, paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   analyzeBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   youSaid: { fontSize: 13, fontStyle: 'italic' },
   resultCard: {

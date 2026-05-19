@@ -10,6 +10,7 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseHabitLog, type ParsedHabitLog } from '@services/ai/habitParser'
+import { VoiceButton } from '@components/VoiceButton'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
 
 const CADENCE_COLORS: Record<string, string> = {
@@ -79,27 +80,19 @@ export function HabitListScreen() {
   const [parsed, setParsed] = useState<ParsedHabitLog | null>(null)
   const [originalText, setOriginalText] = useState('')
 
-  const handleParse = async () => {
-    if (!nlText.trim()) return
+  const handleParse = async (override?: string) => {
+    const input = (override ?? nlText).trim()
+    if (!input) return
     const key = await getProviderKey(aiProvider)
-    if (!key) {
-      Alert.alert(t.no_api_key, t.no_api_key_msg)
-      return
-    }
+    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (override) setNlText(override)
     setParsing(true)
     try {
-      const result = await parseHabitLog(nlText.trim(), habits)
-      if (!result) {
-        Alert.alert(t.ai_error, t.parse_failed)
-      } else {
-        setOriginalText(nlText.trim())
-        setParsed(result)
-      }
-    } catch {
-      Alert.alert(t.ai_error, t.parse_failed)
-    } finally {
-      setParsing(false)
-    }
+      const result = await parseHabitLog(input, habits)
+      if (!result) { Alert.alert(t.ai_error, t.parse_failed) }
+      else { setOriginalText(input); setParsed(result) }
+    } catch { Alert.alert(t.ai_error, t.parse_failed) }
+    finally { setParsing(false) }
   }
 
   const handleConfirm = async () => {
@@ -158,11 +151,12 @@ export function HabitListScreen() {
           placeholderTextColor={theme.text.muted}
           style={[styles.nlInput, { color: theme.text.primary, backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
           returnKeyType="done"
-          onSubmitEditing={handleParse}
+          onSubmitEditing={() => handleParse()}
           editable={!parsing}
         />
+        <VoiceButton onResult={(text) => handleParse(text)} disabled={parsing} size={36} />
         <Pressable
-          onPress={handleParse}
+          onPress={() => handleParse()}
           disabled={parsing || !nlText.trim()}
           style={[styles.nlBtn, { backgroundColor: (parsing || !nlText.trim()) ? theme.border.strong : theme.brand.primary }]}
         >

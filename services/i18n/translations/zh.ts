@@ -111,6 +111,8 @@ export const zh: Translations = {
   yearly_report: '年度报告',
   no_api_key: '未设置 API Key',
   no_api_key_msg: '前往 设置 → 智能 添加 API Key。',
+  mic_denied: '麦克风访问被拒绝。',
+  voice_no_key: '语音输入需要 OpenAI 或 Groq API Key。',
   go_to_settings: '前往设置',
   copy: '复制',
   copied: '已复制！',
@@ -150,6 +152,9 @@ export const zh: Translations = {
   location_empty: '点击添加',
   location_placeholder: '输入地点名称',
   fetching_location: '正在获取位置…',
+
+  sync_data: '云同步',
+  sync_data_hint: '将此模块备份并同步到云端。需要账户。',
 
   privacy: '隐私',
   location_access: '允许位置',
@@ -215,6 +220,8 @@ export const zh: Translations = {
   universal_add_title: '快速添加',
   universal_add_hint: '花了50元买咖啡，明天9点会议提醒，每天健身…',
   universal_add_examples: '系统将自动分类到对应模块',
+  web_persistence_warning_title: 'Firefox web storage warning',
+  web_persistence_warning_msg: 'Firefox may not persist local data on web. Use Chrome/Safari or the mobile app for important data.',
   classified_finance: '财务',
   classified_reminder: '提醒',
   classified_habits: '习惯',
@@ -306,6 +313,7 @@ export const zh: Translations = {
 
   // Per-module NL input placeholders
   nl_placeholder_habits: '例：今天跑步 30 分钟…',
+  nl_placeholder_finance: '例：昨天午餐 50 元…',
   nl_placeholder_journal: '例：今天我很开心因为…',
   nl_placeholder_reminder: '例：明天9点团队会议提醒…',
   nl_reject_to_form: '手动编辑',

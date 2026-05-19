@@ -111,6 +111,8 @@ export const ja: Translations = {
   yearly_report: '年次レポート',
   no_api_key: 'API Key未設定',
   no_api_key_msg: '設定 → スマート から API Key を追加してください。',
+  mic_denied: 'マイクへのアクセスが拒否されました。',
+  voice_no_key: '音声入力には OpenAI または Groq の API Key が必要です。',
   go_to_settings: '設定へ',
   copy: 'コピー',
   copied: 'コピーしました！',
@@ -150,6 +152,9 @@ export const ja: Translations = {
   location_empty: 'タップして追加',
   location_placeholder: '場所名を入力',
   fetching_location: '位置を取得中…',
+
+  sync_data: 'クラウド同期',
+  sync_data_hint: 'このモジュールをクラウドにバックアップ・同期します。アカウントが必要です。',
 
   privacy: 'プライバシー',
   location_access: '位置情報を許可',
@@ -215,6 +220,8 @@ export const ja: Translations = {
   universal_add_title: 'クイック追加',
   universal_add_hint: 'コーヒー500円、明日9時ミーティングリマインダー、毎日ジム…',
   universal_add_examples: 'システムが自動で適切なモジュールに分類します',
+  web_persistence_warning_title: 'Firefox web storage warning',
+  web_persistence_warning_msg: 'Firefox may not persist local data on web. Use Chrome/Safari or the mobile app for important data.',
   classified_finance: '財務',
   classified_reminder: 'リマインダー',
   classified_habits: '習慣',
@@ -306,6 +313,7 @@ export const ja: Translations = {
 
   // Per-module NL input placeholders
   nl_placeholder_habits: '例：今日 30 分走った…',
+  nl_placeholder_finance: '例：昨日ランチ 5000 円…',
   nl_placeholder_journal: '例：今日は嬉しかった、なぜなら…',
   nl_placeholder_reminder: '例：明日9時チームミーティングのリマインダー…',
   nl_reject_to_form: '手動で編集',

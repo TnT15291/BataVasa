@@ -117,6 +117,8 @@ export const vi = {
   yearly_report: 'Báo cáo năm',
   no_api_key: 'Chưa cài API Key',
   no_api_key_msg: 'Vào Cài đặt → Thông minh để thêm API Key.',
+  mic_denied: 'Không có quyền truy cập microphone.',
+  voice_no_key: 'Cần OpenAI hoặc Groq API key để dùng giọng nói.',
   go_to_settings: 'Đến Cài đặt',
   copy: 'Sao chép',
   copied: 'Đã sao chép!',
@@ -162,6 +164,9 @@ export const vi = {
   fetching_location: 'Đang lấy vị trí…',
 
   // Settings — Privacy
+  sync_data: 'Đồng bộ đám mây',
+  sync_data_hint: 'Sao lưu và đồng bộ module này lên đám mây. Cần có tài khoản.',
+
   privacy: 'Quyền riêng tư',
   location_access: 'Cho phép vị trí',
   location_access_hint: 'Tự động đính kèm vị trí hiện tại vào giao dịch, nhật ký, nhắc nhở. Có thể tắt bất cứ lúc nào.',
@@ -232,6 +237,8 @@ export const vi = {
   universal_add_title: 'Thêm nhanh',
   universal_add_hint: 'Tiêu 150k cafe, nhắc họp 9h sáng mai, tập gym mỗi ngày…',
   universal_add_examples: 'Hệ thống sẽ tự phân loại vào đúng module',
+  web_persistence_warning_title: 'Canh bao luu tru tren Firefox',
+  web_persistence_warning_msg: 'Firefox co the khong luu du lieu cuc bo tren web. Hay dung Chrome/Safari hoac app mobile cho du lieu quan trong.',
   classified_finance: 'Tài chính',
   classified_reminder: 'Nhắc nhở',
   classified_habits: 'Thói quen',
@@ -323,6 +330,7 @@ export const vi = {
 
   // Per-module NL input placeholders
   nl_placeholder_habits: 'Vd: chạy bộ 30 phút hôm nay…',
+  nl_placeholder_finance: 'Vd: trưa nay ăn 50k hôm qua…',
   nl_placeholder_journal: 'Vd: hôm nay tôi cảm thấy vui vì…',
   nl_placeholder_reminder: 'Vd: nhắc họp nhóm 9h sáng mai…',
   nl_reject_to_form: 'Sửa thủ công',

@@ -66,6 +66,12 @@ function fixReminderTimezone(isoStr: string): Date {
   return new Date(isoStr)
 }
 
+function normalizeAIISOString(isoStr: string | undefined, fallback: Date): string {
+  if (!isoStr) return fallback.toISOString()
+  const d = new Date(isoStr)
+  return isNaN(d.getTime()) ? fallback.toISOString() : d.toISOString()
+}
+
 export async function parseUniversalEntry(text: string): Promise<UniversalEntry | null> {
   const language = getAILanguage()
   const currency = getAICurrency()
@@ -125,7 +131,10 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
     // Safety: if finance and we have deterministic amount, enforce it
     if (parsed.module === 'finance' && localAmount !== null) {
       const ratio = parsed.amount_cents / localAmount
-      if (ratio > 10 || ratio < 0.1) parsed.amount_cents = localAmount
+      if (ratio >= 10 || ratio <= 0.1) parsed.amount_cents = localAmount
+    }
+    if (parsed.module === 'finance') {
+      parsed.occurred_at = normalizeAIISOString(parsed.occurred_at, now)
     }
 
     // Safety: reminder must have future time; fix UTC-returned times to local

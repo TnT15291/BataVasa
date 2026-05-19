@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler'
 import * as Sentry from '@sentry/react-native'
 import { useEffect, useState } from 'react'
-import { View, Text, ActivityIndicator, Pressable } from 'react-native'
+import { AppState, View, Text, ActivityIndicator, Pressable } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -9,6 +9,7 @@ import { runMigrations } from '@db/core/migrate'
 import { useTheme } from '@design/useTheme'
 import { useSettingsStore } from '@store/settingsStore'
 import { useTranslation } from '@services/i18n'
+import { track } from '@services/analytics'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
@@ -47,6 +48,16 @@ export default function RootLayout() {
       .then(() => setReady(true))
       .catch((e) => setError(String(e)))
   }, [])
+
+  useEffect(() => {
+    if (!ready) return
+    track('app_open')
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') track('app_background')
+    })
+    return () => sub.remove()
+  }, [ready])
 
   if (error) {
     return (

@@ -11,6 +11,7 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
+import { hapticSaveSuccess } from '@services/haptics'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
 
 const MOODS = [
@@ -88,6 +89,7 @@ export function JournalFormScreen() {
         })
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
+    void hapticSaveSuccess()
     router.back()
   }
 

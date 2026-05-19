@@ -7,6 +7,7 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
+import { shouldWarnAboutWebSQLitePersistence } from '@services/webPersistence'
 import { useFinanceBootstrap, useTransactions, useCategories } from '@features/finance/hooks/useFinance'
 import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
@@ -128,6 +129,13 @@ export function DailyDigestScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(false)} />}
       >
+        {shouldWarnAboutWebSQLitePersistence() ? (
+          <View style={[styles.persistenceBanner, { backgroundColor: theme.bg.elevated, borderColor: theme.semantic.warning }]}>
+            <Text style={[styles.persistenceTitle, { color: theme.text.primary }]}>{t.web_persistence_warning_title}</Text>
+            <Text style={[styles.persistenceText, { color: theme.text.muted }]}>{t.web_persistence_warning_msg}</Text>
+          </View>
+        ) : null}
+
         {/* Date Header */}
         <View style={styles.header}>
           <Text style={[styles.greeting, { color: theme.text.muted }]}>{greeting(t)}</Text>
@@ -200,6 +208,14 @@ export function DailyDigestScreen() {
 const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], paddingBottom: 100 },
   header: { paddingTop: spacing[2], paddingBottom: spacing[2], gap: 2 },
+  persistenceBanner: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[3],
+    gap: spacing[1],
+  },
+  persistenceTitle: { fontSize: 14, fontWeight: '700' },
+  persistenceText: { fontSize: 13, lineHeight: 18 },
   greeting: { fontSize: 14, fontWeight: '500' },
   dateStr: { fontSize: 22, fontWeight: '700' },
   card: {

@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
+import { hapticSaveSuccess } from '@services/haptics'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
 import type { Cadence } from '../types'
 
@@ -78,6 +79,7 @@ export function HabitFormScreen() {
       : await createHabit({ name: trimmed, icon, color, cadence, target_per_period: targetNum })
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
+    void hapticSaveSuccess()
     router.back()
   }
 

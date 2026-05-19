@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
+import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator, TextInput, Modal, Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
 import { useMemo, useState, useCallback, useEffect } from 'react'
@@ -23,6 +23,12 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getRates, convertCents } from '@services/fx'
+import { parseUniversalEntry, type UniversalEntry } from '@services/ai/universalEntry'
+import { getProviderKey } from '@services/ai/openai'
+import { matchCategory } from '@features/finance/i18n'
+import { formatAmount } from '@features/finance/services'
+import { VoiceButton } from '@components/VoiceButton'
+import { useFinanceStore } from '@store/financeStore'
 
 type Period = 'today' | 'week' | 'month' | 'all'
 type CurrencyTotals = { income: number; expense: number }
@@ -47,9 +53,62 @@ export function TransactionListScreen() {
   const txs = useTransactions()
   const cats = useCategories()
   const { remove, refresh, loadMore, hasMore, loadingMore } = useFinanceActions()
+  const createTransaction = useFinanceStore((s) => s.createTransaction)
   const [refreshing, setRefreshing] = useState(false)
   const [activePeriod, setActivePeriod] = useState<Period>('today')
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
+  const currency = useSettingsStore((s) => s.currency)
+  const language = useSettingsStore((s) => s.language)
+
+  const [nlText, setNlText] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [parsedEntry, setParsedEntry] = useState<UniversalEntry | null>(null)
+  const [originalNlText, setOriginalNlText] = useState('')
+
+  const handleNlParse = async (override?: string) => {
+    const input = (override ?? nlText).trim()
+    if (!input) return
+    const provider = useSettingsStore.getState().aiProvider
+    const key = await getProviderKey(provider)
+    if (!key) { Alert.alert(t.api_key_required, t.no_api_key_msg); return }
+    if (override) setNlText(override)
+    setParsing(true)
+    try {
+      const result = await parseUniversalEntry(input)
+      if (!result) { Alert.alert(t.ai_error, t.parse_failed); return }
+      setOriginalNlText(input)
+      setParsedEntry(result)
+    } catch { Alert.alert(t.ai_error, t.parse_failed) }
+    finally { setParsing(false) }
+  }
+
+  const handleNlConfirm = async () => {
+    if (!parsedEntry) return
+    if (parsedEntry.module !== 'finance') {
+      Alert.alert(t.ai_error, t.parse_failed)
+      setParsedEntry(null)
+      return
+    }
+    const cat = matchCategory(cats, parsedEntry.category_hint, t)
+    if (!cat) { Alert.alert(t.pick_category, t.pick_category_msg); return }
+    await createTransaction({
+      amount_cents: parsedEntry.direction === 'expense' ? -Math.abs(parsedEntry.amount_cents) : Math.abs(parsedEntry.amount_cents),
+      currency,
+      category_id: cat.id,
+      merchant: parsedEntry.merchant || undefined,
+      note: parsedEntry.note || undefined,
+      occurred_at: parsedEntry.occurred_at,
+      source: 'voice',
+    })
+    setParsedEntry(null)
+    setNlText('')
+  }
+
+  const handleNlEdit = () => {
+    setParsedEntry(null)
+    setNlText('')
+    router.push('/new' as any)
+  }
   const [fxRates, setFxRates] = useState<Record<string, number> | null>(null)
 
   useEffect(() => {
@@ -228,6 +287,29 @@ export function TransactionListScreen() {
         })}
       </View>
 
+      <View style={[styles.nlRow, { backgroundColor: theme.bg.secondary, borderBottomColor: theme.border.subtle }]}>
+        <TextInput
+          value={nlText}
+          onChangeText={setNlText}
+          placeholder={t.nl_placeholder_finance}
+          placeholderTextColor={theme.text.muted}
+          style={[styles.nlInput, { color: theme.text.primary, backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+          returnKeyType="done"
+          onSubmitEditing={() => handleNlParse()}
+          editable={!parsing}
+        />
+        <VoiceButton onResult={(text) => handleNlParse(text)} disabled={parsing} size={36} />
+        <Pressable
+          onPress={() => handleNlParse()}
+          disabled={parsing || !nlText.trim()}
+          style={[styles.nlBtn, { backgroundColor: (parsing || !nlText.trim()) ? theme.border.strong : theme.brand.primary }]}
+        >
+          {parsing
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={styles.nlBtnText}>{t.parse_btn}</Text>}
+        </Pressable>
+      </View>
+
       <View style={styles.aiRow}>
         <Pressable
           onPress={() => router.push('/reports' as any)}
@@ -297,6 +379,43 @@ export function TransactionListScreen() {
       >
         <Text style={styles.fabIcon}>+</Text>
       </Pressable>
+
+      <Modal visible={!!parsedEntry} transparent animationType="slide" onRequestClose={() => setParsedEntry(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setParsedEntry(null)} />
+        <View style={[styles.sheet, { backgroundColor: theme.bg.elevated }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: theme.border.strong }]} />
+          <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.ai_confirm_title}</Text>
+
+          <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_you_said}</Text>
+            <Text style={[styles.infoValue, { color: theme.text.primary }]}>{originalNlText}</Text>
+          </View>
+
+          {parsedEntry && parsedEntry.module === 'finance' && (
+            <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
+              <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
+              <Text style={[styles.infoValue, { color: theme.text.primary }]}>
+                {`${parsedEntry.direction === 'expense' ? '- ' : '+ '}${formatAmount(parsedEntry.amount_cents, currency, language)}${parsedEntry.category_hint ? ' · ' + parsedEntry.category_hint : ''}${parsedEntry.merchant ? ' · ' + parsedEntry.merchant : ''}`}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.sheetActions}>
+            <Pressable
+              onPress={handleNlEdit}
+              style={[styles.sheetBtn, { backgroundColor: theme.bg.secondary, borderColor: theme.border.strong }]}
+            >
+              <Text style={[styles.sheetBtnText, { color: theme.text.secondary }]}>{t.nl_reject_to_form}</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleNlConfirm}
+              style={[styles.sheetBtn, { backgroundColor: theme.brand.primary }]}
+            >
+              <Text style={[styles.sheetBtnText, { color: '#fff' }]}>{t.ai_confirm_save}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -364,4 +483,29 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   fabIcon: { color: '#fff', fontSize: 28, fontWeight: '600', lineHeight: 30 },
+  nlRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[2],
+    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  nlInput: {
+    flex: 1, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
+    fontSize: 14,
+  },
+  nlBtn: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: radius.md },
+  nlBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
+    padding: spacing[4], paddingBottom: spacing[8], gap: spacing[3],
+  },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: spacing[2] },
+  sheetTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  infoRow: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], gap: spacing[1] },
+  infoLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  infoValue: { fontSize: 15 },
+  sheetActions: { flexDirection: 'row', gap: spacing[3], marginTop: spacing[2] },
+  sheetBtn: { flex: 1, paddingVertical: spacing[3], borderRadius: radius.md, alignItems: 'center', borderWidth: 1 },
+  sheetBtnText: { fontSize: 15, fontWeight: '600' },
 })

@@ -8,6 +8,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
+import { hapticSaveSuccess } from '@services/haptics'
 import { useFinanceBootstrap, useCategories, useCategoryActions } from '../hooks/useFinance'
 import { translateKind } from '../i18n'
 import { displayToCents, centsToDisplay } from '@services/ai/aiLanguage'
@@ -78,6 +79,7 @@ export function CategoryFormScreen() {
       Alert.alert(t.could_not_save, res.error ?? '')
       return
     }
+    void hapticSaveSuccess()
     router.back()
   }
 

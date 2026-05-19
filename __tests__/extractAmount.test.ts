@@ -37,3 +37,12 @@ describe('extractAmount — JPY', () => {
   it('parses "500" → 50000 cents (×100)', () => expect(extractAmount('lunch 500', jpy)).toBe(50_000))
   it('parses "1k" → 100000 cents', () => expect(extractAmount('taxi 1k yen', jpy)).toBe(100_000))
 })
+describe('extractAmount grouped separators', () => {
+  it('parses VND grouped thousands', () => {
+    expect(extractAmount('cafe 50.000 d', 'VND')).toBe(50_000)
+  })
+
+  it('parses VND grouped millions', () => {
+    expect(extractAmount('rent 1.000.000', 'VND')).toBe(1_000_000)
+  })
+})

@@ -11,6 +11,7 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
+import { hapticSaveSuccess } from '@services/haptics'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Recurrence } from '../types'
 
@@ -112,6 +113,7 @@ export function ReminderFormScreen() {
       : await createReminder({ title: trimmed, note: note.trim() || undefined, remind_at: notifyAt.toISOString(), advance_minutes: advanceMinutes, recurrence })
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
+    void hapticSaveSuccess()
     router.back()
   }
 

@@ -111,6 +111,8 @@ export const fr: Translations = {
   yearly_report: 'Rapport annuel',
   no_api_key: 'Pas de clé API',
   no_api_key_msg: 'Allez dans Paramètres → Intelligent pour ajouter votre clé API.',
+  mic_denied: 'Accès au microphone refusé.',
+  voice_no_key: 'Clé API OpenAI ou Groq requise pour la saisie vocale.',
   go_to_settings: 'Aller aux paramètres',
   copy: 'Copier',
   copied: 'Copié !',
@@ -150,6 +152,9 @@ export const fr: Translations = {
   location_empty: 'Appuyez pour ajouter',
   location_placeholder: 'Entrez un nom de lieu',
   fetching_location: 'Récupération de la position…',
+
+  sync_data: 'Synchronisation cloud',
+  sync_data_hint: 'Sauvegardez et synchronisez ce module avec le cloud. Nécessite un compte.',
 
   privacy: 'Confidentialité',
   location_access: 'Autoriser la localisation',
@@ -215,6 +220,8 @@ export const fr: Translations = {
   universal_add_title: 'Ajout rapide',
   universal_add_hint: 'Dépensé 5€ café, rappel réunion demain 9h, gym chaque jour…',
   universal_add_examples: 'Le système classe automatiquement dans le bon module',
+  web_persistence_warning_title: 'Avertissement de stockage Firefox',
+  web_persistence_warning_msg: 'Firefox peut ne pas conserver les donnees locales sur le web. Utilisez Chrome/Safari ou l app mobile pour les donnees importantes.',
   classified_finance: 'Finances',
   classified_reminder: 'Rappel',
   classified_habits: 'Habitudes',
@@ -306,6 +313,7 @@ export const fr: Translations = {
 
   // Per-module NL input placeholders
   nl_placeholder_habits: 'ex : couru 30 minutes aujourd\'hui…',
+  nl_placeholder_finance: 'ex : déjeuner 50 € hier…',
   nl_placeholder_journal: 'ex : aujourd\'hui je me sens heureux parce que…',
   nl_placeholder_reminder: 'ex : rappelle-moi réunion d\'équipe 9h demain…',
   nl_reject_to_form: 'Modifier manuellement',

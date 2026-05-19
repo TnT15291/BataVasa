@@ -12,6 +12,7 @@ import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { getProviderKey } from '@services/ai/openai'
 import { parseJournalEntry, type ParsedJournal } from '@services/ai/journalParser'
+import { VoiceButton } from '@components/VoiceButton'
 import { useJournalsBootstrap, useJournals } from '../hooks/useJournals'
 import { useJournalActions } from '../hooks/useJournals'
 import { generateJournalReflection, type JournalReflection } from '@services/ai/journalInsight'
@@ -150,15 +151,17 @@ export function JournalListScreen() {
   const [parsedJournal, setParsedJournal] = useState<ParsedJournal | null>(null)
   const [originalNlText, setOriginalNlText] = useState('')
 
-  const handleNlParse = async () => {
-    if (!nlText.trim()) return
+  const handleNlParse = async (override?: string) => {
+    const input = (override ?? nlText).trim()
+    if (!input) return
     const key = await getProviderKey(aiProvider)
     if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (override) setNlText(override)
     setParsing(true)
     try {
-      const result = await parseJournalEntry(nlText.trim())
+      const result = await parseJournalEntry(input)
       if (!result) { Alert.alert(t.ai_error, t.parse_failed); return }
-      setOriginalNlText(nlText.trim())
+      setOriginalNlText(input)
       setParsedJournal(result)
     } catch { Alert.alert(t.ai_error, t.parse_failed) }
     finally { setParsing(false) }
@@ -242,12 +245,13 @@ export function JournalListScreen() {
           placeholderTextColor={theme.text.muted}
           style={[styles.nlInput, { color: theme.text.primary, backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
           returnKeyType="done"
-          onSubmitEditing={handleNlParse}
+          onSubmitEditing={() => handleNlParse()}
           editable={!parsing}
           multiline={false}
         />
+        <VoiceButton onResult={(text) => handleNlParse(text)} disabled={parsing} size={36} />
         <Pressable
-          onPress={handleNlParse}
+          onPress={() => handleNlParse()}
           disabled={parsing || !nlText.trim()}
           style={[styles.nlBtn, { backgroundColor: (parsing || !nlText.trim()) ? theme.border.strong : theme.brand.primary }]}
         >

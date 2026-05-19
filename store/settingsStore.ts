@@ -17,6 +17,10 @@ type SettingsState = {
   aiProvider: AIProvider
   locationAccess: boolean
   aiAutoConfirm: boolean
+  syncFinance: boolean
+  syncReminders: boolean
+  syncHabits: boolean
+  syncJournals: boolean
   loaded: boolean
 
   loadSettings: () => Promise<void>
@@ -28,6 +32,10 @@ type SettingsState = {
   setAIProvider: (p: AIProvider) => Promise<void>
   setLocationAccess: (allowed: boolean) => Promise<void>
   setAIAutoConfirm: (enabled: boolean) => Promise<void>
+  setSyncFinance: (enabled: boolean) => Promise<void>
+  setSyncReminders: (enabled: boolean) => Promise<void>
+  setSyncHabits: (enabled: boolean) => Promise<void>
+  setSyncJournals: (enabled: boolean) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -39,6 +47,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   aiProvider: 'openai',
   locationAccess: false,
   aiAutoConfirm: true,
+  syncFinance: true,
+  syncReminders: true,
+  syncHabits: true,
+  syncJournals: true,
   loaded: false,
 
   async loadSettings() {
@@ -55,6 +67,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       locationAccess: all['location_access'] === 'true',
       // default true — only false if explicitly stored
       aiAutoConfirm: all['ai_auto_confirm'] !== 'false',
+      syncFinance: all['sync_finance'] !== 'false',
+      syncReminders: all['sync_reminders'] !== 'false',
+      syncHabits: all['sync_habits'] !== 'false',
+      syncJournals: all['sync_journals'] !== 'false',
       loaded: true,
     })
   },
@@ -100,5 +116,25 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   async setAIAutoConfirm(enabled) {
     set({ aiAutoConfirm: enabled })
     await db.setSetting('ai_auto_confirm', enabled ? 'true' : 'false')
+  },
+
+  async setSyncFinance(enabled) {
+    set({ syncFinance: enabled })
+    await db.setSetting('sync_finance', enabled ? 'true' : 'false')
+  },
+
+  async setSyncReminders(enabled) {
+    set({ syncReminders: enabled })
+    await db.setSetting('sync_reminders', enabled ? 'true' : 'false')
+  },
+
+  async setSyncHabits(enabled) {
+    set({ syncHabits: enabled })
+    await db.setSetting('sync_habits', enabled ? 'true' : 'false')
+  },
+
+  async setSyncJournals(enabled) {
+    set({ syncJournals: enabled })
+    await db.setSetting('sync_journals', enabled ? 'true' : 'false')
   },
 }))

@@ -24,13 +24,15 @@ export function extractAmount(text: string, currency: string): number | null {
     { re: /(\d+(?:\.\d+)?)\s*ng[aà]n\b/, mul: 1_000 },
     { re: /(\d+(?:\.\d+)?)\s*ngh[ìi]n\b/, mul: 1_000 },
     { re: /(\d+(?:\.\d+)?)\s*k\b(?!\w)/, mul: 1_000 },
+    { re: /(\d{1,3}(?:\.\d{3})+)\b/, mul: 1 },
     { re: /(\d{3,})\b/, mul: 1 }, // raw number ≥100
   ]
 
   for (const { re, mul } of patterns) {
     const m = t.match(re)
     if (m && m[1]) {
-      const num = parseFloat(m[1])
+      const token = m[1]
+      const num = mul === 1 && token.includes('.') ? parseInt(token.replace(/\./g, ''), 10) : parseFloat(token)
       if (!isFinite(num) || num <= 0) continue
       const raw = Math.round(num * mul)
       // Convert to "amount_cents" per active currency rule
@@ -88,7 +90,7 @@ Rules:
     // Safety net: if our deterministic extractor disagrees by ≥10×, trust ours
     if (localAmount !== null) {
       const ratio = parsed.amount_cents / localAmount
-      if (ratio > 10 || ratio < 0.1) parsed.amount_cents = localAmount
+      if (ratio >= 10 || ratio <= 0.1) parsed.amount_cents = localAmount
     }
     return parsed
   } catch {

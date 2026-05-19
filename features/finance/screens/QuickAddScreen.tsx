@@ -31,13 +31,16 @@ import { useSettingsStore } from '@store/settingsStore'
 import { DateRow } from '@components/DateRow'
 import { LocationRow, EMPTY_LOCATION, type LocationValue } from '@components/LocationRow'
 import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
+import { VoiceButton } from '@components/VoiceButton'
 import { translateCategoryName, matchCategory } from '../i18n'
 import { extractDateFromText } from '@services/dateParser'
 import { formatAmount } from '../services'
 import { format as formatDate } from 'date-fns'
 import { getDateFnsLocale } from '@services/locale'
+import { hapticSaveSuccess } from '@services/haptics'
 
 type Direction = 'expense' | 'income'
+type SmartEntrySource = 'manual' | 'voice'
 
 export function QuickAddScreen() {
   useFinanceBootstrap()
@@ -110,6 +113,7 @@ export function QuickAddScreen() {
       merchant: string
       note: string
       occurredAt: Date
+      source: SmartEntrySource
     }
   } | null>(null)
   const [confirmBusy, setConfirmBusy] = useState(false)
@@ -127,6 +131,7 @@ export function QuickAddScreen() {
     merchant: string
     note: string
     occurredAt: Date
+    source?: SmartEntrySource
   }) => {
     setAmountText(String(centsToDisplay(p.amount_cents, currency)))
     setDirection(p.direction)
@@ -137,9 +142,10 @@ export function QuickAddScreen() {
     setSmartExpanded(false)
   }
 
-  const onParseSmartEntry = async () => {
-    const text = smartText.trim()
+  const onParseSmartEntry = async (override?: string, source: SmartEntrySource = 'manual') => {
+    const text = (override ?? smartText).trim()
     if (!text) return
+    if (override) setSmartText(override)
     // H7: parse date deterministically before AI call so result is never reliant on AI
     const parsedDate = extractDateFromText(text)
     setParsing(true)
@@ -167,10 +173,11 @@ export function QuickAddScreen() {
         merchant: parsed.merchant ?? '',
         note: parsed.note ?? '',
         occurredAt: parsedDate,
+        source,
       }
 
-      // Rule 5: show confirm sheet unless user opted out
-      if (aiAutoConfirm) {
+      // Rule 5: voice input always requires confirmation, even when text smart entry auto-confirm is off.
+      if (source === 'voice' || aiAutoConfirm) {
         const fields: ConfirmField[] = [
           {
             label: parsed.direction === 'income' ? t.income : t.expense,
@@ -214,10 +221,11 @@ export function QuickAddScreen() {
       merchant: p.merchant || undefined,
       note: p.note || undefined,
       occurred_at: p.occurredAt.toISOString(),
-      source: 'manual',
+      source: p.source,
     })
     setConfirmBusy(false)
     if (res.ok) {
+      void hapticSaveSuccess()
       setConfirmSheet(null)
       router.back()
     } else {
@@ -266,6 +274,7 @@ export function QuickAddScreen() {
       Alert.alert(t.could_not_save, res.error ?? 'Unknown error')
       return
     }
+    void hapticSaveSuccess()
     router.back()
   }
 
@@ -330,17 +339,20 @@ export function QuickAddScreen() {
               multiline
               style={[styles.smartInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.secondary }]}
             />
-            <Pressable
-              onPress={onParseSmartEntry}
-              disabled={parsing || !smartText.trim()}
-              style={[styles.smartBtn, { backgroundColor: parsing || !smartText.trim() ? theme.text.muted : theme.brand.accent }]}
-            >
-              {parsing ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.smartBtnText}>{t.fill_from_ai}</Text>
-              )}
-            </Pressable>
+            <View style={styles.smartActions}>
+              <VoiceButton onResult={(text) => onParseSmartEntry(text, 'voice')} disabled={parsing} size={44} />
+              <Pressable
+                onPress={() => onParseSmartEntry()}
+                disabled={parsing || !smartText.trim()}
+                style={[styles.smartBtn, { backgroundColor: parsing || !smartText.trim() ? theme.text.muted : theme.brand.accent }]}
+              >
+                {parsing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.smartBtnText}>{t.fill_from_ai}</Text>
+                )}
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -480,6 +492,11 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   smartHint: { fontSize: 12 },
+  smartActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
   smartInput: {
     borderWidth: 1,
     borderRadius: radius.md,

@@ -111,6 +111,8 @@ export const ko: Translations = {
   yearly_report: '연간 보고서',
   no_api_key: 'API Key 없음',
   no_api_key_msg: '설정 → 스마트 에서 API Key를 추가하세요.',
+  mic_denied: '마이크 접근이 거부되었습니다.',
+  voice_no_key: '음성 입력에는 OpenAI 또는 Groq API Key가 필요합니다.',
   go_to_settings: '설정으로 이동',
   copy: '복사',
   copied: '복사됨!',
@@ -150,6 +152,9 @@ export const ko: Translations = {
   location_empty: '탭하여 추가',
   location_placeholder: '장소 이름 입력',
   fetching_location: '위치 가져오는 중…',
+
+  sync_data: '클라우드 동기화',
+  sync_data_hint: '이 모듈을 클라우드에 백업 및 동기화합니다. 계정이 필요합니다.',
 
   privacy: '개인정보',
   location_access: '위치 허용',
@@ -215,6 +220,8 @@ export const ko: Translations = {
   universal_add_title: '빠른 추가',
   universal_add_hint: '커피 5천원, 내일 9시 회의 알림, 매일 헬스…',
   universal_add_examples: '시스템이 자동으로 올바른 모듈로 분류합니다',
+  web_persistence_warning_title: 'Firefox web storage warning',
+  web_persistence_warning_msg: 'Firefox may not persist local data on web. Use Chrome/Safari or the mobile app for important data.',
   classified_finance: '재정',
   classified_reminder: '알림',
   classified_habits: '습관',
@@ -306,6 +313,7 @@ export const ko: Translations = {
 
   // Per-module NL input placeholders
   nl_placeholder_habits: '예: 오늘 30분 달렸어요…',
+  nl_placeholder_finance: '예: 어제 점심 50000원…',
   nl_placeholder_journal: '예: 오늘 기뻤어요, 왜냐하면…',
   nl_placeholder_reminder: '예: 내일 9시 팀 회의 알림…',
   nl_reject_to_form: '직접 입력',

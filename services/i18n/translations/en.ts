@@ -111,6 +111,8 @@ export const en: Translations = {
   yearly_report: 'Yearly Report',
   no_api_key: 'No API Key',
   no_api_key_msg: 'Go to Settings → Smart to add your API Key.',
+  mic_denied: 'Microphone access denied.',
+  voice_no_key: 'OpenAI or Groq API key required for voice input.',
   go_to_settings: 'Go to Settings',
   copy: 'Copy',
   copied: 'Copied!',
@@ -150,6 +152,9 @@ export const en: Translations = {
   location_empty: 'Tap to add',
   location_placeholder: 'Type a place name',
   fetching_location: 'Fetching location…',
+
+  sync_data: 'Cloud Sync',
+  sync_data_hint: 'Back up and sync this module to the cloud. Requires an account.',
 
   privacy: 'Privacy',
   location_access: 'Allow Location',
@@ -215,6 +220,8 @@ export const en: Translations = {
   universal_add_title: 'Quick Add',
   universal_add_hint: 'Spent 50k on coffee, meeting reminder tomorrow 9am, gym every day…',
   universal_add_examples: 'System will automatically classify into the right module',
+  web_persistence_warning_title: 'Firefox web storage warning',
+  web_persistence_warning_msg: 'Firefox may not persist local data on web. Use Chrome/Safari or the mobile app for important data.',
   classified_finance: 'Finance',
   classified_reminder: 'Reminder',
   classified_habits: 'Habits',
@@ -306,6 +313,7 @@ export const en: Translations = {
 
   // Per-module NL input placeholders
   nl_placeholder_habits: 'e.g. ran 30 minutes today…',
+  nl_placeholder_finance: 'e.g. lunch 50 USD yesterday…',
   nl_placeholder_journal: 'e.g. today I feel happy because…',
   nl_placeholder_reminder: 'e.g. remind me team meeting 9am tomorrow…',
   nl_reject_to_form: 'Edit manually',

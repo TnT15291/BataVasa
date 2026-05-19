@@ -58,6 +58,14 @@ export function SettingsScreen() {
   const setLocationAccess = useSettingsStore((s) => s.setLocationAccess)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
   const setAIAutoConfirm = useSettingsStore((s) => s.setAIAutoConfirm)
+  const syncFinance = useSettingsStore((s) => s.syncFinance)
+  const setSyncFinance = useSettingsStore((s) => s.setSyncFinance)
+  const syncReminders = useSettingsStore((s) => s.syncReminders)
+  const setSyncReminders = useSettingsStore((s) => s.setSyncReminders)
+  const syncHabits = useSettingsStore((s) => s.syncHabits)
+  const setSyncHabits = useSettingsStore((s) => s.setSyncHabits)
+  const syncJournals = useSettingsStore((s) => s.syncJournals)
+  const setSyncJournals = useSettingsStore((s) => s.setSyncJournals)
   const wipeFinance = useFinanceStore((s) => s.wipeAll)
   const wipeReminders = useRemindersStore((s) => s.wipeAll)
   const wipeJournals = useJournalsStore((s) => s.wipeAll)
@@ -181,6 +189,13 @@ export function SettingsScreen() {
 
       <SectionHeader label={t.finance_settings} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <Switch value={syncFinance} onValueChange={setSyncFinance} />
+        </View>
         <SettingRow label={t.currency} value={currency} onPress={() => router.push('/currency')} />
         <SettingRow label={t.display_currency} value={displayCurrency} onPress={() => router.push('/display-currency' as any)} />
         <SettingRow label={t.categories} onPress={() => router.push('/categories' as any)} />
@@ -213,6 +228,13 @@ export function SettingsScreen() {
 
       <SectionHeader label={t.nav_reminders} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <Switch value={syncReminders} onValueChange={setSyncReminders} />
+        </View>
         <SettingRow label={t.reminders} onPress={() => router.push('/reminders' as any)} />
         <Pressable
           onPress={onExportReminders}
@@ -243,6 +265,13 @@ export function SettingsScreen() {
 
       <SectionHeader label={t.habits} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <Switch value={syncHabits} onValueChange={setSyncHabits} />
+        </View>
         <SettingRow label={t.habits} onPress={() => router.push('/habits' as any)} />
         <Pressable
           onPress={onExportHabits}
@@ -266,6 +295,13 @@ export function SettingsScreen() {
 
       <SectionHeader label={t.nav_journal} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <Switch value={syncJournals} onValueChange={setSyncJournals} />
+        </View>
         <SettingRow label={t.journals} onPress={() => router.push('/journals' as any)} />
         <Pressable
           onPress={onExportJournals}
