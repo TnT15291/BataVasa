@@ -8,7 +8,8 @@ export type Reminder = {
   user_id: string | null
   title: string
   note: string | null
-  remind_at: string
+  remind_at: string        // actual notification fire time = event_at - advance_minutes
+  advance_minutes: number  // minutes before the event to notify (0 = at event time)
   recurrence: Recurrence
   completed: number // 0 | 1 (SQLite boolean)
   location_lat: number | null
@@ -24,6 +25,7 @@ export const CreateReminderInputSchema = z.object({
   title: z.string().min(1).max(200),
   note: z.string().max(500).optional(),
   remind_at: z.string().datetime(),
+  advance_minutes: z.number().int().min(0).default(0),
   recurrence: RecurrenceSchema.default('none'),
   location_lat: z.number().min(-90).max(90).optional(),
   location_lng: z.number().min(-180).max(180).optional(),

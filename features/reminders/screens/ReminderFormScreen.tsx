@@ -15,6 +15,7 @@ import { useRemindersBootstrap, useReminders, useReminderActions } from '../hook
 import type { Recurrence } from '../types'
 
 const RECURRENCES: Recurrence[] = ['none', 'daily', 'weekly', 'monthly']
+const ADVANCE_OPTIONS = [0, 5, 10, 15, 30, 60, 120, 1440, 2880] as const
 
 export function ReminderFormScreen() {
   useRemindersBootstrap()
@@ -39,6 +40,7 @@ export function ReminderFormScreen() {
     const d = new Date(); d.setMinutes(d.getMinutes() + 30); d.setSeconds(0, 0); return d
   })
   const [recurrence, setRecurrence] = useState<Recurrence>('none')
+  const [advanceMinutes, setAdvanceMinutes] = useState(0)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showTimePicker, setShowTimePicker] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -48,7 +50,11 @@ export function ReminderFormScreen() {
     if (!editingReminder || prefilled) return
     setTitle(editingReminder.title)
     setNote(editingReminder.note ?? '')
-    setRemindAt(new Date(editingReminder.remind_at))
+    // Reconstruct event time: remind_at is notification time, event = remind_at + advance_minutes
+    const adv = editingReminder.advance_minutes ?? 0
+    const eventTime = new Date(new Date(editingReminder.remind_at).getTime() + adv * 60000)
+    setRemindAt(eventTime)
+    setAdvanceMinutes(adv)
     setRecurrence(editingReminder.recurrence)
     setPrefilled(true)
   }, [editingReminder, prefilled])
@@ -59,7 +65,12 @@ export function ReminderFormScreen() {
       const p = JSON.parse(params.prefill as string)
       if (p.title) setTitle(p.title)
       if (p.note) setNote(p.note)
-      if (p.remind_at) setRemindAt(new Date(p.remind_at))
+      if (p.remind_at) {
+        const adv = Number(p.advance_minutes ?? 0)
+        const eventTime = new Date(new Date(p.remind_at).getTime() + adv * 60000)
+        setRemindAt(eventTime)
+        setAdvanceMinutes(adv)
+      }
       if (p.recurrence && ['none', 'daily', 'weekly', 'monthly'].includes(p.recurrence))
         setRecurrence(p.recurrence as Recurrence)
       setPrefilled(true)
@@ -76,8 +87,18 @@ export function ReminderFormScreen() {
     return map[r]
   }
 
-  const dateStr = format(remindAt, 'dd/MM/yyyy', { locale: getDateFnsLocale(language) })
-  const timeStr = format(remindAt, 'HH:mm', { locale: getDateFnsLocale(language) })
+  const locale = getDateFnsLocale(language)
+  const dateStr = format(remindAt, 'dd/MM/yyyy', { locale })
+  const timeStr = format(remindAt, 'HH:mm', { locale })
+  const notifyAt = new Date(remindAt.getTime() - advanceMinutes * 60000)
+  const notifyTimeStr = advanceMinutes > 0 ? format(notifyAt, 'HH:mm dd/MM', { locale }) : null
+
+  const advanceLabel = (mins: number): string => {
+    if (mins === 0) return t.at_event_time
+    if (mins < 60) return `${mins}m`
+    if (mins < 1440) return `${mins / 60}h`
+    return `${mins / 1440}d`
+  }
 
   const onSave = async () => {
     const trimmed = title.trim()
@@ -87,8 +108,8 @@ export function ReminderFormScreen() {
     }
     setSubmitting(true)
     const res = isEditing
-      ? await updateReminder({ id: editingId!, title: trimmed, note: note.trim() || undefined, remind_at: remindAt.toISOString(), recurrence })
-      : await createReminder({ title: trimmed, note: note.trim() || undefined, remind_at: remindAt.toISOString(), recurrence })
+      ? await updateReminder({ id: editingId!, title: trimmed, note: note.trim() || undefined, remind_at: notifyAt.toISOString(), advance_minutes: advanceMinutes, recurrence })
+      : await createReminder({ title: trimmed, note: note.trim() || undefined, remind_at: notifyAt.toISOString(), advance_minutes: advanceMinutes, recurrence })
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
     router.back()
@@ -137,7 +158,7 @@ export function ReminderFormScreen() {
       />
 
       {/* Date & Time */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.reminder_date_time.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.event_time.toUpperCase()}</Text>
       <View style={styles.dateRow}>
         <Pressable
           onPress={() => { setShowTimePicker(false); setShowDatePicker(true) }}
@@ -168,6 +189,33 @@ export function ReminderFormScreen() {
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           onChange={(_, date) => { setShowTimePicker(Platform.OS === 'ios'); if (date) setRemindAt((prev) => { const d = new Date(prev); d.setHours(date.getHours(), date.getMinutes(), 0, 0); return d }) }}
         />
+      )}
+
+      {/* Advance notice */}
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.remind_before.toUpperCase()}</Text>
+      <View style={styles.recurrenceRow}>
+        {ADVANCE_OPTIONS.map((mins) => {
+          const active = advanceMinutes === mins
+          return (
+            <Pressable
+              key={mins}
+              onPress={() => setAdvanceMinutes(mins)}
+              style={[styles.recurrenceBtn, {
+                backgroundColor: active ? theme.brand.primary : theme.bg.elevated,
+                borderColor: active ? theme.brand.primary : theme.border.subtle,
+              }]}
+            >
+              <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '600' }}>
+                {advanceLabel(mins)}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      {notifyTimeStr && (
+        <Text style={[styles.notifyHint, { color: theme.text.muted }]}>
+          🔔 {notifyTimeStr}
+        </Text>
       )}
 
       {/* Recurrence */}
@@ -221,6 +269,7 @@ const styles = StyleSheet.create({
   datePill: { flex: 1, borderWidth: 1, borderRadius: radius.md, padding: spacing[3], alignItems: 'center' },
   recurrenceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   recurrenceBtn: { paddingVertical: spacing[2], paddingHorizontal: spacing[3], borderRadius: radius.md, borderWidth: 1 },
+  notifyHint: { fontSize: 12, fontStyle: 'italic', marginTop: -spacing[1] },
   saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[2] },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   deleteBtn: { alignItems: 'center', paddingVertical: spacing[3] },

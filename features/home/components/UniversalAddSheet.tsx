@@ -105,6 +105,7 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
         title: result.title,
         note: result.note || undefined,
         remind_at: result.remind_at,
+        advance_minutes: 0,
         recurrence: result.recurrence,
       })
       setSaving(false)

@@ -41,8 +41,10 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const isDone = reminder.completed === 1
-  const isPast = new Date(reminder.remind_at) < new Date() && !isDone
-  const dateStr = format(new Date(reminder.remind_at), 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
+  const adv = reminder.advance_minutes ?? 0
+  const eventTime = new Date(new Date(reminder.remind_at).getTime() + adv * 60000)
+  const isPast = eventTime < new Date() && !isDone
+  const dateStr = format(eventTime, 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
 
   return (
     <Pressable
@@ -82,6 +84,11 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
         <Text style={[styles.rowDate, { color: isPast ? theme.semantic.danger : theme.text.muted }]}>
           {dateStr}
         </Text>
+        {adv > 0 && (
+          <Text style={[styles.rowAdvance, { color: theme.brand.primary }]}>
+            🔔 {adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} {t.remind_before.toLowerCase()}
+          </Text>
+        )}
         {reminder.note ? (
           <Text style={[styles.rowNote, { color: theme.text.muted }]} numberOfLines={1}>
             {reminder.note}
@@ -124,10 +131,13 @@ export function ReminderListScreen() {
 
   const handleNlConfirm = async () => {
     if (!parsedReminder) return
+    const adv = parsedReminder.advance_minutes ?? 0
+    const notifyAt = new Date(new Date(parsedReminder.remind_at).getTime() - adv * 60000)
     await createReminder({
       title: parsedReminder.title,
       note: parsedReminder.note || undefined,
-      remind_at: parsedReminder.remind_at,
+      remind_at: notifyAt.toISOString(),
+      advance_minutes: adv,
       recurrence: parsedReminder.recurrence,
     })
     setParsedReminder(null)
@@ -247,9 +257,11 @@ export function ReminderListScreen() {
           <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
             <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
             <Text style={[styles.infoValue, { color: theme.text.primary }]}>
-              {parsedReminder
-                ? `🔔 ${parsedReminder.title}${parsedReminder.note ? ' · ' + parsedReminder.note : ''}`
-                : ''}
+              {parsedReminder ? (() => {
+                const adv = parsedReminder.advance_minutes ?? 0
+                const advStr = adv === 0 ? '' : ` · ${adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} ${t.remind_before.toLowerCase()}`
+                return `🔔 ${parsedReminder.title}${advStr}${parsedReminder.note ? ' · ' + parsedReminder.note : ''}`
+              })() : ''}
             </Text>
           </View>
 
@@ -285,6 +297,7 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '500', flex: 1 },
   strikethrough: { textDecorationLine: 'line-through' },
   rowDate: { fontSize: 12 },
+  rowAdvance: { fontSize: 11, fontWeight: '500' },
   rowNote: { fontSize: 12 },
   badge: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
   badgeText: { fontSize: 10, fontWeight: '600' },

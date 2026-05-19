@@ -37,6 +37,10 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   async (db) => {
     await createHabitSchema(db)
   },
+  // v7 — advance_minutes on reminder (remind X minutes before the event)
+  async (db) => {
+    await safeAddColumn(db, 'reminder', 'advance_minutes', 'INTEGER NOT NULL DEFAULT 0')
+  },
 ]
 
 async function safeAddColumn(

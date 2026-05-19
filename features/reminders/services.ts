@@ -33,6 +33,7 @@ export async function createReminder(
       title: data.title,
       note: data.note ?? null,
       remind_at: data.remind_at,
+      advance_minutes: data.advance_minutes,
       recurrence: data.recurrence,
       completed: 0,
       location_lat: data.location_lat ?? null,
@@ -77,6 +78,7 @@ export async function updateReminder(
     if (data.remind_at !== undefined) patch.remind_at = data.remind_at
     if (data.recurrence !== undefined) patch.recurrence = data.recurrence
     if (data.completed !== undefined) patch.completed = data.completed
+    if (data.advance_minutes !== undefined) patch.advance_minutes = data.advance_minutes
     if (data.location_lat !== undefined) patch.location_lat = data.location_lat
     if (data.location_lng !== undefined) patch.location_lng = data.location_lng
     if (data.location_label !== undefined) patch.location_label = data.location_label
