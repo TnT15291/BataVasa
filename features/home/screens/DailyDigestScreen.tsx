@@ -171,6 +171,15 @@ export function DailyDigestScreen() {
           accentColor="#FF9800"
           onPress={() => router.push('/habits' as any)}
         />
+
+        {/* Cross-module Analysis Card */}
+        <ModuleCard
+          icon="🔮"
+          title={t.analysis_title}
+          subtitle={t.analysis_subtitle}
+          accentColor="#607D8B"
+          onPress={() => router.push('/analysis' as any)}
+        />
       </ScrollView>
 
       {/* Universal Add FAB */}

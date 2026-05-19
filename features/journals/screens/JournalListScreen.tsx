@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   View, Text, Pressable, ScrollView, StyleSheet, Modal,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, TextInput,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { format } from 'date-fns'
@@ -10,7 +10,10 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
+import { getProviderKey } from '@services/ai/openai'
+import { parseJournalEntry, type ParsedJournal } from '@services/ai/journalParser'
 import { useJournalsBootstrap, useJournals } from '../hooks/useJournals'
+import { useJournalActions } from '../hooks/useJournals'
 import { generateJournalReflection, type JournalReflection } from '@services/ai/journalInsight'
 import type { Journal } from '../types'
 
@@ -135,9 +138,45 @@ export function JournalListScreen() {
   const journals = useJournals()
   const locale = getDateFnsLocale(language)
 
+  const { createJournal } = useJournalActions()
+  const aiProvider = useSettingsStore((s) => s.aiProvider)
+
   const [reflecting, setReflecting] = useState(false)
   const [reflection, setReflection] = useState<JournalReflection | null>(null)
   const [sheetVisible, setSheetVisible] = useState(false)
+
+  const [nlText, setNlText] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [parsedJournal, setParsedJournal] = useState<ParsedJournal | null>(null)
+  const [originalNlText, setOriginalNlText] = useState('')
+
+  const handleNlParse = async () => {
+    if (!nlText.trim()) return
+    const key = await getProviderKey(aiProvider)
+    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    setParsing(true)
+    try {
+      const result = await parseJournalEntry(nlText.trim())
+      if (!result) { Alert.alert(t.ai_error, t.parse_failed); return }
+      setOriginalNlText(nlText.trim())
+      setParsedJournal(result)
+    } catch { Alert.alert(t.ai_error, t.parse_failed) }
+    finally { setParsing(false) }
+  }
+
+  const handleNlConfirm = async () => {
+    if (!parsedJournal) return
+    await createJournal({ content: parsedJournal.content, mood: parsedJournal.mood ?? undefined, occurred_at: parsedJournal.occurred_at })
+    setParsedJournal(null)
+    setNlText('')
+  }
+
+  const handleNlEdit = () => {
+    const p = parsedJournal
+    setParsedJournal(null)
+    setNlText('')
+    router.push({ pathname: '/journal', params: p ? { prefill: JSON.stringify(p) } : {} } as any)
+  }
 
   const groups = useMemo<DateGroup[]>(() => {
     const map = new Map<string, Journal[]>()
@@ -194,6 +233,28 @@ export function JournalListScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+      {/* NL input */}
+      <View style={[styles.nlRow, { backgroundColor: theme.bg.secondary, borderBottomColor: theme.border.subtle }]}>
+        <TextInput
+          value={nlText}
+          onChangeText={setNlText}
+          placeholder={t.nl_placeholder_journal}
+          placeholderTextColor={theme.text.muted}
+          style={[styles.nlInput, { color: theme.text.primary, backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+          returnKeyType="done"
+          onSubmitEditing={handleNlParse}
+          editable={!parsing}
+          multiline={false}
+        />
+        <Pressable
+          onPress={handleNlParse}
+          disabled={parsing || !nlText.trim()}
+          style={[styles.nlBtn, { backgroundColor: (parsing || !nlText.trim()) ? theme.border.strong : theme.brand.primary }]}
+        >
+          {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.nlBtnText}>{t.parse_btn}</Text>}
+        </Pressable>
+      </View>
+
       <ScrollView contentContainerStyle={styles.list}>
         {groups.map((group) => (
           <View key={group.dateLabel} style={styles.group}>
@@ -224,6 +285,16 @@ export function JournalListScreen() {
         )}
       </Pressable>
 
+      {/* Report button */}
+      <Pressable
+        onPress={() => router.push('/journals-report' as any)}
+        accessibilityRole="button"
+        accessibilityLabel={t.journals_report_title}
+        style={[styles.reportBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+      >
+        <Text style={[styles.reportBtnText, { color: theme.text.secondary }]}>📊</Text>
+      </Pressable>
+
       <Pressable
         onPress={() => router.push('/journal' as any)}
         accessibilityRole="button"
@@ -240,6 +311,44 @@ export function JournalListScreen() {
         theme={theme}
         t={t}
       />
+
+      {/* NL confirm modal */}
+      <Modal visible={!!parsedJournal} transparent animationType="slide" onRequestClose={() => setParsedJournal(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setParsedJournal(null)} />
+        <View style={[styles.sheet, { backgroundColor: theme.bg.elevated, padding: spacing[4], paddingBottom: spacing[8], gap: spacing[3] }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: theme.border.strong }]} />
+          <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.ai_confirm_title}</Text>
+
+          <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_you_said}</Text>
+            <Text style={[styles.infoValue, { color: theme.text.primary }]}>{originalNlText}</Text>
+          </View>
+
+          <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
+            <Text style={[styles.infoValue, { color: theme.text.primary }]}>
+              {parsedJournal
+                ? `${MOOD_EMOJI[parsedJournal.mood ?? 0] || '–'} ${parsedJournal.content.slice(0, 80)}${parsedJournal.content.length > 80 ? '…' : ''}`
+                : ''}
+            </Text>
+          </View>
+
+          <View style={styles.sheetActions}>
+            <Pressable
+              onPress={handleNlEdit}
+              style={[styles.sheetBtn, { backgroundColor: theme.bg.secondary, borderColor: theme.border.strong }]}
+            >
+              <Text style={[styles.sheetBtnText, { color: theme.text.secondary }]}>{t.nl_reject_to_form}</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleNlConfirm}
+              style={[styles.sheetBtn, { backgroundColor: theme.brand.primary }]}
+            >
+              <Text style={[styles.sheetBtnText, { color: '#fff' }]}>{t.ai_confirm_save}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -277,6 +386,14 @@ const styles = StyleSheet.create({
     minWidth: 44, justifyContent: 'center',
   },
   reflectBtnText: { fontSize: 14, fontWeight: '600' },
+  reportBtn: {
+    position: 'absolute', left: spacing[6], bottom: spacing[8] + 56,
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+    elevation: 3, shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+  },
+  reportBtnText: { fontSize: 20 },
   fab: {
     position: 'absolute', right: spacing[6], bottom: spacing[8],
     width: 60, height: 60, borderRadius: 30,
@@ -312,4 +429,22 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3], alignItems: 'center',
   },
   closeBtnText: { fontSize: 15, fontWeight: '600' },
+  nlRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[2],
+    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  nlInput: {
+    flex: 1, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
+    fontSize: 14,
+  },
+  nlBtn: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: radius.md },
+  nlBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  infoRow: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], gap: spacing[1] },
+  infoLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  infoValue: { fontSize: 15 },
+  sheetActions: { flexDirection: 'row', gap: spacing[3], marginTop: spacing[2] },
+  sheetBtn: { flex: 1, paddingVertical: spacing[3], borderRadius: radius.md, alignItems: 'center', borderWidth: 1 },
+  sheetBtnText: { fontSize: 15, fontWeight: '600' },
 })

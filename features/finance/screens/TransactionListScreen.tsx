@@ -229,29 +229,22 @@ export function TransactionListScreen() {
       </View>
 
       <View style={styles.aiRow}>
-        {[
-          { label: '🧠', title: t.ai_insights, route: '/insights' },
-          { label: '📊', title: t.nav_reports, route: '/reports' },
-          { label: '💬', title: t.ai_chat, route: '/chat' },
-          { label: '🔔', title: t.nav_reminders, route: '/reminders' },
-        ].map((item) => (
-          <Pressable
-            key={item.route}
-            onPress={() => router.push(item.route as any)}
-            accessibilityRole="button"
-            accessibilityLabel={item.title}
-            style={({ pressed }) => [
-              styles.aiBtn,
-              {
-                backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated,
-                borderColor: theme.border.subtle,
-              },
-            ]}
-          >
-            <Text style={styles.aiBtnIcon}>{item.label}</Text>
-            <Text style={[styles.aiBtnLabel, { color: theme.text.secondary }]}>{item.title}</Text>
-          </Pressable>
-        ))}
+        <Pressable
+          onPress={() => router.push('/reports' as any)}
+          accessibilityRole="button"
+          accessibilityLabel={t.finance_report_title}
+          style={({ pressed }) => [
+            styles.aiBtn,
+            styles.aiBtnFull,
+            {
+              backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated,
+              borderColor: theme.border.subtle,
+            },
+          ]}
+        >
+          <Text style={styles.aiBtnIcon}>📊</Text>
+          <Text style={[styles.aiBtnLabel, { color: theme.text.secondary }]}>{t.finance_report_title}</Text>
+        </Pressable>
       </View>
 
       <FlashList
@@ -343,6 +336,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     gap: spacing[1],
   },
+  aiBtnFull: { flex: 0, flexDirection: 'row', width: '100%', justifyContent: 'center', gap: spacing[2] },
   aiBtnIcon: { fontSize: 18 },
   aiBtnLabel: { fontSize: 11, fontWeight: '500', textAlign: 'center' },
   empty: { alignItems: 'center', marginTop: spacing[12] },

@@ -30,7 +30,7 @@ export function JournalFormScreen() {
   const journals = useJournals()
   const { createJournal, updateJournal, deleteJournal } = useJournalActions()
 
-  const params = useLocalSearchParams<{ id?: string }>()
+  const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
   const editingJournal = useMemo(
     () => (editingId ? journals.find((j) => j.id === editingId) ?? null : null),
@@ -52,6 +52,17 @@ export function JournalFormScreen() {
     setOccurredAt(new Date(editingJournal.occurred_at))
     setPrefilled(true)
   }, [editingJournal, prefilled])
+
+  useEffect(() => {
+    if (editingId || prefilled || !params.prefill) return
+    try {
+      const p = JSON.parse(params.prefill as string)
+      if (p.content) setContent(p.content)
+      if (p.mood != null) setMood(Number(p.mood))
+      if (p.occurred_at) setOccurredAt(new Date(p.occurred_at))
+      setPrefilled(true)
+    } catch { /* ignore malformed prefill */ }
+  }, [editingId, prefilled, params.prefill])
 
   const locale = getDateFnsLocale(language)
   const dateStr = format(occurredAt, 'dd/MM/yyyy', { locale })

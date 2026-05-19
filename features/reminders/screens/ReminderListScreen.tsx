@@ -1,5 +1,8 @@
-import { useMemo } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { useMemo, useState } from 'react'
+import {
+  View, Text, Pressable, ScrollView, StyleSheet,
+  TextInput, Modal, ActivityIndicator, Alert,
+} from 'react-native'
 import { useRouter } from 'expo-router'
 import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
@@ -7,6 +10,8 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
+import { getProviderKey } from '@services/ai/openai'
+import { parseReminderEntry, type ParsedReminder } from '@services/ai/reminderParser'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Reminder } from '../types'
 
@@ -95,7 +100,46 @@ export function ReminderListScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const reminders = useReminders()
-  const { updateReminder } = useReminderActions()
+  const { createReminder, updateReminder } = useReminderActions()
+  const aiProvider = useSettingsStore((s) => s.aiProvider)
+
+  const [nlText, setNlText] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [parsedReminder, setParsedReminder] = useState<ParsedReminder | null>(null)
+  const [originalNlText, setOriginalNlText] = useState('')
+
+  const handleNlParse = async () => {
+    if (!nlText.trim()) return
+    const key = await getProviderKey(aiProvider)
+    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    setParsing(true)
+    try {
+      const result = await parseReminderEntry(nlText.trim())
+      if (!result) { Alert.alert(t.ai_error, t.parse_failed); return }
+      setOriginalNlText(nlText.trim())
+      setParsedReminder(result)
+    } catch { Alert.alert(t.ai_error, t.parse_failed) }
+    finally { setParsing(false) }
+  }
+
+  const handleNlConfirm = async () => {
+    if (!parsedReminder) return
+    await createReminder({
+      title: parsedReminder.title,
+      note: parsedReminder.note || undefined,
+      remind_at: parsedReminder.remind_at,
+      recurrence: parsedReminder.recurrence,
+    })
+    setParsedReminder(null)
+    setNlText('')
+  }
+
+  const handleNlEdit = () => {
+    const p = parsedReminder
+    setParsedReminder(null)
+    setNlText('')
+    router.push({ pathname: '/reminder', params: p ? { prefill: JSON.stringify(p) } : {} } as any)
+  }
 
   const { upcoming, past } = useMemo(() => {
     const now = new Date()
@@ -132,6 +176,29 @@ export function ReminderListScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+      {/* NL input */}
+      <View style={[styles.nlRow, { backgroundColor: theme.bg.secondary, borderBottomColor: theme.border.subtle }]}>
+        <TextInput
+          value={nlText}
+          onChangeText={setNlText}
+          placeholder={t.nl_placeholder_reminder}
+          placeholderTextColor={theme.text.muted}
+          style={[styles.nlInput, { color: theme.text.primary, backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+          returnKeyType="done"
+          onSubmitEditing={handleNlParse}
+          editable={!parsing}
+        />
+        <Pressable
+          onPress={handleNlParse}
+          disabled={parsing || !nlText.trim()}
+          style={[styles.nlBtn, { backgroundColor: (parsing || !nlText.trim()) ? theme.border.strong : theme.brand.primary }]}
+        >
+          {parsing
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={styles.nlBtnText}>{t.parse_btn}</Text>}
+        </Pressable>
+      </View>
+
       <ScrollView contentContainerStyle={styles.content}>
         {reminders.length === 0 ? (
           <View style={styles.empty}>
@@ -148,6 +215,15 @@ export function ReminderListScreen() {
       </ScrollView>
 
       <Pressable
+        onPress={() => router.push('/reminders-report' as any)}
+        accessibilityRole="button"
+        accessibilityLabel={t.reminders_report_title}
+        style={[styles.reportBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+      >
+        <Text style={styles.reportBtnText}>📊</Text>
+      </Pressable>
+
+      <Pressable
         onPress={() => router.push('/reminder' as any)}
         accessibilityRole="button"
         accessibilityLabel={t.new_reminder}
@@ -155,6 +231,44 @@ export function ReminderListScreen() {
       >
         <Text style={styles.fabIcon}>+</Text>
       </Pressable>
+
+      {/* NL confirm modal */}
+      <Modal visible={!!parsedReminder} transparent animationType="slide" onRequestClose={() => setParsedReminder(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setParsedReminder(null)} />
+        <View style={[styles.sheet, { backgroundColor: theme.bg.elevated }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: theme.border.strong }]} />
+          <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.ai_confirm_title}</Text>
+
+          <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_you_said}</Text>
+            <Text style={[styles.infoValue, { color: theme.text.primary }]}>{originalNlText}</Text>
+          </View>
+
+          <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
+            <Text style={[styles.infoValue, { color: theme.text.primary }]}>
+              {parsedReminder
+                ? `🔔 ${parsedReminder.title}${parsedReminder.note ? ' · ' + parsedReminder.note : ''}`
+                : ''}
+            </Text>
+          </View>
+
+          <View style={styles.sheetActions}>
+            <Pressable
+              onPress={handleNlEdit}
+              style={[styles.sheetBtn, { backgroundColor: theme.bg.secondary, borderColor: theme.border.strong }]}
+            >
+              <Text style={[styles.sheetBtnText, { color: theme.text.secondary }]}>{t.nl_reject_to_form}</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleNlConfirm}
+              style={[styles.sheetBtn, { backgroundColor: theme.brand.primary }]}
+            >
+              <Text style={[styles.sheetBtnText, { color: '#fff' }]}>{t.ai_confirm_save}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -179,10 +293,42 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
   emptyMsg: { fontSize: 14, textAlign: 'center' },
+  reportBtn: {
+    position: 'absolute', left: spacing[6], bottom: spacing[8],
+    width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+    elevation: 3, shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+  },
+  reportBtnText: { fontSize: 20 },
   fab: {
     position: 'absolute', right: spacing[6], bottom: spacing[8],
     width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center',
     elevation: 4, shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
   fabIcon: { color: '#fff', fontSize: 28, fontWeight: '600', lineHeight: 30 },
+  nlRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[2],
+    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  nlInput: {
+    flex: 1, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
+    fontSize: 14,
+  },
+  nlBtn: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: radius.md },
+  nlBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
+    padding: spacing[4], paddingBottom: spacing[8], gap: spacing[3],
+  },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: spacing[2] },
+  sheetTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  infoRow: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], gap: spacing[1] },
+  infoLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  infoValue: { fontSize: 15 },
+  sheetActions: { flexDirection: 'row', gap: spacing[3], marginTop: spacing[2] },
+  sheetBtn: { flex: 1, paddingVertical: spacing[3], borderRadius: radius.md, alignItems: 'center', borderWidth: 1 },
+  sheetBtnText: { fontSize: 15, fontWeight: '600' },
 })

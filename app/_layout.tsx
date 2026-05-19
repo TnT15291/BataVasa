@@ -103,6 +103,11 @@ export default function RootLayout() {
           <Stack.Screen name="journal" options={{ title: t.new_journal }} />
           <Stack.Screen name="habits" options={{ title: t.habits }} />
           <Stack.Screen name="habit" options={{ title: t.new_habit }} />
+          <Stack.Screen name="display-currency" options={{ title: t.display_currency }} />
+          <Stack.Screen name="analysis" options={{ title: t.analysis_title }} />
+          <Stack.Screen name="habits-report" options={{ title: t.habits_report_title }} />
+          <Stack.Screen name="journals-report" options={{ title: t.journals_report_title }} />
+          <Stack.Screen name="reminders-report" options={{ title: t.reminders_report_title }} />
         </Stack>
         </ErrorBoundary>
       </SafeAreaProvider>

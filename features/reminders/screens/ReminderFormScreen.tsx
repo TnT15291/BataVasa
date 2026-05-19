@@ -25,7 +25,7 @@ export function ReminderFormScreen() {
   const reminders = useReminders()
   const { createReminder, updateReminder, deleteReminder } = useReminderActions()
 
-  const params = useLocalSearchParams<{ id?: string }>()
+  const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
   const editingReminder = useMemo(
     () => (editingId ? reminders.find((r) => r.id === editingId) ?? null : null),
@@ -52,6 +52,19 @@ export function ReminderFormScreen() {
     setRecurrence(editingReminder.recurrence)
     setPrefilled(true)
   }, [editingReminder, prefilled])
+
+  useEffect(() => {
+    if (editingId || prefilled || !params.prefill) return
+    try {
+      const p = JSON.parse(params.prefill as string)
+      if (p.title) setTitle(p.title)
+      if (p.note) setNote(p.note)
+      if (p.remind_at) setRemindAt(new Date(p.remind_at))
+      if (p.recurrence && ['none', 'daily', 'weekly', 'monthly'].includes(p.recurrence))
+        setRecurrence(p.recurrence as Recurrence)
+      setPrefilled(true)
+    } catch { /* ignore malformed prefill */ }
+  }, [editingId, prefilled, params.prefill])
 
   const recurrenceLabel = (r: Recurrence) => {
     const map: Record<Recurrence, string> = {
