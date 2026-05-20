@@ -1,6 +1,6 @@
 # Production Readiness — BataVasa
 
-> Tracking checklist for moving all modules from MVP → production. Last updated: 2026-05-19.
+> Tracking checklist for moving all modules from MVP → production. Last updated: 2026-05-21.
 
 **Current state:** 🟢 MVP cá nhân dùng được · 🔴 chưa thể public launch.
 
@@ -16,7 +16,7 @@
 
 - [ ] **B1. Không có auth** 🔁 cross-module · `docs/security.md#authentication` — `user_id: null` mọi nơi → multi-user impossible, RLS Supabase vô nghĩa
 - [ ] **B2. Không có cloud sync** 🔁 cross-module (Rule 1) · `docs/sync-offline.md` — `sync_queue` table chưa tồn tại, Supabase chưa wire → mất phone = mất sạch data
-- [ ] **B5. Không có tests** 🔁 cross-module · `docs/ops.md#testing` — 0% coverage → refactor là gambling. Coverage gate 70%/90% spec'd
+- [ ] **B5. Tests — IN PROGRESS (2026-05-21)** 🔁 cross-module · `docs/ops.md#testing` — Coverage gate wired (`npm run test:ci`, thresholds in `jest.config.js`). **153 tests / 14 suites pass.** Pure helpers (`dateParser`, `locale`, `uuid`, `fx`, `aiLanguage`, `reminderParser`) ✅ ≥90% target. AI response parsers (reminder/habit/journal) tested against valid + malformed JSON fixtures. **Còn lại:** `database/*/queries.ts` (cần in-memory SQLite), `features/{finance,reminders}/services.ts`, AI insight builders → để đạt 70% gate trên services/DB (global hiện ~17%, floor ratchet đã set).
 
 ---
 
@@ -87,6 +87,7 @@
 - ✅ Web Firefox SQLite warning banner (H12) + helper tests
 - ✅ Haptic feedback wrapper for voice and save confirmation (L2)
 - ✅ Analytics service allow-list wrapper + app lifecycle events (M35)
+- ✅ Test infra: Jest coverage gate (`test:ci`) + per-file 90% locks on pure helpers; 153 tests across 14 suites (B5 partial)
 
 ---
 
@@ -98,7 +99,7 @@
 | Code quality | 7/10 | TypeScript strict, Result pattern, thiếu tests |
 | UX hoàn chỉnh | 5/10 | Voice input + 4 modules CRUD, thiếu onboarding |
 | Security | 5/10 | PII scrub, thiếu auth + biometric |
-| Reliability | 3/10 | 0% test coverage, no backup |
+| Reliability | 4/10 | Coverage gate + 153 tests (helpers ≥90%); DB/sync layer still untested, no backup |
 | **Production-ready** | **3/10** | Blockers B1+B2+B5 chưa xong |
 
 ---
@@ -121,7 +122,7 @@
 **Sprint 3 (2-3 tuần) — Beta launch:** ← CURRENT
 1. B1 — Auth (Supabase email/OAuth)
 2. B2 — Sync engine (sync_queue + Supabase mirror)
-3. B5 — Tests cho service + DB layer (target 70%)
+3. B5 — Tests cho service + DB layer (target 70%) — 🔄 helpers + parsers done; DB queries + feature services còn lại
 4. H16 — Onboarding flow
 5. H17 — Biometric lock
 6. ✅ H19 — Voice force-confirm fix (QuickAddScreen)
