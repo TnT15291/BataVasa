@@ -332,4 +332,23 @@ export const zh: Translations = {
   report_days: '天',
   report_habits_completed: '总完成次数',
   report_view: '查看报告',
+
+  // Auth
+  account: '账户',
+  auth_subtitle_signin: '登录以继续',
+  auth_subtitle_signup: '创建您的账户',
+  auth_email: '邮箱',
+  auth_password: '密码',
+  auth_email_ph: 'you@email.com',
+  auth_password_ph: '至少 6 个字符',
+  auth_signin_cta: '登录',
+  auth_signup_cta: '创建账户',
+  auth_toggle_to_signup: '还没有账户？注册',
+  auth_toggle_to_signin: '已有账户？登录',
+  auth_check_email: '账户已创建。请查收邮件确认后再登录。',
+  auth_not_configured_title: '无法登录',
+  auth_not_configured_body: '后端尚未配置。请参阅设置指南：',
+  auth_signed_in_as: '登录身份',
+  auth_sign_out: '退出登录',
+  auth_sign_out_confirm: '退出此账户？您的数据将保留在本设备上。',
 }

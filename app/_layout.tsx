@@ -11,6 +11,8 @@ import { useSettingsStore } from '@store/settingsStore'
 import { useTranslation } from '@services/i18n'
 import { track } from '@services/analytics'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { useAuthStore } from '@store/authStore'
+import { AuthScreen } from '@features/auth/AuthScreen'
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
 if (SENTRY_DSN) {
@@ -38,6 +40,7 @@ function SettingsButton() {
 export default function RootLayout() {
   const theme = useTheme()
   const loadSettings = useSettingsStore((s) => s.loadSettings)
+  const session = useAuthStore((s) => s.session)
   const { t } = useTranslation()
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,6 +48,7 @@ export default function RootLayout() {
   useEffect(() => {
     runMigrations()
       .then(() => loadSettings())
+      .then(() => useAuthStore.getState().init())
       .then(() => setReady(true))
       .catch((e) => setError(String(e)))
   }, [])
@@ -79,6 +83,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ErrorBoundary>
+        {session ? (
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: theme.bg.elevated },
@@ -120,6 +125,9 @@ export default function RootLayout() {
           <Stack.Screen name="journals-report" options={{ title: t.journals_report_title }} />
           <Stack.Screen name="reminders-report" options={{ title: t.reminders_report_title }} />
         </Stack>
+        ) : (
+          <AuthScreen />
+        )}
         </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>

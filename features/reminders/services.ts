@@ -1,6 +1,7 @@
 import { ok, appErr, type Result, type AppError } from '@services/result'
 import { uuid } from '@services/uuid'
 import { logger } from '@services/logger'
+import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/reminders/queries'
 import { scheduleReminderNotification, cancelNotification, cancelAllNotifications } from '@services/notifications'
@@ -29,7 +30,7 @@ export async function createReminder(
   try {
     const reminder: Reminder = {
       id: uuid(),
-      user_id: null,
+      user_id: getCurrentUserId(),
       title: data.title,
       note: data.note ?? null,
       remind_at: data.remind_at,

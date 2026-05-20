@@ -349,6 +349,25 @@ export const vi = {
   report_days: 'ngày',
   report_habits_completed: 'Tổng lần hoàn thành',
   report_view: 'Xem báo cáo',
+
+  // Auth
+  account: 'Tài khoản',
+  auth_subtitle_signin: 'Đăng nhập để tiếp tục',
+  auth_subtitle_signup: 'Tạo tài khoản mới',
+  auth_email: 'Email',
+  auth_password: 'Mật khẩu',
+  auth_email_ph: 'ban@email.com',
+  auth_password_ph: 'Ít nhất 6 ký tự',
+  auth_signin_cta: 'Đăng nhập',
+  auth_signup_cta: 'Tạo tài khoản',
+  auth_toggle_to_signup: 'Chưa có tài khoản? Đăng ký',
+  auth_toggle_to_signin: 'Đã có tài khoản? Đăng nhập',
+  auth_check_email: 'Đã tạo tài khoản. Kiểm tra email để xác nhận, rồi đăng nhập.',
+  auth_not_configured_title: 'Chưa cấu hình đăng nhập',
+  auth_not_configured_body: 'Cần thiết lập Supabase để bật đăng nhập. Xem hướng dẫn:',
+  auth_signed_in_as: 'Đăng nhập bằng',
+  auth_sign_out: 'Đăng xuất',
+  auth_sign_out_confirm: 'Đăng xuất khỏi tài khoản này? Dữ liệu vẫn giữ trên thiết bị.',
 }
 
 export type Translations = typeof vi

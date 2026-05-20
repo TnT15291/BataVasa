@@ -25,6 +25,9 @@ jest.mock('../services/uuid', () => ({
   uuid: () => 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
 }))
 
+// Mock identity (avoids pulling in the Supabase/auth-store import chain)
+jest.mock('../services/identity', () => ({ getCurrentUserId: () => null }))
+
 // Mock logger
 jest.mock('../services/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },

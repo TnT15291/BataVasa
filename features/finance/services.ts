@@ -1,6 +1,7 @@
 import { ok, appErr, type Result, type AppError } from '@services/result'
 import { uuid } from '@services/uuid'
 import { logger } from '@services/logger'
+import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/finance/queries'
 import {
@@ -39,7 +40,7 @@ export async function createTransaction(
     const hasLocation = !!(data.location_label && data.location_label.trim().length > 0)
     const tx: Transaction = {
       id: uuid(),
-      user_id: null,
+      user_id: getCurrentUserId(),
       amount_cents: data.amount_cents,
       currency: data.currency,
       category_id: data.category_id,

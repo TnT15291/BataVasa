@@ -332,4 +332,23 @@ export const fr: Translations = {
   report_days: 'jours',
   report_habits_completed: 'Total complétions',
   report_view: 'Voir le rapport',
+
+  // Auth
+  account: 'Compte',
+  auth_subtitle_signin: 'Connectez-vous pour continuer',
+  auth_subtitle_signup: 'Créez votre compte',
+  auth_email: 'E-mail',
+  auth_password: 'Mot de passe',
+  auth_email_ph: 'vous@email.com',
+  auth_password_ph: 'Au moins 6 caractères',
+  auth_signin_cta: 'Se connecter',
+  auth_signup_cta: 'Créer un compte',
+  auth_toggle_to_signup: "Pas de compte ? S'inscrire",
+  auth_toggle_to_signin: 'Déjà un compte ? Se connecter',
+  auth_check_email: 'Compte créé. Vérifiez votre e-mail pour confirmer, puis connectez-vous.',
+  auth_not_configured_title: 'Connexion indisponible',
+  auth_not_configured_body: "Le backend n'est pas encore configuré. Voir le guide :",
+  auth_signed_in_as: 'Connecté en tant que',
+  auth_sign_out: 'Se déconnecter',
+  auth_sign_out_confirm: 'Se déconnecter de ce compte ? Vos données restent sur cet appareil.',
 }

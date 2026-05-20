@@ -332,4 +332,23 @@ export const ja: Translations = {
   report_days: '日',
   report_habits_completed: '総達成回数',
   report_view: 'レポートを見る',
+
+  // Auth
+  account: 'アカウント',
+  auth_subtitle_signin: 'サインインして続行',
+  auth_subtitle_signup: 'アカウントを作成',
+  auth_email: 'メール',
+  auth_password: 'パスワード',
+  auth_email_ph: 'you@email.com',
+  auth_password_ph: '6文字以上',
+  auth_signin_cta: 'サインイン',
+  auth_signup_cta: 'アカウント作成',
+  auth_toggle_to_signup: 'アカウントがない方は登録',
+  auth_toggle_to_signin: 'アカウントをお持ちの方はサインイン',
+  auth_check_email: 'アカウントを作成しました。メールで確認後にサインインしてください。',
+  auth_not_configured_title: 'サインインできません',
+  auth_not_configured_body: 'バックエンドが未設定です。セットアップガイドを参照：',
+  auth_signed_in_as: 'サインイン中',
+  auth_sign_out: 'サインアウト',
+  auth_sign_out_confirm: 'このアカウントからサインアウトしますか？データは端末に残ります。',
 }

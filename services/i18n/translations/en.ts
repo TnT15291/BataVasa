@@ -332,4 +332,23 @@ export const en: Translations = {
   report_days: 'days',
   report_habits_completed: 'Total completions',
   report_view: 'View Report',
+
+  // Auth
+  account: 'Account',
+  auth_subtitle_signin: 'Sign in to continue',
+  auth_subtitle_signup: 'Create your account',
+  auth_email: 'Email',
+  auth_password: 'Password',
+  auth_email_ph: 'you@email.com',
+  auth_password_ph: 'At least 6 characters',
+  auth_signin_cta: 'Sign in',
+  auth_signup_cta: 'Create account',
+  auth_toggle_to_signup: "Don't have an account? Sign up",
+  auth_toggle_to_signin: 'Already have an account? Sign in',
+  auth_check_email: 'Account created. Check your email to confirm, then sign in.',
+  auth_not_configured_title: 'Sign-in unavailable',
+  auth_not_configured_body: 'The backend is not configured yet. See the setup guide:',
+  auth_signed_in_as: 'Signed in as',
+  auth_sign_out: 'Sign out',
+  auth_sign_out_confirm: 'Sign out of this account? Your data stays on this device.',
 }

@@ -1,6 +1,7 @@
 import { ok, appErr, type Result, type AppError } from '@services/result'
 import { uuid } from '@services/uuid'
 import { logger } from '@services/logger'
+import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/habits/queries'
 import {
@@ -27,7 +28,7 @@ export async function createHabit(
   try {
     const habit: Habit = {
       id: uuid(),
-      user_id: null,
+      user_id: getCurrentUserId(),
       name: data.name,
       icon: data.icon,
       color: data.color,
@@ -137,7 +138,7 @@ export async function logHabit(
     const log: HabitLog = {
       id: uuid(),
       habit_id: data.habit_id,
-      user_id: null,
+      user_id: getCurrentUserId(),
       occurred_at: data.occurred_at,
       note: data.note ?? null,
       created_at: nowIso(),

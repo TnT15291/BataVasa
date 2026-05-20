@@ -13,6 +13,7 @@ import { useJournalsStore } from '@store/journalsStore'
 import { exportAllJournals } from '@features/journals/services'
 import { useHabitsStore } from '@store/habitsStore'
 import { exportAllHabits } from '@features/habits/services'
+import { useAuthStore } from '@store/authStore'
 
 type RowProps = {
   label: string
@@ -70,6 +71,16 @@ export function SettingsScreen() {
   const wipeReminders = useRemindersStore((s) => s.wipeAll)
   const wipeJournals = useJournalsStore((s) => s.wipeAll)
   const wipeHabits = useHabitsStore((s) => s.wipeAll)
+  const authConfigured = useAuthStore((s) => s.configured)
+  const session = useAuthStore((s) => s.session)
+  const signOut = useAuthStore((s) => s.signOut)
+
+  const onSignOut = () => {
+    Alert.alert(t.auth_sign_out, t.auth_sign_out_confirm, [
+      { text: t.cancel, style: 'cancel' },
+      { text: t.auth_sign_out, style: 'destructive', onPress: () => { void signOut() } },
+    ])
+  }
 
   const onExportReminders = async () => {
     const r = await exportAllReminders()
@@ -181,6 +192,30 @@ export function SettingsScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={styles.container}>
+      {authConfigured && (
+        <>
+          <SectionHeader label={t.account} />
+          <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+              <View style={{ flex: 1, paddingRight: spacing[3] }}>
+                <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.auth_signed_in_as}</Text>
+                <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{session?.user?.email ?? '—'}</Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={onSignOut}
+              style={({ pressed }) => [
+                styles.row,
+                styles.rowLast,
+                { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+              ]}
+            >
+              <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.auth_sign_out}</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
+
       <SectionHeader label={t.appearance} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <SettingRow label={t.appearance} onPress={() => router.push('/appearance')} />

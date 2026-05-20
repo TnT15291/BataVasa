@@ -14,7 +14,7 @@
 
 ## ❌ BLOCKER
 
-- [ ] **B1. Không có auth** 🔁 cross-module · `docs/security.md#authentication` — `user_id: null` mọi nơi → multi-user impossible, RLS Supabase vô nghĩa
+- [ ] **B1. Auth — CODE COMPLETE (2026-05-21), chờ Supabase project + runtime verify** 🔁 cross-module · `docs/security.md#authentication` · setup: `docs/auth-setup.md` — Đã wire Supabase Auth (email/password, **login wall**): `services/supabase.ts` (env-gated client + chunked SecureStore adapter), `store/authStore.ts` (session + `onAuthStateChange` → reload stores), `services/identity.ts` (`getCurrentUserId`), `features/auth/AuthScreen.tsx`, login gate trong `app/_layout.tsx`, Settings → Account (email + sign out). **5 chỗ `user_id: null` → `getCurrentUserId()`** (finance/reminders/journals/habits). i18n auth keys (6 ngôn ngữ). Typecheck + 153 tests xanh. **Còn lại:** user tạo Supabase project + điền `.env.local` (theo `docs/auth-setup.md`) → chạy thử end-to-end; OAuth + orphan-row adoption hoãn sang sau.
 - [ ] **B2. Không có cloud sync** 🔁 cross-module (Rule 1) · `docs/sync-offline.md` — `sync_queue` table chưa tồn tại, Supabase chưa wire → mất phone = mất sạch data
 - [ ] **B5. Tests — IN PROGRESS (2026-05-21)** 🔁 cross-module · `docs/ops.md#testing` — Coverage gate wired (`npm run test:ci`, thresholds in `jest.config.js`). **153 tests / 14 suites pass.** Pure helpers (`dateParser`, `locale`, `uuid`, `fx`, `aiLanguage`, `reminderParser`) ✅ ≥90% target. AI response parsers (reminder/habit/journal) tested against valid + malformed JSON fixtures. **Còn lại:** `database/*/queries.ts` (cần in-memory SQLite), `features/{finance,reminders}/services.ts`, AI insight builders → để đạt 70% gate trên services/DB (global hiện ~17%, floor ratchet đã set).
 
@@ -98,7 +98,7 @@
 | Architecture | 8/10 | Layer separation tốt, còn thiếu auth layer |
 | Code quality | 7/10 | TypeScript strict, Result pattern, thiếu tests |
 | UX hoàn chỉnh | 5/10 | Voice input + 4 modules CRUD, thiếu onboarding |
-| Security | 5/10 | PII scrub, thiếu auth + biometric |
+| Security | 6/10 | PII scrub + auth code (login wall, email/password) chờ live verify; thiếu biometric |
 | Reliability | 4/10 | Coverage gate + 153 tests (helpers ≥90%); DB/sync layer still untested, no backup |
 | **Production-ready** | **3/10** | Blockers B1+B2+B5 chưa xong |
 
@@ -120,7 +120,7 @@
 - ✅ AI language enforcement + multi-currency display
 
 **Sprint 3 (2-3 tuần) — Beta launch:** ← CURRENT
-1. B1 — Auth (Supabase email/OAuth)
+1. B1 — Auth (Supabase email/password) — 🔄 code complete, chờ Supabase project + runtime verify (`docs/auth-setup.md`)
 2. B2 — Sync engine (sync_queue + Supabase mirror)
 3. B5 — Tests cho service + DB layer (target 70%) — 🔄 helpers + parsers done; DB queries + feature services còn lại
 4. H16 — Onboarding flow

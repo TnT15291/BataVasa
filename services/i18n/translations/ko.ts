@@ -332,4 +332,23 @@ export const ko: Translations = {
   report_days: '일',
   report_habits_completed: '총 달성 횟수',
   report_view: '보고서 보기',
+
+  // Auth
+  account: '계정',
+  auth_subtitle_signin: '계속하려면 로그인',
+  auth_subtitle_signup: '계정 만들기',
+  auth_email: '이메일',
+  auth_password: '비밀번호',
+  auth_email_ph: 'you@email.com',
+  auth_password_ph: '6자 이상',
+  auth_signin_cta: '로그인',
+  auth_signup_cta: '계정 생성',
+  auth_toggle_to_signup: '계정이 없으신가요? 가입',
+  auth_toggle_to_signin: '이미 계정이 있으신가요? 로그인',
+  auth_check_email: '계정이 생성되었습니다. 이메일을 확인한 후 로그인하세요.',
+  auth_not_configured_title: '로그인 불가',
+  auth_not_configured_body: '백엔드가 아직 구성되지 않았습니다. 설정 가이드를 참조하세요:',
+  auth_signed_in_as: '로그인 계정',
+  auth_sign_out: '로그아웃',
+  auth_sign_out_confirm: '이 계정에서 로그아웃할까요? 데이터는 기기에 남아 있습니다.',
 }
