@@ -53,6 +53,10 @@ Tests are a hard requirement before any module ships to beta. Without them, refa
 
 Run: `npm test` · CI: `npm run test:ci` (fails on coverage regression) · E2E: `maestro test .maestro/`
 
+Current B5 ratchet (2026-05-21): 184 Jest tests across 19 suites. Global CI
+coverage floor is 37% statements / 35% branches / 31% functions / 39% lines.
+Raise these thresholds only after adding coverage; never lower them.
+
 **Per-module required test surface:**
 - Services: all `Result` branches (happy + error path for every public function)
 - DB layer: round-trip insert/query/update/soft-delete + migration up/down

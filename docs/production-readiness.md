@@ -16,7 +16,7 @@
 
 - [x] **B1. Auth — DONE (2026-05-21)** 🔁 cross-module · `docs/auth-setup.md` — Supabase Auth (email/password, login wall) hoàn chỉnh: `services/supabase.ts`, `store/authStore.ts`, `services/identity.ts`, `features/auth/AuthScreen.tsx`, login gate `app/_layout.tsx`, Settings → Account. i18n 6 ngôn ngữ. `.env.local` đã điền (Supabase project live). **Còn lại:** chạy end-to-end verify trên thiết bị thật.
 - [x] **B2. Cloud sync — DONE (2026-05-21)** 🔁 cross-module (Rule 1) · `docs/sync-offline.md` — Offline-first sync engine hoàn chỉnh: `database/sync/schema.ts` (sync_queue table + dedup index), `database/sync/queue.ts` (enqueue/getPending/markSynced/markFailed), `services/sync.ts` (drain worker, AppState listener, module toggle check), migration v8. Tất cả 4 module services (finance/habits/journals/reminders) đã wire enqueue sau mỗi create/update/delete/wipe. `startSyncWorker` chạy sau auth init. Supabase tables + RLS: `docs/supabase-setup.sql`. **Còn lại:** chạy SQL trên Supabase dashboard → verify end-to-end.
-- [ ] **B5. Tests — IN PROGRESS (2026-05-21)** 🔁 cross-module · `docs/ops.md#testing` — Coverage gate wired (`npm run test:ci`, thresholds in `jest.config.js`). **153+ tests / 14+ suites pass.** Pure helpers + B1/B2 integration smoke tests (`__tests__/b1b2.test.ts`). **Còn lại:** `database/*/queries.ts` (in-memory SQLite), `features/*/services.ts`, AI insight builders → đạt 70% global gate.
+- [ ] **B5. Tests — IN PROGRESS (2026-05-21)** 🔁 cross-module · `docs/ops.md#testing` — Coverage gate wired (`npm run test:ci`, thresholds in `jest.config.js`). **184 tests / 19 suites pass. CI coverage floor ratcheted to 37% statements / 35% branches / 31% functions / 39% lines.** Added finance/reminders service tests and finance/reminders query tests. **Còn lại:** habits/journals DB query tests, sync/settings/core DB tests, AI insight builders → đạt 70% global gate.
 
 ---
 
@@ -92,7 +92,7 @@
 - ✅ Data Management screen: export/wipe per module với double-confirm
 - ✅ B1/B2 validation service (`services/b1b2-validate.ts`) + smoke tests
 - ✅ H18 partial: production icon/splash/favicon + privacy policy + store listing source copy
-- ✅ Test infra: Jest coverage gate (`test:ci`) + per-file 90% locks on pure helpers; 153+ tests across 14+ suites (B5 partial)
+- ✅ Test infra: Jest coverage gate (`test:ci`) + per-file 90% locks on pure helpers; 184 tests across 19 suites; finance/reminders service + query coverage added (B5 partial)
 
 ---
 
@@ -104,7 +104,7 @@
 | Code quality | 7/10 | TypeScript strict, Result pattern, thiếu DB/service tests |
 | UX hoàn chỉnh | 8/10 | Voice + CRUD + onboarding + reports + biometric; thiếu App Store assets |
 | Security | 8/10 | Auth live (Supabase), PII scrub, RLS, biometric lock; cần device E2E verify |
-| Reliability | 5/10 | Sync engine + 153+ tests; DB/service layer chưa tested |
+| Reliability | 6/10 | Sync engine + 184 tests; finance/reminders service + query layers covered; còn core/sync/settings/AI insight tests |
 | **Production-ready** | **6/10** | Beta closed ✅; cần H18 + ≥50% MEDIUM cho public launch |
 
 ---
@@ -127,7 +127,7 @@
 **Sprint 3 ✅ PHẦN LỚN COMPLETE (2026-05-21) — Beta launch:**
 1. ✅ B1 — Auth (Supabase email/password + login wall + i18n 6 ngôn ngữ)
 2. ✅ B2 — Sync engine (sync_queue, drain worker, 4 modules, Supabase tables + RLS)
-3. 🔄 B5 — Tests helpers ≥90% ✅; DB/service layer còn lại (target 70% global)
+3. 🔄 B5 — Tests helpers ≥90% ✅; finance/reminders service + query tests ✅; còn core/sync/settings/AI insight tests (target 70% global)
 4. ✅ H16 — Onboarding flow (3-step modal)
 5. ✅ H17 — Biometric lock
 6. ✅ H19 — Voice force-confirm fix

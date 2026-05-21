@@ -29,10 +29,10 @@ module.exports = {
   // Current global is the regression floor; raise as the DB/sync layers get tests.
   coverageThreshold: {
     global: {
-      statements: 17,
-      branches: 18,
-      functions: 13,
-      lines: 18,
+      statements: 37,
+      branches: 35,
+      functions: 31,
+      lines: 39,
     },
     // Pure deterministic helpers — locked at the 90% target (docs/ops.md).
     './services/dateParser.ts': { statements: 90, branches: 80, functions: 90, lines: 90 },
