@@ -117,6 +117,7 @@ export const en: Translations = {
   weekly: 'Weekly',
   monthly: 'Monthly',
   yearly: 'Yearly',
+  quarterly: 'Quarterly',
   custom_range: 'Custom',
   from_date: 'From',
   to_date: 'To',

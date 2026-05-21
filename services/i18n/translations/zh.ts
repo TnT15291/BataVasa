@@ -117,6 +117,7 @@ export const zh: Translations = {
   weekly: '按周',
   monthly: '按月',
   yearly: '按年',
+  quarterly: '按季度',
   custom_range: '自定义',
   from_date: '开始日期',
   to_date: '结束日期',

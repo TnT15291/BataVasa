@@ -117,6 +117,7 @@ export const fr: Translations = {
   weekly: 'Hebdomadaire',
   monthly: 'Mensuel',
   yearly: 'Annuel',
+  quarterly: 'Trimestriel',
   custom_range: 'Personnalisé',
   from_date: 'Du',
   to_date: 'Au',

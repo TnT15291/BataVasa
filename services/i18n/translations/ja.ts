@@ -117,6 +117,7 @@ export const ja: Translations = {
   weekly: '週次',
   monthly: '月次',
   yearly: '年次',
+  quarterly: '四半期',
   custom_range: 'カスタム',
   from_date: '開始日',
   to_date: '終了日',

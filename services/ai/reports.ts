@@ -2,7 +2,7 @@ import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
 import type { Transaction, Category } from '@features/finance/types'
 
-export type ReportType = 'weekly' | 'monthly' | 'yearly' | 'custom'
+export type ReportType = 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'custom'
 
 function formatData(txs: Transaction[], cats: Map<string, Category>, currency: string): string {
   let income = 0
@@ -37,6 +37,8 @@ const SECTIONS: Record<ReportType, string> = {
     '## 📊 Weekly Overview\n## 💸 Notable Spending\n## ✅ Good Habits\n## ⚠️ Areas to Improve\n## 💡 Tips for Next Week',
   monthly:
     '## 📊 Monthly Overview\n## 🏆 Top Categories\n## 📈 Trends\n## 🚨 Overspending Alerts\n## 💰 Savings\n## 🎯 Goals for Next Month',
+  quarterly:
+    '## Quarterly Overview\n## Top Categories\n## Weekly Breakdown\n## Trends\n## Savings\n## Goals for Next Quarter',
   yearly:
     '## 📊 Annual Overview\n## 🏆 Top Categories\n## 📈 Monthly Breakdown\n## 🏅 Best & Worst Periods\n## 💰 Annual Savings\n## 🎯 Goals for Next Year',
   custom:

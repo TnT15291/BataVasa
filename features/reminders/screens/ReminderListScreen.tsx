@@ -3,8 +3,9 @@ import {
   View, Text, Pressable, ScrollView, StyleSheet,
   TextInput, Modal, ActivityIndicator, Alert,
 } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import { format } from 'date-fns'
+import { endOfDay, format, startOfDay } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -27,7 +28,8 @@ function RecurrenceBadge({ recurrence }: { recurrence: Reminder['recurrence'] })
   }
   return (
     <View style={[styles.badge, { backgroundColor: theme.brand.primary + '22' }]}>
-      <Text style={[styles.badgeText, { color: theme.brand.primary }]}>↻ {labels[recurrence]}</Text>
+      <Feather name="repeat" size={10} color={theme.brand.primary} />
+      <Text style={[styles.badgeText, { color: theme.brand.primary }]}>{labels[recurrence]}</Text>
     </View>
   )
 }
@@ -44,31 +46,38 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
   const isDone = reminder.completed === 1
   const adv = reminder.advance_minutes ?? 0
   const eventTime = new Date(new Date(reminder.remind_at).getTime() + adv * 60000)
-  const isPast = eventTime < new Date() && !isDone
-  const dateStr = format(eventTime, 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
+  const now = new Date()
+  const isPast = eventTime < now && !isDone
+  const isToday = eventTime >= startOfDay(now) && eventTime <= endOfDay(now)
+  const statusColor = isDone ? theme.semantic.success : isPast ? theme.semantic.danger : isToday ? theme.brand.primary : '#2196F3'
+  const statusLabel = isDone ? t.reminder_completed : isPast ? t.reminder_past : isToday ? t.today : t.reminder_upcoming
+  const dateStr = format(eventTime, isToday ? 'HH:mm' : 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border.subtle },
-        pressed && { backgroundColor: theme.bg.secondary },
+        {
+          backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated,
+          borderColor: isPast ? theme.semantic.danger + '55' : theme.border.subtle,
+        },
       ]}
       accessibilityRole="button"
       accessibilityLabel={reminder.title}
     >
+      <View style={[styles.rowAccent, { backgroundColor: statusColor }]} />
       <Pressable
         onPress={onToggle}
         style={[styles.checkbox, {
-          borderColor: isDone ? theme.semantic.success : theme.border.strong,
-          backgroundColor: isDone ? theme.semantic.success : 'transparent',
+          borderColor: isDone ? theme.semantic.success : statusColor,
+          backgroundColor: isDone ? theme.semantic.success : statusColor + '12',
         }]}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isDone }}
         hitSlop={8}
       >
-        {isDone && <Text style={styles.checkmark}>✓</Text>}
+        {isDone && <Feather name="check" size={12} color="#fff" />}
       </Pressable>
 
       <View style={styles.rowContent}>
@@ -82,12 +91,16 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
           </Text>
           <RecurrenceBadge recurrence={reminder.recurrence} />
         </View>
-        <Text style={[styles.rowDate, { color: isPast ? theme.semantic.danger : theme.text.muted }]}>
-          {dateStr}
-        </Text>
+        <View style={styles.rowMeta}>
+          <View style={[styles.timePill, { backgroundColor: statusColor + '18' }]}>
+            <Feather name="clock" size={11} color={statusColor} />
+            <Text style={[styles.timePillText, { color: statusColor }]}>{dateStr}</Text>
+          </View>
+          <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+        </View>
         {adv > 0 && (
           <Text style={[styles.rowAdvance, { color: theme.brand.primary }]}>
-            🔔 {adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} {t.remind_before.toLowerCase()}
+            {adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} {t.remind_before.toLowerCase()}
           </Text>
         )}
         {reminder.note ? (
@@ -97,7 +110,7 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
         ) : null}
       </View>
 
-      <Text style={[styles.chevron, { color: theme.text.muted }]}>›</Text>
+      <Feather name="chevron-right" size={20} color={theme.text.muted} />
     </Pressable>
   )
 }
@@ -110,6 +123,7 @@ export function ReminderListScreen() {
   const reminders = useReminders()
   const { createReminder, updateReminder } = useReminderActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
+  const language = useSettingsStore((s) => s.language)
 
   const [nlText, setNlText] = useState('')
   const [parsing, setParsing] = useState(false)
@@ -154,14 +168,33 @@ export function ReminderListScreen() {
     router.push({ pathname: '/reminder', params: p ? { prefill: JSON.stringify(p) } : {} } as any)
   }
 
-  const { upcoming, past } = useMemo(() => {
+  const { overdue, today, upcoming, completed } = useMemo(() => {
     const now = new Date()
+    const dayStart = startOfDay(now)
+    const dayEnd = endOfDay(now)
+    const eventAt = (r: Reminder) => new Date(new Date(r.remind_at).getTime() + (r.advance_minutes ?? 0) * 60000)
     const active = reminders.filter((r) => r.completed === 0)
-    const done = reminders.filter((r) => r.completed === 1)
-    const upcoming = active.filter((r) => new Date(r.remind_at) >= now)
-    const pastActive = active.filter((r) => new Date(r.remind_at) < now)
-    return { upcoming: [...upcoming, ...pastActive], past: done }
+    const completed = reminders
+      .filter((r) => r.completed === 1)
+      .sort((a, b) => eventAt(b).getTime() - eventAt(a).getTime())
+    const overdue = active
+      .filter((r) => eventAt(r) < now)
+      .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
+    const today = active
+      .filter((r) => {
+        const d = eventAt(r)
+        return d >= now && d >= dayStart && d <= dayEnd
+      })
+      .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
+    const upcoming = active
+      .filter((r) => eventAt(r) > dayEnd)
+      .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
+    return { overdue, today, upcoming, completed }
   }, [reminders])
+
+  const nextReminder = today[0] ?? upcoming[0] ?? overdue[0] ?? null
+  const completedCount = completed.length
+  const activeCount = reminders.length - completedCount
 
   const toggleDone = (r: Reminder) => {
     updateReminder({ id: r.id, completed: r.completed === 1 ? 0 : 1 })
@@ -170,9 +203,12 @@ export function ReminderListScreen() {
   const renderGroup = (title: string, items: Reminder[]) => {
     if (items.length === 0) return null
     return (
-      <View key={title}>
-        <Text style={[styles.groupHeader, { color: theme.text.muted }]}>{title.toUpperCase()}</Text>
-        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      <View key={title} style={styles.group}>
+        <View style={styles.groupTitleRow}>
+          <Text style={[styles.groupHeader, { color: theme.text.primary }]}>{title}</Text>
+          <Text style={[styles.groupCount, { color: theme.text.muted }]}>{items.length}</Text>
+        </View>
+        <View style={styles.listStack}>
           {items.map((r, idx) => (
             <ReminderRow
               key={r.id}
@@ -189,34 +225,81 @@ export function ReminderListScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
-      {/* NL input */}
-      <View style={[styles.nlRow, { backgroundColor: theme.bg.secondary, borderBottomColor: theme.border.subtle }]}>
-        <TextInput
-          value={nlText}
-          onChangeText={setNlText}
-          placeholder={t.nl_placeholder_reminder}
-          placeholderTextColor={theme.text.muted}
-          style={[styles.nlInput, { color: theme.text.primary, backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
-          returnKeyType="done"
-          onSubmitEditing={() => handleNlParse()}
-          editable={!parsing}
-        />
-        <VoiceButton onResult={(text) => handleNlParse(text)} disabled={parsing} size={36} module="reminders" />
-        <Pressable
-          onPress={() => handleNlParse()}
-          disabled={parsing || !nlText.trim()}
-          style={[styles.nlBtn, { backgroundColor: (parsing || !nlText.trim()) ? theme.border.strong : theme.brand.primary }]}
-        >
-          {parsing
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={styles.nlBtnText}>{t.parse_btn}</Text>}
-        </Pressable>
-      </View>
-
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={[styles.hero, { backgroundColor: '#2196F314', borderColor: '#2196F344' }]}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroText}>
+              <Text style={[styles.heroKicker, { color: theme.text.muted }]}>{t.nav_reminders}</Text>
+              <Text style={[styles.heroTitle, { color: theme.text.primary }]}>
+                {nextReminder ? nextReminder.title : t.reminder_today_none}
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: theme.text.muted }]}>
+                {nextReminder
+                  ? format(new Date(new Date(nextReminder.remind_at).getTime() + (nextReminder.advance_minutes ?? 0) * 60000), 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
+                  : t.reminder_add_hint}
+              </Text>
+            </View>
+            <View style={[styles.heroIcon, { backgroundColor: '#2196F31F' }]}>
+              <Feather name="bell" size={28} color="#2196F3" />
+            </View>
+          </View>
+          <View style={styles.statGrid}>
+            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
+              <Text style={[styles.statValue, { color: theme.semantic.danger }]}>{overdue.length}</Text>
+              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.reminder_past}</Text>
+            </View>
+            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
+              <Text style={[styles.statValue, { color: theme.brand.primary }]}>{today.length}</Text>
+              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.today}</Text>
+            </View>
+            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
+              <Text style={[styles.statValue, { color: theme.text.primary }]}>{activeCount}</Text>
+              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.reminder_upcoming}</Text>
+            </View>
+            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
+              <Text style={[styles.statValue, { color: theme.semantic.success }]}>{completedCount}</Text>
+              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.reminder_completed}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.commandCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.commandHeader}>
+            <View style={[styles.commandIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
+              <Feather name="zap" size={16} color={theme.brand.primary} />
+            </View>
+            <Text style={[styles.commandTitle, { color: theme.text.primary }]}>{t.smart_entry}</Text>
+          </View>
+          <View style={[styles.nlInputWrap, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}>
+            <TextInput
+              value={nlText}
+              onChangeText={setNlText}
+              placeholder={t.nl_placeholder_reminder}
+              placeholderTextColor={theme.text.muted}
+              style={[styles.nlInput, { color: theme.text.primary }]}
+              returnKeyType="done"
+              onSubmitEditing={() => handleNlParse()}
+              editable={!parsing}
+              multiline
+            />
+            <View style={styles.nlActions}>
+              <VoiceButton onResult={(text) => handleNlParse(text)} disabled={parsing} size={38} module="reminders" />
+              <Pressable
+                onPress={() => handleNlParse()}
+                disabled={parsing || !nlText.trim()}
+                style={[styles.nlBtn, { backgroundColor: (parsing || !nlText.trim()) ? theme.border.strong : theme.brand.primary }]}
+              >
+                {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
         {reminders.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={[styles.emptyIcon]}>🔔</Text>
+            <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
+              <Feather name="bell" size={34} color={theme.brand.primary} />
+            </View>
             <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_reminders}</Text>
             <Text style={[styles.emptyMsg, { color: theme.text.muted }]}>{t.no_reminders_msg}</Text>
             <Pressable
@@ -228,8 +311,10 @@ export function ReminderListScreen() {
           </View>
         ) : (
           <>
+            {renderGroup(t.reminder_past, overdue)}
+            {renderGroup(t.today, today)}
             {renderGroup(t.reminder_upcoming, upcoming)}
-            {renderGroup(t.reminder_completed, past)}
+            {renderGroup(t.reminder_completed, completed)}
           </>
         )}
       </ScrollView>
@@ -240,7 +325,7 @@ export function ReminderListScreen() {
         accessibilityLabel={t.reminders_report_title}
         style={[styles.reportBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
       >
-        <Text style={styles.reportBtnText}>📊</Text>
+        <Feather name="bar-chart-2" size={20} color={theme.text.secondary} />
       </Pressable>
 
       <Pressable
@@ -249,10 +334,9 @@ export function ReminderListScreen() {
         accessibilityLabel={t.new_reminder}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}
       >
-        <Text style={styles.fabIcon}>+</Text>
+        <Feather name="plus" size={28} color="#fff" />
       </Pressable>
 
-      {/* NL confirm modal */}
       <Modal visible={!!parsedReminder} transparent animationType="slide" onRequestClose={() => setParsedReminder(null)}>
         <Pressable style={styles.backdrop} onPress={() => setParsedReminder(null)} />
         <View style={[styles.sheet, { backgroundColor: theme.bg.elevated }]}>
@@ -269,8 +353,8 @@ export function ReminderListScreen() {
             <Text style={[styles.infoValue, { color: theme.text.primary }]}>
               {parsedReminder ? (() => {
                 const adv = parsedReminder.advance_minutes ?? 0
-                const advStr = adv === 0 ? '' : ` · ${adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} ${t.remind_before.toLowerCase()}`
-                return `🔔 ${parsedReminder.title}${advStr}${parsedReminder.note ? ' · ' + parsedReminder.note : ''}`
+                const advStr = adv === 0 ? '' : ` / ${adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} ${t.remind_before.toLowerCase()}`
+                return `${parsedReminder.title}${advStr}${parsedReminder.note ? ' / ' + parsedReminder.note : ''}`
               })() : ''}
             </Text>
           </View>
@@ -296,24 +380,104 @@ export function ReminderListScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing[4], gap: spacing[2], paddingBottom: 80 },
-  groupHeader: { fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: spacing[2], marginLeft: spacing[1] },
-  card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', marginBottom: spacing[3] },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing[4], paddingVertical: spacing[3], gap: spacing[3] },
+  content: { padding: spacing[4], gap: spacing[3], paddingBottom: 96 },
+  hero: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[4],
+    gap: spacing[4],
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  heroText: { flex: 1, gap: spacing[1] },
+  heroKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroTitle: { fontSize: 22, fontWeight: '800' },
+  heroSubtitle: { fontSize: 13, lineHeight: 18 },
+  heroIcon: {
+    width: 62,
+    height: 62,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  statChip: {
+    width: '48%',
+    minHeight: 64,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[3],
+    justifyContent: 'center',
+  },
+  statValue: { fontSize: 20, fontWeight: '800' },
+  statLabel: { fontSize: 11, fontWeight: '700', marginTop: 2 },
+  commandCard: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[4],
+    gap: spacing[3],
+  },
+  commandHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  commandIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commandTitle: { fontSize: 15, fontWeight: '800' },
+  nlInputWrap: {
+    minHeight: 88,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing[3],
+    paddingBottom: 46,
+  },
+  nlActions: {
+    position: 'absolute',
+    right: spacing[2],
+    bottom: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  group: { gap: spacing[2] },
+  groupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  groupHeader: { fontSize: 15, fontWeight: '800' },
+  groupCount: { fontSize: 12, fontWeight: '700' },
+  listStack: { gap: spacing[2] },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    gap: spacing[3],
+    overflow: 'hidden',
+  },
+  rowAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
   checkbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  checkmark: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  rowContent: { flex: 1, gap: 2 },
+  rowContent: { flex: 1, gap: spacing[1] },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  rowTitle: { fontSize: 15, fontWeight: '500', flex: 1 },
+  rowTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
   strikethrough: { textDecorationLine: 'line-through' },
-  rowDate: { fontSize: 12 },
+  rowMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexWrap: 'wrap' },
+  timePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  timePillText: { fontSize: 11, fontWeight: '700' },
+  statusText: { fontSize: 11, fontWeight: '700' },
   rowAdvance: { fontSize: 11, fontWeight: '500' },
   rowNote: { fontSize: 12 },
-  badge: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
   badgeText: { fontSize: 10, fontWeight: '600' },
-  chevron: { fontSize: 20, lineHeight: 22 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: spacing[3] },
-  emptyIcon: { fontSize: 48 },
+  emptyIconWrap: { width: 72, height: 72, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
   emptyMsg: { fontSize: 14, textAlign: 'center' },
   emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
@@ -324,25 +488,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     elevation: 3, shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
   },
-  reportBtnText: { fontSize: 20 },
   fab: {
     position: 'absolute', right: spacing[6], bottom: spacing[8],
-    width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center',
+    width: 56, height: 56, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center',
     elevation: 4, shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
-  fabIcon: { color: '#fff', fontSize: 28, fontWeight: '600', lineHeight: 30 },
-  nlRow: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing[2],
-    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
   nlInput: {
-    flex: 1, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
+    minHeight: 42,
     fontSize: 14,
+    lineHeight: 19,
   },
-  nlBtn: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: radius.md },
-  nlBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  nlBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
     borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   View, Text, Pressable, StyleSheet, ScrollView,
-  TextInput, ActivityIndicator, Share,
+  ActivityIndicator, Share, Platform,
 } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import {
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   startOfYear, endOfYear,
@@ -57,6 +58,7 @@ export function HabitsReportScreen() {
   const [anchorDate, setAnchorDate] = useState(new Date())
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  const [datePickerTarget, setDatePickerTarget] = useState<'from' | 'to' | null>(null)
   const [allLogs, setAllLogs] = useState<HabitLog[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -98,6 +100,22 @@ export function HabitsReportScreen() {
     if (period === 'weekly') setAnchorDate((d) => dir === 1 ? addWeeks(d, 1) : subWeeks(d, 1))
     else if (period === 'monthly') setAnchorDate((d) => dir === 1 ? addMonths(d, 1) : subMonths(d, 1))
     else if (period === 'yearly') setAnchorDate((d) => dir === 1 ? addYears(d, 1) : subYears(d, 1))
+  }
+
+  const customFromDate = useMemo(() => {
+    const d = parseISO(customFrom)
+    return isValid(d) ? d : new Date()
+  }, [customFrom])
+
+  const customToDate = useMemo(() => {
+    const d = parseISO(customTo)
+    return isValid(d) ? d : new Date()
+  }, [customTo])
+
+  const setCustomDate = (target: 'from' | 'to', date: Date) => {
+    const value = format(date, 'yyyy-MM-dd')
+    if (target === 'from') setCustomFrom(value)
+    else setCustomTo(value)
   }
 
   const stats = useMemo(() => {
@@ -149,20 +167,43 @@ export function HabitsReportScreen() {
           <View style={styles.customRow}>
             <View style={styles.customField}>
               <Text style={[styles.customLabel, { color: theme.text.muted }]}>{t.from_date}</Text>
-              <TextInput value={customFrom} onChangeText={setCustomFrom} placeholder={t.date_hint} placeholderTextColor={theme.text.muted}
-                style={[styles.dateInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
-                autoCapitalize="none" keyboardType="numbers-and-punctuation" />
+              <Pressable
+                onPress={() => setDatePickerTarget('from')}
+                style={[styles.dateInput, { borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
+              >
+                <Text style={[styles.dateInputText, { color: customFrom ? theme.text.primary : theme.text.muted }]}>
+                  {customFrom || t.date_hint}
+                </Text>
+              </Pressable>
             </View>
             <Text style={[styles.dateSep, { color: theme.text.muted }]}>→</Text>
             <View style={styles.customField}>
               <Text style={[styles.customLabel, { color: theme.text.muted }]}>{t.to_date}</Text>
-              <TextInput value={customTo} onChangeText={setCustomTo} placeholder={t.date_hint} placeholderTextColor={theme.text.muted}
-                style={[styles.dateInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
-                autoCapitalize="none" keyboardType="numbers-and-punctuation" />
+              <Pressable
+                onPress={() => setDatePickerTarget('to')}
+                style={[styles.dateInput, { borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
+              >
+                <Text style={[styles.dateInputText, { color: customTo ? theme.text.primary : theme.text.muted }]}>
+                  {customTo || t.date_hint}
+                </Text>
+              </Pressable>
             </View>
           </View>
         )}
       </View>
+
+      {datePickerTarget && (
+        <DateTimePicker
+          value={datePickerTarget === 'from' ? customFromDate : customToDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          onChange={(event, selectedDate) => {
+            if (Platform.OS !== 'ios') setDatePickerTarget(null)
+            if (event.type === 'dismissed' || !selectedDate) return
+            setCustomDate(datePickerTarget, selectedDate)
+          }}
+        />
+      )}
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
@@ -221,7 +262,15 @@ const styles = StyleSheet.create({
   customRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing[2] },
   customField: { flex: 1, gap: spacing[1] },
   customLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  dateInput: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2], fontSize: 13, fontFamily: 'Courier' },
+  dateInput: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    minHeight: 38,
+    justifyContent: 'center',
+  },
+  dateInputText: { fontSize: 13, fontFamily: 'Courier' },
   dateSep: { fontSize: 18, paddingBottom: spacing[2] },
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   statsGrid: { flexDirection: 'row', gap: spacing[3] },

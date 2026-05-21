@@ -10,9 +10,10 @@ type Props = {
   selectedId: string | null
   onSelect: (c: Category) => void
   filterKind?: CategoryKind
+  scrollEnabled?: boolean
 }
 
-export function CategoryPicker({ categories, selectedId, onSelect, filterKind }: Props) {
+export function CategoryPicker({ categories, selectedId, onSelect, filterKind, scrollEnabled = true }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
   const list = filterKind ? categories.filter((c) => c.kind === filterKind) : categories
@@ -25,8 +26,8 @@ export function CategoryPicker({ categories, selectedId, onSelect, filterKind }:
     { essential: [], discretionary: [], income: [], savings: [] }
   )
 
-  return (
-    <ScrollView>
+  const content = (
+    <>
       {(Object.keys(grouped) as CategoryKind[]).map((kind) =>
         grouped[kind].length === 0 ? null : (
           <View key={kind} style={styles.group}>
@@ -61,7 +62,13 @@ export function CategoryPicker({ categories, selectedId, onSelect, filterKind }:
           </View>
         )
       )}
-    </ScrollView>
+    </>
+  )
+
+  return scrollEnabled ? (
+    <ScrollView nestedScrollEnabled>{content}</ScrollView>
+  ) : (
+    <View>{content}</View>
   )
 }
 

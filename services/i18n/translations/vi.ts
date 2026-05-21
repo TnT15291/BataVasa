@@ -123,6 +123,7 @@ export const vi = {
   weekly: 'Theo tuần',
   monthly: 'Theo tháng',
   yearly: 'Theo năm',
+  quarterly: 'Theo quý',
   custom_range: 'Tùy chọn',
   from_date: 'Từ ngày',
   to_date: 'Đến ngày',

@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import {
   useFinanceBootstrap,
@@ -52,18 +53,14 @@ export function QuickAddScreen() {
   const locationAccess = useSettingsStore((s) => s.locationAccess)
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const [hasApiKey, setHasApiKey] = useState(false)
-  useEffect(() => {
-    getProviderKey(aiProvider).then((k) => setHasApiKey(!!k))
-  }, [aiProvider])
   const categories = useCategories()
   const allTxs = useTransactions()
   const { create, update, remove } = useFinanceActions()
 
-  // Edit mode if `id` query param present
   const params = useLocalSearchParams<{ id?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
   const editingTx = useMemo(
-    () => (editingId ? allTxs.find((t) => t.id === editingId) ?? null : null),
+    () => (editingId ? allTxs.find((tx) => tx.id === editingId) ?? null : null),
     [editingId, allTxs]
   )
   const isEditing = !!editingId
@@ -79,7 +76,28 @@ export function QuickAddScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [prefilled, setPrefilled] = useState(false)
 
-  // Pre-fill state when editing an existing transaction
+  const [smartText, setSmartText] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
+  const [confirmSheet, setConfirmSheet] = useState<{
+    rawInput: string
+    fields: ConfirmField[]
+    payload: {
+      direction: Direction
+      amount_cents: number
+      category: Category
+      merchant: string
+      note: string
+      occurredAt: Date
+      source: SmartEntrySource
+    }
+  } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+
+  useEffect(() => {
+    getProviderKey(aiProvider).then((key) => setHasApiKey(!!key))
+  }, [aiProvider])
+
   useEffect(() => {
     if (!editingTx || prefilled) return
     const cat = categories.find((c) => c.id === editingTx.category_id) ?? null
@@ -98,32 +116,11 @@ export function QuickAddScreen() {
     setPrefilled(true)
   }, [editingTx, categories, prefilled])
 
-  // Smart entry state
-  const [smartText, setSmartText] = useState('')
-  const [parsing, setParsing] = useState(false)
-  const [smartExpanded, setSmartExpanded] = useState(false)
-  const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
-  const [confirmSheet, setConfirmSheet] = useState<{
-    rawInput: string
-    fields: ConfirmField[]
-    payload: {
-      direction: Direction
-      amount_cents: number
-      category: Category
-      merchant: string
-      note: string
-      occurredAt: Date
-      source: SmartEntrySource
-    }
-  } | null>(null)
-  const [confirmBusy, setConfirmBusy] = useState(false)
-
   const visibleCategories = useMemo(() => {
     if (direction === 'income') return categories.filter((c) => c.kind === 'income')
     return categories.filter((c) => c.kind !== 'income')
   }, [direction, categories])
 
-  // Apply a parsed result into the form state (used by both auto-fill path and "Edit" from confirm sheet)
   const applyParsedToForm = (p: {
     direction: Direction
     amount_cents: number
@@ -131,7 +128,6 @@ export function QuickAddScreen() {
     merchant: string
     note: string
     occurredAt: Date
-    source?: SmartEntrySource
   }) => {
     setAmountText(String(centsToDisplay(p.amount_cents, currency)))
     setDirection(p.direction)
@@ -139,14 +135,13 @@ export function QuickAddScreen() {
     if (p.merchant) setMerchant(p.merchant)
     if (p.note) setNote(p.note)
     setOccurredAt(p.occurredAt)
-    setSmartExpanded(false)
+    setSmartText('')
   }
 
   const onParseSmartEntry = async (override?: string, source: SmartEntrySource = 'manual') => {
     const text = (override ?? smartText).trim()
     if (!text) return
     if (override) setSmartText(override)
-    // H7: parse date deterministically before AI call so result is never reliant on AI
     const parsedDate = extractDateFromText(text)
     setParsing(true)
     try {
@@ -155,7 +150,6 @@ export function QuickAddScreen() {
         Alert.alert(t.ai_error, t.smart_entry_hint)
         return
       }
-      // H6: match using English exact → translated → substring, never silently fail
       const matched = matchCategory(categories, parsed.category_hint, t)
       const fallbackCat =
         matched ??
@@ -176,7 +170,6 @@ export function QuickAddScreen() {
         source,
       }
 
-      // Rule 5: voice input always requires confirmation, even when text smart entry auto-confirm is off.
       if (source === 'voice' || aiAutoConfirm) {
         const fields: ConfirmField[] = [
           {
@@ -186,7 +179,7 @@ export function QuickAddScreen() {
           { label: t.category, value: translateCategoryName(fallbackCat, t) },
           {
             label: t.date,
-            value: formatDate(payload.occurredAt, 'EEE, dd MMM yyyy · HH:mm', {
+            value: formatDate(payload.occurredAt, 'EEE, dd MMM yyyy / HH:mm', {
               locale: getDateFnsLocale(language),
             }),
           },
@@ -208,7 +201,6 @@ export function QuickAddScreen() {
     }
   }
 
-  // Confirm sheet handlers
   const onSheetSave = async () => {
     if (!confirmSheet) return
     setConfirmBusy(true)
@@ -232,12 +224,12 @@ export function QuickAddScreen() {
       Alert.alert(t.could_not_save, res.error ?? '')
     }
   }
+
   const onSheetEdit = () => {
     if (!confirmSheet) return
     applyParsedToForm(confirmSheet.payload)
     setConfirmSheet(null)
   }
-  const onSheetCancel = () => setConfirmSheet(null)
 
   const onSave = async () => {
     const raw = parseInt(amountText.replace(/[^0-9]/g, ''), 10)
@@ -300,136 +292,132 @@ export function QuickAddScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        {/* Smart Entry */}
-        <Pressable
-          onPress={() => {
-            if (!hasApiKey) {
-              router.push('/ai-settings')
-              return
-            }
-            setSmartExpanded((v) => !v)
-          }}
-          style={[
-            styles.smartToggle,
-            {
-              borderColor: hasApiKey ? theme.brand.primary : theme.border.strong,
-              backgroundColor: theme.bg.elevated,
-            },
-          ]}
-        >
-          <Text style={{ fontSize: 16 }}>✨</Text>
-          <Text style={[styles.smartToggleText, { color: hasApiKey ? theme.brand.primary : theme.text.muted }]}>
-            {t.smart_entry}
-          </Text>
-          {hasApiKey ? (
-            <Text style={{ color: theme.brand.primary, fontSize: 16 }}>{smartExpanded ? '▲' : '▼'}</Text>
-          ) : (
-            <Text style={{ color: theme.text.muted, fontSize: 12 }}>{t.setup_ai_first} →</Text>
-          )}
-        </Pressable>
-
-        {smartExpanded && hasApiKey && (
-          <View style={[styles.smartBox, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.smartHint, { color: theme.text.muted }]}>{t.smart_entry_hint}</Text>
+        <View style={[styles.smartBox, { backgroundColor: theme.bg.elevated, borderColor: hasApiKey ? theme.border.subtle : theme.border.strong }]}>
+          <View style={styles.smartHeader}>
+            <View style={[styles.smartIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
+              <Feather name="star" size={16} color={hasApiKey ? theme.brand.primary : theme.text.muted} />
+            </View>
+            <Text style={[styles.smartTitle, { color: hasApiKey ? theme.brand.primary : theme.text.muted }]}>
+              {t.smart_entry}
+            </Text>
+            {!hasApiKey ? (
+              <Pressable onPress={() => router.push('/ai-settings')} style={styles.setupRow}>
+                <Text style={{ color: theme.text.muted, fontSize: 12 }}>{t.setup_ai_first}</Text>
+                <Feather name="arrow-right" size={14} color={theme.text.muted} />
+              </Pressable>
+            ) : null}
+          </View>
+          <View style={styles.smartInputRow}>
             <TextInput
               value={smartText}
               onChangeText={setSmartText}
               placeholder={t.smart_entry_placeholder}
               placeholderTextColor={theme.text.muted}
               multiline
-              style={[styles.smartInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.secondary }]}
+              editable={hasApiKey && !parsing}
+              onFocus={() => {
+                if (!hasApiKey) router.push('/ai-settings')
+              }}
+              style={[styles.smartInput, { color: theme.text.primary, borderColor: theme.border.subtle, backgroundColor: theme.bg.secondary }]}
             />
-            <View style={styles.smartActions}>
-              <VoiceButton onResult={(text) => onParseSmartEntry(text, 'voice')} disabled={parsing} size={44} module="finance" />
+            <View style={styles.smartInputActions}>
+              <VoiceButton onResult={(text) => onParseSmartEntry(text, 'voice')} disabled={parsing || !hasApiKey} size={40} module="finance" />
               <Pressable
-                onPress={() => onParseSmartEntry()}
+                onPress={() => {
+                  if (!hasApiKey) {
+                    router.push('/ai-settings')
+                    return
+                  }
+                  void onParseSmartEntry()
+                }}
                 disabled={parsing || !smartText.trim()}
-                style={[styles.smartBtn, { backgroundColor: parsing || !smartText.trim() ? theme.text.muted : theme.brand.accent }]}
+                style={[styles.smartSendBtn, { backgroundColor: parsing || !smartText.trim() ? theme.border.strong : theme.brand.primary }]}
               >
-                {parsing ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.smartBtnText}>{t.fill_from_ai}</Text>
-                )}
+                {parsing ? <ActivityIndicator color="#fff" size="small" /> : <Feather name="send" size={16} color="#fff" />}
               </Pressable>
             </View>
           </View>
-        )}
-
-        {/* Direction toggle */}
-        <View style={styles.directionRow}>
-          {(['expense', 'income'] as Direction[]).map((d) => {
-            const active = direction === d
-            const color = d === 'expense' ? theme.finance.expense : theme.finance.income
-            return (
-              <Pressable
-                key={d}
-                onPress={() => {
-                  setDirection(d)
-                  setCategory(null)
-                }}
-                style={[
-                  styles.directionBtn,
-                  {
-                    backgroundColor: active ? color : theme.bg.elevated,
-                    borderColor: active ? color : theme.border.subtle,
-                  },
-                ]}
-              >
-                <Text style={{ color: active ? '#fff' : theme.text.primary, fontWeight: '600' }}>
-                  {d === 'expense' ? t.expense : t.income}
-                </Text>
-              </Pressable>
-            )
-          })}
+          <Text style={[styles.smartHint, { color: theme.text.muted }]}>{t.smart_entry_hint}</Text>
         </View>
 
-        <TextInput
-          value={amountText}
-          onChangeText={setAmountText}
-          placeholder="0"
-          placeholderTextColor={theme.text.muted}
-          keyboardType="numeric"
-          style={[styles.amountInput, { color: theme.text.primary, borderColor: theme.border.strong }]}
-        />
-        <Text style={[styles.currency, { color: theme.text.muted }]}>{currency}</Text>
+        <View style={[styles.primaryCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.directionRow}>
+            {(['expense', 'income'] as Direction[]).map((d) => {
+              const active = direction === d
+              const color = d === 'expense' ? theme.finance.expense : theme.finance.income
+              return (
+                <Pressable
+                  key={d}
+                  onPress={() => {
+                    setDirection(d)
+                    setCategory(null)
+                  }}
+                  style={[
+                    styles.directionBtn,
+                    {
+                      backgroundColor: active ? color : theme.bg.secondary,
+                      borderColor: active ? color : theme.border.subtle,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: active ? '#fff' : theme.text.primary, fontWeight: '600' }}>
+                    {d === 'expense' ? t.expense : t.income}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
 
-        <Text style={[styles.label, { color: theme.text.muted }]}>{t.category}</Text>
-        <View style={[styles.box, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
-          <CategoryPicker
-            categories={visibleCategories}
+          <TextInput
+            value={amountText}
+            onChangeText={setAmountText}
+            placeholder="0"
+            placeholderTextColor={theme.text.muted}
+            keyboardType="numeric"
+            style={[styles.amountInput, { color: theme.text.primary, borderColor: theme.border.strong }]}
+          />
+          <Text style={[styles.currency, { color: theme.text.muted }]}>{currency}</Text>
+
+          <Text style={[styles.label, { color: theme.text.muted }]}>{t.category}</Text>
+          <View style={[styles.box, { borderColor: theme.border.subtle, backgroundColor: theme.bg.primary }]}>
+            <CategoryPicker
+              categories={visibleCategories}
             selectedId={category?.id ?? null}
             onSelect={setCategory}
             filterKind={direction === 'income' ? 'income' : undefined}
+            scrollEnabled={false}
           />
+          </View>
         </View>
 
-        <Text style={[styles.label, { color: theme.text.muted }]}>{t.mood_label}</Text>
-        <MoodSelector value={mood} onChange={setMood} />
+        <View style={[styles.detailsCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text.muted }]}>{t.mood_label}</Text>
+          <MoodSelector value={mood} onChange={setMood} />
 
-        <DateRow value={occurredAt} onChange={setOccurredAt} label={t.date} />
+          <DateRow value={occurredAt} onChange={setOccurredAt} label={t.date} />
 
-        <LocationRow
-          value={location}
-          onChange={setLocation}
-          autoFetch={locationAccess}
-          label={t.location}
-        />
+          <LocationRow
+            value={location}
+            onChange={setLocation}
+            autoFetch={locationAccess}
+            label={t.location}
+          />
 
-        <TextInput
-          value={merchant}
-          onChangeText={setMerchant}
-          placeholder={t.merchant_optional}
-          placeholderTextColor={theme.text.muted}
-          style={[styles.input, { color: theme.text.primary, borderColor: theme.border.subtle }]}
-        />
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          placeholder={t.note_optional}
-          placeholderTextColor={theme.text.muted}
-          style={[styles.input, { color: theme.text.primary, borderColor: theme.border.subtle }]}
-        />
+          <TextInput
+            value={merchant}
+            onChangeText={setMerchant}
+            placeholder={t.merchant_optional}
+            placeholderTextColor={theme.text.muted}
+            style={[styles.input, { color: theme.text.primary, borderColor: theme.border.subtle, backgroundColor: theme.bg.primary }]}
+          />
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder={t.note_optional}
+            placeholderTextColor={theme.text.muted}
+            style={[styles.input, { color: theme.text.primary, borderColor: theme.border.subtle, backgroundColor: theme.bg.primary }]}
+          />
+        </View>
       </ScrollView>
 
       <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
@@ -466,7 +454,7 @@ export function QuickAddScreen() {
           fields={confirmSheet.fields}
           onSave={onSheetSave}
           onEdit={onSheetEdit}
-          onCancel={onSheetCancel}
+          onCancel={() => setConfirmSheet(null)}
           busy={confirmBusy}
         />
       )}
@@ -476,41 +464,58 @@ export function QuickAddScreen() {
 
 const styles = StyleSheet.create({
   body: { padding: spacing[4], gap: spacing[3], paddingBottom: spacing[8] },
-  smartToggle: {
+  smartIconWrap: { width: 32, height: 32, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  smartTitle: { flex: 1, fontSize: 15, fontWeight: '700' },
+  setupRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  smartBox: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[3],
+    gap: spacing[2],
+  },
+  smartHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
-    padding: spacing[3],
-    borderRadius: radius.md,
-    borderWidth: 1,
   },
-  smartToggleText: { flex: 1, fontSize: 15, fontWeight: '600' },
-  smartBox: {
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing[3],
-    gap: spacing[3],
-  },
-  smartHint: { fontSize: 12 },
-  smartActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-  },
+  smartInputRow: { gap: spacing[2] },
   smartInput: {
     borderWidth: 1,
     borderRadius: radius.md,
     padding: spacing[3],
     fontSize: 14,
-    minHeight: 60,
+    minHeight: 56,
+    paddingRight: 96,
     textAlignVertical: 'top',
   },
-  smartBtn: {
-    paddingVertical: spacing[3],
-    borderRadius: radius.md,
+  smartInputActions: {
+    position: 'absolute',
+    right: spacing[2],
+    bottom: spacing[2],
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing[2],
   },
-  smartBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  smartSendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smartHint: { fontSize: 12 },
+  primaryCard: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[4],
+    gap: spacing[3],
+  },
+  detailsCard: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[4],
+    gap: spacing[3],
+  },
   directionRow: { flexDirection: 'row', gap: spacing[2] },
   directionBtn: {
     flex: 1,
@@ -520,17 +525,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   amountInput: {
-    fontSize: 40,
-    fontWeight: '700',
+    fontSize: 44,
+    fontWeight: '800',
     textAlign: 'center',
     paddingVertical: spacing[3],
     borderBottomWidth: 1,
   },
   currency: { textAlign: 'center', fontSize: 12, marginTop: -spacing[2] },
-  label: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginTop: spacing[2] },
+  label: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginTop: spacing[1], letterSpacing: 0.5 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   box: {
-    flexShrink: 1,
-    maxHeight: 220,
     borderRadius: radius.md,
     borderWidth: 1,
     padding: spacing[3],

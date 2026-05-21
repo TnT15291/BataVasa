@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { startOfMonth, endOfMonth } from 'date-fns'
 import { useTheme } from '@design/useTheme'
@@ -107,7 +108,7 @@ export function CategoryListScreen() {
                         )}
                       </View>
                       {!isSystem && (
-                        <Text style={[styles.chevron, { color: theme.text.muted }]}>›</Text>
+                        <Feather name="chevron-right" size={20} color={theme.text.muted} />
                       )}
                     </Pressable>
                   )
@@ -124,7 +125,7 @@ export function CategoryListScreen() {
         accessibilityLabel={t.new_category}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}
       >
-        <Text style={styles.fabIcon}>+</Text>
+        <Feather name="plus" size={28} color="#fff" />
       </Pressable>
     </View>
   )
@@ -161,7 +162,6 @@ const styles = StyleSheet.create({
   barTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
   barFill: { height: 4, borderRadius: 2 },
   budgetText: { fontSize: 11 },
-  chevron: { fontSize: 20, lineHeight: 22 },
   fab: {
     position: 'absolute',
     right: spacing[6],
@@ -176,5 +176,4 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
   },
-  fabIcon: { color: '#fff', fontSize: 28, fontWeight: '600', lineHeight: 30 },
 })

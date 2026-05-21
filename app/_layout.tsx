@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/react-native'
 import { useEffect, useRef, useState } from 'react'
 import { AppState, View, Text, ActivityIndicator, Pressable } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
+import { Feather } from '@expo/vector-icons'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { runMigrations } from '@db/core/migrate'
@@ -34,7 +35,7 @@ function SettingsButton() {
       hitSlop={8}
       style={{ paddingHorizontal: 4 }}
     >
-      <Text style={{ fontSize: 22, color: theme.text.secondary }}>⚙️</Text>
+      <Feather name="settings" size={22} color={theme.text.secondary} />
     </Pressable>
   )
 }

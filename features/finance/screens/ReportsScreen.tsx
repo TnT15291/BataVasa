@@ -5,20 +5,25 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
-  TextInput,
   ActivityIndicator,
   Alert,
   Share,
+  Platform,
 } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import { useRouter } from 'expo-router'
 import {
+  startOfDay, endOfDay,
   startOfWeek, endOfWeek,
   startOfMonth, endOfMonth,
+  startOfQuarter, endOfQuarter,
   startOfYear, endOfYear,
   addWeeks, subWeeks,
   addMonths, subMonths,
+  addQuarters, subQuarters,
   addYears, subYears,
   format, parseISO, isValid,
+  eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval,
 } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -32,6 +37,7 @@ import { track } from '@services/analytics'
 import { formatAmount } from '../services'
 
 type Period = ReportType
+type ChartBucket = { key: string; label: string; from: Date; to: Date; income: number; expense: number }
 
 function NavRow({
   label,
@@ -74,6 +80,7 @@ export function ReportsScreen() {
   const [anchorDate, setAnchorDate] = useState(new Date())
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  const [datePickerTarget, setDatePickerTarget] = useState<'from' | 'to' | null>(null)
   const [kindFilter, setKindFilter] = useState<'all' | 'income' | 'expense'>('all')
   const [report, setReport] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -87,6 +94,23 @@ export function ReportsScreen() {
 
   const onPeriodChange = (p: Period) => {
     setPeriod(p)
+    setReport(null)
+  }
+
+  const customFromDate = useMemo(() => {
+    const d = parseISO(customFrom)
+    return isValid(d) ? d : new Date()
+  }, [customFrom])
+
+  const customToDate = useMemo(() => {
+    const d = parseISO(customTo)
+    return isValid(d) ? d : new Date()
+  }, [customTo])
+
+  const setCustomDate = (target: 'from' | 'to', date: Date) => {
+    const value = format(date, 'yyyy-MM-dd')
+    if (target === 'from') setCustomFrom(value)
+    else setCustomTo(value)
     setReport(null)
   }
 
@@ -106,6 +130,12 @@ export function ReportsScreen() {
       const to = endOfMonth(anchorDate)
       return { from, to, label: format(anchorDate, 'MMMM yyyy', { locale: dfLocale }) }
     }
+    if (period === 'quarterly') {
+      const from = startOfQuarter(anchorDate)
+      const to = endOfQuarter(anchorDate)
+      const quarter = Math.floor(anchorDate.getMonth() / 3) + 1
+      return { from, to, label: `Q${quarter} ${format(anchorDate, 'yyyy', { locale: dfLocale })}` }
+    }
     if (period === 'yearly') {
       const from = startOfYear(anchorDate)
       const to = endOfYear(anchorDate)
@@ -122,6 +152,7 @@ export function ReportsScreen() {
     setReport(null)
     if (period === 'weekly') setAnchorDate((d) => dir === 1 ? addWeeks(d, 1) : subWeeks(d, 1))
     else if (period === 'monthly') setAnchorDate((d) => dir === 1 ? addMonths(d, 1) : subMonths(d, 1))
+    else if (period === 'quarterly') setAnchorDate((d) => dir === 1 ? addQuarters(d, 1) : subQuarters(d, 1))
     else if (period === 'yearly') setAnchorDate((d) => dir === 1 ? addYears(d, 1) : subYears(d, 1))
   }
 
@@ -142,9 +173,48 @@ export function ReportsScreen() {
     const expense = rangeTxs.filter((tx) => tx.amount_cents < 0).reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
     return { count: rangeTxs.length, income, expense }
   }, [rangeTxs])
-  const chartMax = Math.max(summary.income, summary.expense, 1)
-  const incomePct = Math.max(6, (summary.income / chartMax) * 100)
-  const expensePct = Math.max(6, (summary.expense / chartMax) * 100)
+
+  const chartBuckets = useMemo<ChartBucket[]>(() => {
+    if (!range) return []
+    const makeBucket = (from: Date, to: Date, label: string, key: string): ChartBucket => {
+      let income = 0
+      let expense = 0
+      for (const tx of rangeTxs) {
+        const d = new Date(tx.occurred_at)
+        if (d < from || d > to) continue
+        if (tx.amount_cents > 0) income += tx.amount_cents
+        else expense += Math.abs(tx.amount_cents)
+      }
+      return { key, label, from, to, income, expense }
+    }
+
+    if (period === 'weekly') {
+      return eachDayOfInterval({ start: range.from, end: range.to })
+        .map((d) => makeBucket(startOfDay(d), endOfDay(d), format(d, 'EEE', { locale: dfLocale }), format(d, 'yyyy-MM-dd')))
+    }
+    if (period === 'monthly') {
+      return eachDayOfInterval({ start: range.from, end: range.to })
+        .map((d) => makeBucket(startOfDay(d), endOfDay(d), format(d, 'd', { locale: dfLocale }), format(d, 'yyyy-MM-dd')))
+    }
+    if (period === 'quarterly') {
+      return eachWeekOfInterval({ start: range.from, end: range.to }, { weekStartsOn: 1 })
+        .map((d, i) => makeBucket(startOfWeek(d, { weekStartsOn: 1 }), endOfWeek(d, { weekStartsOn: 1 }), `W${i + 1}`, format(d, 'yyyy-MM-dd')))
+    }
+    if (period === 'yearly') {
+      return eachMonthOfInterval({ start: range.from, end: range.to })
+        .map((d) => makeBucket(startOfMonth(d), endOfMonth(d), format(d, 'MMM', { locale: dfLocale }), format(d, 'yyyy-MM')))
+    }
+
+    const days = Math.ceil((range.to.getTime() - range.from.getTime()) / 86400000) + 1
+    if (days <= 45) {
+      return eachDayOfInterval({ start: range.from, end: range.to })
+        .map((d) => makeBucket(startOfDay(d), endOfDay(d), format(d, 'dd/MM', { locale: dfLocale }), format(d, 'yyyy-MM-dd')))
+    }
+    return eachMonthOfInterval({ start: range.from, end: range.to })
+      .map((d) => makeBucket(startOfMonth(d), endOfMonth(d), format(d, 'MMM yy', { locale: dfLocale }), format(d, 'yyyy-MM')))
+  }, [range?.from, range?.to, rangeTxs, period, dfLocale])
+
+  const chartMax = Math.max(...chartBuckets.map((b) => Math.max(b.income, b.expense)), 1)
 
   const generate = useCallback(async () => {
     const range = getRange()
@@ -186,6 +256,7 @@ export function ReportsScreen() {
   const TABS: { key: Period; label: string }[] = [
     { key: 'weekly', label: t.weekly },
     { key: 'monthly', label: t.monthly },
+    { key: 'quarterly', label: t.quarterly },
     { key: 'yearly', label: t.yearly },
     { key: 'custom_range' as any, label: t.custom_range },
   ].map((x) => ({ key: x.key === ('custom_range' as any) ? 'custom' : x.key, label: x.label })) as { key: Period; label: string }[]
@@ -222,32 +293,43 @@ export function ReportsScreen() {
           <View style={styles.customRow}>
             <View style={styles.customField}>
               <Text style={[styles.customLabel, { color: theme.text.muted }]}>{t.from_date}</Text>
-              <TextInput
-                value={customFrom}
-                onChangeText={(v) => { setCustomFrom(v); setReport(null) }}
-                placeholder={t.date_hint}
-                placeholderTextColor={theme.text.muted}
-                style={[styles.dateInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
-                autoCapitalize="none"
-                keyboardType="numbers-and-punctuation"
-              />
+              <Pressable
+                onPress={() => setDatePickerTarget('from')}
+                style={[styles.dateInput, { borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
+              >
+                <Text style={[styles.dateInputText, { color: customFrom ? theme.text.primary : theme.text.muted }]}>
+                  {customFrom || t.date_hint}
+                </Text>
+              </Pressable>
             </View>
             <Text style={[styles.dateSep, { color: theme.text.muted }]}>→</Text>
             <View style={styles.customField}>
               <Text style={[styles.customLabel, { color: theme.text.muted }]}>{t.to_date}</Text>
-              <TextInput
-                value={customTo}
-                onChangeText={(v) => { setCustomTo(v); setReport(null) }}
-                placeholder={t.date_hint}
-                placeholderTextColor={theme.text.muted}
-                style={[styles.dateInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
-                autoCapitalize="none"
-                keyboardType="numbers-and-punctuation"
-              />
+              <Pressable
+                onPress={() => setDatePickerTarget('to')}
+                style={[styles.dateInput, { borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
+              >
+                <Text style={[styles.dateInputText, { color: customTo ? theme.text.primary : theme.text.muted }]}>
+                  {customTo || t.date_hint}
+                </Text>
+              </Pressable>
             </View>
           </View>
         )}
       </View>
+
+      {datePickerTarget && (
+        <DateTimePicker
+          value={datePickerTarget === 'from' ? customFromDate : customToDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          onChange={(event, selectedDate) => {
+            if (Platform.OS !== 'ios') setDatePickerTarget(null)
+            if (event.type === 'dismissed' || !selectedDate) return
+            setCustomDate(datePickerTarget, selectedDate)
+          }}
+        />
+      )}
 
       {/* Report content */}
       <ScrollView contentContainerStyle={styles.content}>
@@ -274,18 +356,49 @@ export function ReportsScreen() {
             <Text style={[styles.snapshotTitle, { color: theme.text.primary }]}>{t.report_snapshot}</Text>
             <Text style={[styles.snapshotMeta, { color: theme.text.muted }]}>{range ? range.label : t.custom_range}</Text>
           </View>
-          <View style={styles.chartRow}>
-            <Text style={[styles.chartLabel, { color: theme.text.muted }]}>{t.income}</Text>
-            <View style={[styles.chartTrack, { backgroundColor: theme.bg.secondary }]}>
-              <View style={[styles.chartBar, { width: `${incomePct}%`, backgroundColor: theme.finance.income }]} />
-            </View>
+          <View style={styles.legendRow}>
+            {kindFilter !== 'expense' ? (
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: theme.finance.income }]} />
+                <Text style={[styles.legendText, { color: theme.text.muted }]}>{t.income}</Text>
+              </View>
+            ) : null}
+            {kindFilter !== 'income' ? (
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: theme.finance.expense }]} />
+                <Text style={[styles.legendText, { color: theme.text.muted }]}>{t.expense}</Text>
+              </View>
+            ) : null}
           </View>
-          <View style={styles.chartRow}>
-            <Text style={[styles.chartLabel, { color: theme.text.muted }]}>{t.expense}</Text>
-            <View style={[styles.chartTrack, { backgroundColor: theme.bg.secondary }]}>
-              <View style={[styles.chartBar, { width: `${expensePct}%`, backgroundColor: theme.finance.expense }]} />
-            </View>
-          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.columnChart}
+          >
+            {chartBuckets.map((bucket) => {
+              const incomeHeight = Math.max(2, (bucket.income / chartMax) * 100)
+              const expenseHeight = Math.max(2, (bucket.expense / chartMax) * 100)
+              return (
+                <View key={bucket.key} style={styles.columnItem}>
+                  <View style={styles.columnBars}>
+                    {kindFilter !== 'expense' ? (
+                      <View style={[styles.columnTrack, { backgroundColor: theme.bg.secondary }]}>
+                        <View style={[styles.columnBar, { height: `${incomeHeight}%`, backgroundColor: theme.finance.income }]} />
+                      </View>
+                    ) : null}
+                    {kindFilter !== 'income' ? (
+                      <View style={[styles.columnTrack, { backgroundColor: theme.bg.secondary }]}>
+                        <View style={[styles.columnBar, { height: `${expenseHeight}%`, backgroundColor: theme.finance.expense }]} />
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={[styles.columnLabel, { color: theme.text.muted }]} numberOfLines={1}>
+                    {bucket.label}
+                  </Text>
+                </View>
+              )
+            })}
+          </ScrollView>
         </View>
         <View style={styles.filterRow}>
           {(['all', 'income', 'expense'] as const).map((key) => (
@@ -368,7 +481,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 2,
   },
-  tabText: { fontSize: 13, fontWeight: '600' },
+  tabText: { fontSize: 12, fontWeight: '600' },
   dateBar: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: spacing[2],
@@ -394,9 +507,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    fontSize: 13,
-    fontFamily: 'Courier',
+    minHeight: 38,
+    justifyContent: 'center',
   },
+  dateInputText: { fontSize: 13, fontFamily: 'Courier' },
   dateSep: { fontSize: 18, paddingBottom: spacing[2] },
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   statsGrid: { flexDirection: 'row', gap: spacing[3] },
@@ -419,10 +533,27 @@ const styles = StyleSheet.create({
   snapshotHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3], alignItems: 'center' },
   snapshotTitle: { fontSize: 15, fontWeight: '700' },
   snapshotMeta: { fontSize: 12, flex: 1, textAlign: 'right' },
-  chartRow: { gap: spacing[1] },
-  chartLabel: { fontSize: 11, fontWeight: '600' },
-  chartTrack: { height: 10, borderRadius: radius.full, overflow: 'hidden' },
-  chartBar: { height: '100%', borderRadius: radius.full },
+  legendRow: { flexDirection: 'row', gap: spacing[3], alignItems: 'center' },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  legendDot: { width: 8, height: 8, borderRadius: radius.full },
+  legendText: { fontSize: 11, fontWeight: '600' },
+  columnChart: {
+    minHeight: 170,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing[1],
+  },
+  columnItem: { alignItems: 'center', gap: spacing[1], minWidth: 22 },
+  columnBars: { height: 132, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 2 },
+  columnTrack: {
+    width: 6,
+    height: '100%',
+    borderRadius: radius.full,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  columnBar: { width: '100%', borderRadius: radius.full },
+  columnLabel: { fontSize: 10, maxWidth: 34, textAlign: 'center' },
   filterRow: { flexDirection: 'row', gap: spacing[2] },
   filterPill: {
     flex: 1,

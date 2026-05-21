@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native'
+import { useCallback, useMemo, useState } from 'react'
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { format, startOfDay, endOfDay } from 'date-fns'
 import { useTheme } from '@design/useTheme'
@@ -8,12 +9,20 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { shouldWarnAboutWebSQLitePersistence } from '@services/webPersistence'
-import { useFinanceBootstrap, useTransactions, useCategories } from '@features/finance/hooks/useFinance'
+import { useFinanceBootstrap, useTransactions } from '@features/finance/hooks/useFinance'
 import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
+import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJournals'
+import { useFinanceStore } from '@store/financeStore'
+import { useRemindersStore } from '@store/remindersStore'
+import { useHabitsStore } from '@store/habitsStore'
+import { useJournalsStore } from '@store/journalsStore'
+import { VoiceButton } from '@components/VoiceButton'
 import { formatAmount } from '@features/finance/services'
 import { UniversalAddSheet } from '../components/UniversalAddSheet'
 import { OnboardingModal } from '../components/OnboardingModal'
+
+type IconName = keyof typeof Feather.glyphMap
 
 function greeting(t: any): string {
   const h = new Date().getHours()
@@ -23,7 +32,7 @@ function greeting(t: any): string {
 }
 
 type CardProps = {
-  icon: string
+  icon: IconName
   title: string
   subtitle: string
   hint?: string
@@ -43,17 +52,40 @@ function ModuleCard({ icon, title, subtitle, hint, accentColor, onPress }: CardP
         { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
       ]}
     >
-      <View style={[styles.cardAccent, { backgroundColor: accentColor }]} />
       <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardIcon}>{icon}</Text>
-          <Text style={[styles.cardTitle, { color: theme.text.muted }]}>{title}</Text>
-          <Text style={[styles.cardChevron, { color: theme.text.muted }]}>›</Text>
+        <View style={[styles.cardIconWrap, { backgroundColor: accentColor + '1F' }]}>
+          <Feather name={icon} size={20} color={accentColor} />
         </View>
-        <Text style={[styles.cardSubtitle, { color: theme.text.primary }]}>{subtitle}</Text>
+        <Text style={[styles.cardTitle, { color: theme.text.primary }]} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.cardSubtitle, { color: theme.text.muted }]} numberOfLines={2}>{subtitle}</Text>
         {hint ? <Text style={[styles.cardHint, { color: theme.text.muted }]}>{hint}</Text> : null}
       </View>
+      <Feather name="chevron-right" size={18} color={theme.text.muted} style={styles.cardChevron} />
     </Pressable>
+  )
+}
+
+type SummaryChipProps = {
+  icon: IconName
+  label: string
+  value: string
+  color: string
+}
+
+function SummaryChip({ icon, label, value, color }: SummaryChipProps) {
+  const theme = useTheme()
+  return (
+    <View style={[styles.summaryChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
+      <View style={[styles.summaryIcon, { backgroundColor: color + '1F' }]}>
+        <Feather name={icon} size={15} color={color} />
+      </View>
+      <Text style={[styles.summaryValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      <Text style={[styles.summaryLabel, { color: theme.text.muted }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
   )
 }
 
@@ -61,24 +93,32 @@ export function DailyDigestScreen() {
   useFinanceBootstrap()
   useRemindersBootstrap()
   useHabitsBootstrap()
+  useJournalsBootstrap()
   const theme = useTheme()
   const router = useRouter()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const currency = useSettingsStore((s) => s.currency)
   const txs = useTransactions()
-  const cats = useCategories()
   const reminders = useReminders()
   const habits = useHabits()
+  const journals = useJournals()
+  const loadCategories = useFinanceStore((s) => s.loadCategories)
+  const loadTransactions = useFinanceStore((s) => s.loadTransactions)
+  const loadReminders = useRemindersStore((s) => s.loadReminders)
+  const loadHabits = useHabitsStore((s) => s.loadHabits)
+  const loadJournals = useJournalsStore((s) => s.loadJournals)
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding)
   const [showAdd, setShowAdd] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [smartText, setSmartText] = useState('')
+  const [sheetText, setSheetText] = useState('')
+  const [autoAnalyzeToken, setAutoAnalyzeToken] = useState(0)
 
   const locale = getDateFnsLocale(language)
   const now = new Date()
   const dateStr = format(now, 'EEEE, dd MMMM', { locale })
 
-  // Finance: today's expense
   const todayExpense = useMemo(() => {
     const from = startOfDay(now)
     const to = endOfDay(now)
@@ -88,7 +128,15 @@ export function DailyDigestScreen() {
       .reduce((sum, tx) => sum + Math.abs(tx.amount_cents), 0)
   }, [txs, currency, now])
 
-  // Reminders: next upcoming today (include overdue earlier today too)
+  const todayJournals = useMemo(() => {
+    const from = startOfDay(now)
+    const to = endOfDay(now)
+    return journals.filter((j) => {
+      const d = new Date(j.occurred_at)
+      return d >= from && d <= to
+    }).length
+  }, [journals, now])
+
   const nextReminder = useMemo(() => {
     const from = startOfDay(now)
     const to = endOfDay(now)
@@ -98,7 +146,6 @@ export function DailyDigestScreen() {
       .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())[0] ?? null
   }, [reminders, now])
 
-  // Upcoming reminder not today
   const nextFutureReminder = useMemo(() => {
     if (nextReminder) return null
     return reminders
@@ -111,25 +158,55 @@ export function DailyDigestScreen() {
     : t.today_no_spending
 
   const reminderSubtitle = nextReminder
-    ? `${nextReminder.title} — ${format(new Date(nextReminder.remind_at), 'HH:mm', { locale })}`
+    ? `${nextReminder.title} - ${format(new Date(nextReminder.remind_at), 'HH:mm', { locale })}`
     : nextFutureReminder
-      ? `${nextFutureReminder.title} — ${format(new Date(nextFutureReminder.remind_at), 'dd/MM HH:mm', { locale })}`
+      ? `${nextFutureReminder.title} - ${format(new Date(nextFutureReminder.remind_at), 'dd/MM HH:mm', { locale })}`
       : t.reminder_today_none
 
   const reminderHint = !nextReminder && !nextFutureReminder ? t.reminder_add_hint : undefined
 
-  // Habits: today's progress
   const habitsDoneCount = habits.filter((h) => h.todayCount >= h.target_per_period).length
   const habitsTotal = habits.length
+  const nextHabit = habits.find((h) => h.todayCount < h.target_per_period) ?? null
+  const habitProgress = habitsTotal === 0 ? 0 : Math.round((habitsDoneCount / habitsTotal) * 100)
   const habitsSubtitle = habitsTotal === 0
     ? t.habits_card_subtitle
     : t.habits_done_today.replace('{{done}}', String(habitsDoneCount)).replace('{{total}}', String(habitsTotal))
+  const journalSubtitle = todayJournals > 0 ? `${todayJournals} ${t.today}` : t.journal_card_subtitle
+
+  const openSmartAdd = useCallback((input?: string) => {
+    const value = (input ?? smartText).trim()
+    if (!value) {
+      setSheetText('')
+      setShowAdd(true)
+      return
+    }
+    setSheetText(value)
+    setAutoAnalyzeToken((n) => n + 1)
+    setShowAdd(true)
+    setSmartText('')
+  }, [smartText])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all([
+        loadCategories(),
+        loadTransactions(),
+        loadReminders(),
+        loadHabits(),
+        loadJournals(),
+      ])
+    } finally {
+      setRefreshing(false)
+    }
+  }, [loadCategories, loadTransactions, loadReminders, loadHabits, loadJournals])
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(false)} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {shouldWarnAboutWebSQLitePersistence() ? (
           <View style={[styles.persistenceBanner, { backgroundColor: theme.bg.elevated, borderColor: theme.semantic.warning }]}>
@@ -138,71 +215,193 @@ export function DailyDigestScreen() {
           </View>
         ) : null}
 
-        {/* Date Header */}
-        <View style={styles.header}>
-          <Text style={[styles.greeting, { color: theme.text.muted }]}>{greeting(t)}</Text>
-          <Text style={[styles.dateStr, { color: theme.text.primary }]}>{dateStr}</Text>
+        <View style={[styles.hero, { backgroundColor: theme.brand.primary + '12', borderColor: theme.brand.primary + '44' }]}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroText}>
+              <Text style={[styles.greeting, { color: theme.text.muted }]}>{greeting(t)}</Text>
+              <Text style={[styles.dateStr, { color: theme.text.primary }]}>{dateStr}</Text>
+            </View>
+            <View style={[styles.progressDial, { borderColor: theme.brand.primary }]}>
+              <Text style={[styles.progressValue, { color: theme.text.primary }]}>{habitProgress}%</Text>
+              <Text style={[styles.progressLabel, { color: theme.text.muted }]}>{t.habits}</Text>
+            </View>
+          </View>
+
+          <View style={styles.heroMetric}>
+            <View style={styles.heroMetricText}>
+              <Text style={[styles.heroMetricLabel, { color: theme.text.muted }]}>{t.today_spent}</Text>
+              <Text style={[styles.heroMetricValue, { color: theme.finance.expense }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatAmount(todayExpense, currency, language)}
+              </Text>
+            </View>
+            <View style={[styles.heroMetricIcon, { backgroundColor: theme.finance.expense + '1F' }]}>
+              <Feather name="trending-down" size={22} color={theme.finance.expense} />
+            </View>
+          </View>
+
+          <View style={styles.summaryStrip}>
+            <SummaryChip
+              icon="bell"
+              label={t.nav_reminders}
+              value={nextReminder ? format(new Date(nextReminder.remind_at), 'HH:mm', { locale }) : '-'}
+              color="#2196F3"
+            />
+            <SummaryChip
+              icon="check-circle"
+              label={t.habits}
+              value={habitsTotal === 0 ? '-' : `${habitsDoneCount}/${habitsTotal}`}
+              color="#FF9800"
+            />
+            <SummaryChip
+              icon="book-open"
+              label={t.nav_journal}
+              value={todayJournals > 0 ? String(todayJournals) : '-'}
+              color="#9C27B0"
+            />
+          </View>
         </View>
 
-        {/* Finance Card */}
-        <ModuleCard
-          icon="💰"
-          title={t.nav_finance}
-          subtitle={financeSubtitle}
-          hint={todayExpense === 0 ? t.finance_add_hint : undefined}
-          accentColor={theme.finance.expense}
-          onPress={() => router.push('/finance' as any)}
-        />
+        <View style={[styles.smartCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.smartHeader}>
+            <View style={[styles.smartIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
+              <Feather name="zap" size={16} color={theme.brand.primary} />
+            </View>
+            <Text style={[styles.smartTitle, { color: theme.text.primary }]}>{t.universal_add_title}</Text>
+          </View>
+          <View style={[styles.smartInputWrap, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}>
+            <TextInput
+              value={smartText}
+              onChangeText={setSmartText}
+              placeholder={t.universal_add_hint}
+              placeholderTextColor={theme.text.muted}
+              multiline
+              style={[styles.smartInput, { color: theme.text.primary }]}
+              textAlignVertical="top"
+            />
+            <View style={styles.smartActions}>
+              <VoiceButton onResult={(value) => openSmartAdd(value)} size={38} module="home" />
+              <Pressable
+                onPress={() => openSmartAdd()}
+                accessibilityRole="button"
+                accessibilityLabel={t.parse_btn}
+                disabled={!smartText.trim()}
+                style={[
+                  styles.smartSend,
+                  { backgroundColor: smartText.trim() ? theme.brand.primary : theme.border.strong },
+                ]}
+              >
+                <Feather name="send" size={16} color="#fff" />
+              </Pressable>
+            </View>
+          </View>
+        </View>
 
-        {/* Reminder Card */}
-        <ModuleCard
-          icon="🔔"
-          title={t.nav_reminders}
-          subtitle={reminderSubtitle}
-          hint={reminderHint}
-          accentColor="#2196F3"
-          onPress={() => router.push('/reminders' as any)}
-        />
+        {(nextReminder || nextHabit) ? (
+          <View style={[styles.todayPanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>{t.today}</Text>
+            {nextReminder ? (
+              <Pressable onPress={() => router.push('/reminders' as any)} style={styles.actionItem}>
+                <Feather name="bell" size={18} color="#2196F3" />
+                <View style={styles.actionText}>
+                  <Text style={[styles.actionTitle, { color: theme.text.primary }]} numberOfLines={1}>{nextReminder.title}</Text>
+                  <Text style={[styles.actionSubtitle, { color: theme.text.muted }]}>
+                    {format(new Date(nextReminder.remind_at), 'HH:mm', { locale })}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={theme.text.muted} />
+              </Pressable>
+            ) : null}
+            {nextHabit ? (
+              <Pressable onPress={() => router.push('/habits' as any)} style={styles.actionItem}>
+                <Feather name="check-circle" size={18} color="#FF9800" />
+                <View style={styles.actionText}>
+                  <Text style={[styles.actionTitle, { color: theme.text.primary }]} numberOfLines={1}>{nextHabit.name}</Text>
+                  <Text style={[styles.actionSubtitle, { color: theme.text.muted }]}>
+                    {nextHabit.todayCount}/{nextHabit.target_per_period}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={theme.text.muted} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
-        {/* Journal Card */}
-        <ModuleCard
-          icon="📖"
-          title={t.nav_journal}
-          subtitle={t.journal_card_subtitle}
-          accentColor="#9C27B0"
-          onPress={() => router.push('/journals' as any)}
-        />
+        <View style={styles.moduleGrid}>
+          <ModuleCard
+            icon="dollar-sign"
+            title={t.nav_finance}
+            subtitle={financeSubtitle}
+            hint={todayExpense === 0 ? t.finance_add_hint : undefined}
+            accentColor={theme.finance.expense}
+            onPress={() => router.push('/finance' as any)}
+          />
 
-        {/* Habits Card */}
-        <ModuleCard
-          icon="💪"
-          title={t.habits}
-          subtitle={habitsSubtitle}
-          accentColor="#FF9800"
-          onPress={() => router.push('/habits' as any)}
-        />
+          <ModuleCard
+            icon="bell"
+            title={t.nav_reminders}
+            subtitle={reminderSubtitle}
+            hint={reminderHint}
+            accentColor="#2196F3"
+            onPress={() => router.push('/reminders' as any)}
+          />
 
-        {/* Cross-module Analysis Card */}
-        <ModuleCard
-          icon="🔮"
-          title={t.analysis_title}
-          subtitle={t.analysis_subtitle}
-          accentColor="#607D8B"
+          <ModuleCard
+            icon="book-open"
+            title={t.nav_journal}
+            subtitle={journalSubtitle}
+            accentColor="#9C27B0"
+            onPress={() => router.push('/journals' as any)}
+          />
+
+          <ModuleCard
+            icon="check-circle"
+            title={t.habits}
+            subtitle={habitsSubtitle}
+            accentColor="#FF9800"
+            onPress={() => router.push('/habits' as any)}
+          />
+        </View>
+
+        <Pressable
           onPress={() => router.push('/analysis' as any)}
-        />
+          accessibilityRole="button"
+          accessibilityLabel={t.analysis_title}
+          style={({ pressed }) => [
+            styles.analysisStrip,
+            {
+              backgroundColor: pressed ? theme.bg.secondary : '#607D8B14',
+              borderColor: '#607D8B44',
+            },
+          ]}
+        >
+          <View style={[styles.analysisIcon, { backgroundColor: '#607D8B1F' }]}>
+            <Feather name="bar-chart-2" size={20} color="#607D8B" />
+          </View>
+          <View style={styles.analysisText}>
+            <Text style={[styles.analysisTitle, { color: theme.text.primary }]}>{t.analysis_title}</Text>
+            <Text style={[styles.analysisSubtitle, { color: theme.text.muted }]} numberOfLines={2}>
+              {t.analysis_subtitle}
+            </Text>
+          </View>
+          <Feather name="arrow-right" size={20} color="#607D8B" />
+        </Pressable>
       </ScrollView>
 
-      {/* Universal Add FAB */}
       <Pressable
-        onPress={() => setShowAdd(true)}
+        onPress={() => { setSheetText(''); setShowAdd(true) }}
         accessibilityRole="button"
         accessibilityLabel={t.universal_add_title}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}
       >
-        <Text style={styles.fabIcon}>+</Text>
+        <Feather name="plus" size={28} color="#fff" />
       </Pressable>
 
-      <UniversalAddSheet visible={showAdd} onClose={() => setShowAdd(false)} />
+      <UniversalAddSheet
+        visible={showAdd}
+        onClose={() => setShowAdd(false)}
+        initialText={sheetText}
+        autoAnalyzeToken={autoAnalyzeToken}
+      />
       <OnboardingModal visible={!hasSeenOnboarding} />
     </View>
   )
@@ -210,7 +409,107 @@ export function DailyDigestScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], paddingBottom: 100 },
-  header: { paddingTop: spacing[2], paddingBottom: spacing[2], gap: 2 },
+  hero: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[5],
+    gap: spacing[4],
+    overflow: 'hidden',
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
+  heroText: { flex: 1, gap: 2 },
+  progressDial: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.full,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressValue: { fontSize: 16, fontWeight: '800' },
+  progressLabel: { fontSize: 10, fontWeight: '700' },
+  heroMetric: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  heroMetricText: { flex: 1 },
+  heroMetricLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroMetricValue: { fontSize: 30, fontWeight: '800', marginTop: 2 },
+  heroMetricIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryStrip: { flexDirection: 'row', gap: spacing[2] },
+  summaryChip: {
+    flex: 1,
+    minHeight: 74,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[2],
+    gap: spacing[1],
+  },
+  summaryIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryValue: { fontSize: 15, fontWeight: '800' },
+  summaryLabel: { fontSize: 10, fontWeight: '700' },
+  smartCard: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[4],
+    gap: spacing[3],
+  },
+  smartHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  smartIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smartTitle: { fontSize: 15, fontWeight: '700' },
+  smartInputWrap: {
+    minHeight: 88,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing[3],
+    paddingBottom: 46,
+  },
+  smartInput: { minHeight: 42, fontSize: 15, lineHeight: 20 },
+  smartActions: {
+    position: 'absolute',
+    right: spacing[2],
+    bottom: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  smartSend: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todayPanel: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[4],
+    gap: spacing[2],
+  },
+  sectionTitle: { fontSize: 15, fontWeight: '700' },
+  actionItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], minHeight: 44 },
+  actionText: { flex: 1 },
+  actionTitle: { fontSize: 15, fontWeight: '600' },
+  actionSubtitle: { fontSize: 12, marginTop: 2 },
   persistenceBanner: {
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -220,26 +519,50 @@ const styles = StyleSheet.create({
   persistenceTitle: { fontSize: 14, fontWeight: '700' },
   persistenceText: { fontSize: 13, lineHeight: 18 },
   greeting: { fontSize: 14, fontWeight: '500' },
-  dateStr: { fontSize: 22, fontWeight: '700' },
+  dateStr: { fontSize: 24, fontWeight: '800' },
+  moduleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
   card: {
+    width: '48%',
+    minHeight: 146,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    flexDirection: 'row',
+    padding: spacing[3],
   },
-  cardAccent: { width: 4 },
-  cardContent: { flex: 1, padding: spacing[4], gap: spacing[1] },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  cardIcon: { fontSize: 18 },
-  cardTitle: { flex: 1, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  cardChevron: { fontSize: 20, lineHeight: 22 },
-  cardSubtitle: { fontSize: 16, fontWeight: '500' },
-  cardHint: { fontSize: 13 },
+  cardContent: { flex: 1, gap: spacing[2] },
+  cardIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: { fontSize: 15, fontWeight: '800' },
+  cardSubtitle: { fontSize: 13, lineHeight: 18 },
+  cardHint: { fontSize: 12, lineHeight: 16 },
+  cardChevron: { position: 'absolute', right: spacing[3], top: spacing[3] },
+  analysisStrip: {
+    minHeight: 88,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  analysisIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  analysisText: { flex: 1, gap: 2 },
+  analysisTitle: { fontSize: 15, fontWeight: '800' },
+  analysisSubtitle: { fontSize: 13, lineHeight: 18 },
   fab: {
     position: 'absolute', right: spacing[6], bottom: spacing[8],
-    width: 60, height: 60, borderRadius: 30,
+    width: 56, height: 56, borderRadius: radius.full,
     alignItems: 'center', justifyContent: 'center',
     elevation: 6, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
-  fabIcon: { color: '#fff', fontSize: 30, fontWeight: '600', lineHeight: 32 },
 })

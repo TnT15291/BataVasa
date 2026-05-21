@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Linking } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -31,7 +32,7 @@ function SettingRow({ label, value, onPress, last }: RowProps) {
       <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{label}</Text>
       <View style={styles.rowRight}>
         {value ? <Text style={[styles.rowValue, { color: theme.text.muted }]}>{value}</Text> : null}
-        <Text style={[styles.chevron, { color: theme.text.muted }]}>›</Text>
+        <Feather name="chevron-right" size={20} color={theme.text.muted} />
       </View>
     </Pressable>
   )
@@ -397,5 +398,4 @@ const styles = StyleSheet.create({
   rowHint: { fontSize: 12, marginTop: 4 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   rowValue: { fontSize: 15 },
-  chevron: { fontSize: 20, lineHeight: 22 },
 })

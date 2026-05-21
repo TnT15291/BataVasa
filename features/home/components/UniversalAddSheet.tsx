@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   View, Text, TextInput, Pressable, StyleSheet,
   Modal, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
@@ -22,16 +23,23 @@ import { useHabitsStore } from '@store/habitsStore'
 import { useJournalsStore } from '@store/journalsStore'
 import { formatAmount } from '@features/finance/services'
 
-const MODULE_META: Record<string, { icon: string; color: string }> = {
-  finance:  { icon: '💰', color: '#4CAF50' },
-  reminder: { icon: '🔔', color: '#2196F3' },
-  habits:   { icon: '💪', color: '#FF9800' },
-  journal:  { icon: '📖', color: '#9C27B0' },
+type IconName = keyof typeof Feather.glyphMap
+
+const MODULE_META: Record<string, { icon: IconName; color: string }> = {
+  finance:  { icon: 'dollar-sign', color: '#4CAF50' },
+  reminder: { icon: 'bell', color: '#2196F3' },
+  habits:   { icon: 'check-circle', color: '#FF9800' },
+  journal:  { icon: 'book-open', color: '#9C27B0' },
 }
 
-type Props = { visible: boolean; onClose: () => void }
+type Props = {
+  visible: boolean
+  onClose: () => void
+  initialText?: string
+  autoAnalyzeToken?: number
+}
 
-export function UniversalAddSheet({ visible, onClose }: Props) {
+export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnalyzeToken = 0 }: Props) {
   const theme = useTheme()
   const router = useRouter()
   const { t } = useTranslation()
@@ -72,6 +80,16 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
     } catch { Alert.alert(t.ai_error, t.parse_failed) }
     finally { setAnalyzing(false) }
   }
+
+  useEffect(() => {
+    if (!visible || !initialText.trim()) return
+    setText(initialText)
+    setResult(null)
+    if (autoAnalyzeToken > 0) {
+      void onAnalyze(initialText)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialText, autoAnalyzeToken])
 
   const onSave = async () => {
     if (!result) return
@@ -125,7 +143,7 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
         name: result.title,
         cadence,
         target_per_period: 1,
-        icon: '✅',
+        icon: 'check',
         color: '#4CAF50',
       })
       setSaving(false)
@@ -185,7 +203,9 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
     return (
       <View style={[styles.resultCard, { backgroundColor: theme.bg.elevated, borderColor: meta.color + '44' }]}>
         <View style={styles.resultHeader}>
-          <Text style={styles.resultIcon}>{meta.icon}</Text>
+          <View style={[styles.resultIconWrap, { backgroundColor: meta.color + '1F' }]}>
+            <Feather name={meta.icon} size={20} color={meta.color} />
+          </View>
           <Text style={[styles.resultModule, { color: meta.color }]}>{moduleLabel[result.module]}</Text>
         </View>
         {lines.map((line, i) => (
@@ -228,7 +248,12 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
                 >
                   {analyzing
                     ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.analyzeBtnText}>{t.parse_btn}</Text>}
+                    : (
+                      <View style={styles.analyzeBtnContent}>
+                        <Feather name="send" size={16} color="#fff" />
+                        <Text style={styles.analyzeBtnText}>{t.parse_btn}</Text>
+                      </View>
+                    )}
                 </Pressable>
               </View>
             </>
@@ -280,6 +305,7 @@ const styles = StyleSheet.create({
   examples: { fontSize: 12, marginTop: -spacing[2] },
   analyzeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   analyzeBtn: { flex: 1, paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
+  analyzeBtnContent: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   analyzeBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   youSaid: { fontSize: 13, fontStyle: 'italic' },
   resultCard: {
@@ -287,7 +313,13 @@ const styles = StyleSheet.create({
     padding: spacing[4], gap: spacing[2],
   },
   resultHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  resultIcon: { fontSize: 22 },
+  resultIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   resultModule: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   resultLine: { fontSize: 15 },
   actionRow: { flexDirection: 'row', gap: spacing[2] },

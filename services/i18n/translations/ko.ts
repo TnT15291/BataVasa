@@ -117,6 +117,7 @@ export const ko: Translations = {
   weekly: '주간',
   monthly: '월간',
   yearly: '연간',
+  quarterly: '분기별',
   custom_range: '기간 지정',
   from_date: '시작일',
   to_date: '종료일',

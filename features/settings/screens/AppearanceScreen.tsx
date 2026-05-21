@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useTheme, useMode } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -73,7 +74,7 @@ export function AppearanceScreen() {
                     !active && { opacity: 0.7 },
                   ]}
                 >
-                  {active && <Text style={styles.swatchCheck}>✓</Text>}
+                  {active && <Feather name="check" size={22} color="#fff" />}
                 </View>
                 <Text
                   style={[
@@ -131,6 +132,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  swatchCheck: { color: '#fff', fontSize: 22, fontWeight: '700' },
   swatchLabel: { fontSize: 12, textAlign: 'center' },
 })
