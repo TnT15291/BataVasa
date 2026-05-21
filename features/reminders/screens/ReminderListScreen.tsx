@@ -219,6 +219,12 @@ export function ReminderListScreen() {
             <Text style={[styles.emptyIcon]}>🔔</Text>
             <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_reminders}</Text>
             <Text style={[styles.emptyMsg, { color: theme.text.muted }]}>{t.no_reminders_msg}</Text>
+            <Pressable
+              onPress={() => router.push('/reminder' as any)}
+              style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
+            >
+              <Text style={styles.emptyBtnText}>{t.new_reminder}</Text>
+            </Pressable>
           </View>
         ) : (
           <>
@@ -310,6 +316,8 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
   emptyMsg: { fontSize: 14, textAlign: 'center' },
+  emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
+  emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   reportBtn: {
     position: 'absolute', left: spacing[6], bottom: spacing[8],
     width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',

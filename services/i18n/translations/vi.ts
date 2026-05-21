@@ -389,6 +389,18 @@ export const vi = {
   report_habits_completed: 'Tổng lần hoàn thành',
   report_view: 'Xem báo cáo',
   export_report: 'Xuất báo cáo',
+  report_snapshot: 'Tổng quan',
+  data_records: 'Bản ghi',
+  data_export_format: 'Định dạng xuất',
+  data_delete_scope: 'Phạm vi xóa',
+  data_scope_cloud: 'Đám mây',
+  data_scope_device: 'Thiết bị',
+  data_delete_cloud_note: 'Xóa sẽ tạo lệnh wipe đồng bộ đám mây, nên module này được xóa khỏi thiết bị và tài khoản đã đồng bộ.',
+  data_delete_device_note: 'Xóa module này khỏi thiết bị. Đồng bộ đám mây đang tắt cho module này.',
+  habit_sample_water: 'Uống nước',
+  habit_sample_exercise: 'Tập thể dục',
+  habit_sample_read: 'Đọc sách',
+  journal_empty_prompt: 'Hôm nay tôi nhận ra...',
 
   // Auth
   account: 'Tài khoản',

@@ -133,6 +133,13 @@
 6. ✅ H19 — Voice force-confirm fix
 
 **Sprint 4 — Module completion + public prep:**
+0. Public launch polish sequence:
+   - 1) Empty states + permission preflows + reports screenshot readiness + data management clarity
+   - 2) Store screenshots + metadata final pass
+   - 3) Error message/i18n audit
+   - 4) Settings information architecture cleanup
+   - 5) Accessibility and dynamic text pass
+   - 6) Micro-interactions/loading/success states polish
 1. Habits module: streak tracking + AI insight
 2. M36 — Cross-module behavioral patterns (Finance × Habits × Journals)
 3. M37 — Proactive weekly push insights

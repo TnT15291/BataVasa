@@ -372,6 +372,18 @@ export const ko: Translations = {
   report_habits_completed: '총 달성 횟수',
   report_view: '보고서 보기',
   export_report: '보고서 내보내기',
+  report_snapshot: 'Snapshot',
+  data_records: 'Records',
+  data_export_format: 'Export format',
+  data_delete_scope: 'Delete scope',
+  data_scope_cloud: 'Cloud',
+  data_scope_device: 'Device',
+  data_delete_cloud_note: 'Delete creates a cloud sync wipe so this module is removed from the device and synced account.',
+  data_delete_device_note: 'Delete removes this module from this device. Cloud sync is currently off for this module.',
+  habit_sample_water: 'Drink water',
+  habit_sample_exercise: 'Exercise',
+  habit_sample_read: 'Read',
+  journal_empty_prompt: 'Today I noticed...',
 
   // Auth
   account: '계정',

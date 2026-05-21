@@ -29,6 +29,7 @@ import { getDateFnsLocale } from '@services/locale'
 import { useSettingsStore } from '@store/settingsStore'
 import { getProviderKey } from '@services/ai/openai'
 import { track } from '@services/analytics'
+import { formatAmount } from '../services'
 
 type Period = ReportType
 
@@ -63,6 +64,7 @@ export function ReportsScreen() {
   const allTxs = useTransactions()
   const cats = useCategories()
   const language = useSettingsStore((s) => s.language)
+  const currency = useSettingsStore((s) => s.currency)
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const dfLocale = getDateFnsLocale(language)
 
@@ -140,6 +142,9 @@ export function ReportsScreen() {
     const expense = rangeTxs.filter((tx) => tx.amount_cents < 0).reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
     return { count: rangeTxs.length, income, expense }
   }, [rangeTxs])
+  const chartMax = Math.max(summary.income, summary.expense, 1)
+  const incomePct = Math.max(6, (summary.income / chartMax) * 100)
+  const expensePct = Math.max(6, (summary.expense / chartMax) * 100)
 
   const generate = useCallback(async () => {
     const range = getRange()
@@ -252,12 +257,34 @@ export function ReportsScreen() {
             <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_entries}</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.statValue, { color: theme.text.primary }]}>{Math.round(summary.income / 100)}</Text>
+            <Text style={[styles.statValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
+              {formatAmount(summary.income, currency, language)}
+            </Text>
             <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.income}</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.statValue, { color: theme.text.primary }]}>{Math.round(summary.expense / 100)}</Text>
+            <Text style={[styles.statValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
+              {formatAmount(summary.expense, currency, language)}
+            </Text>
             <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.expense}</Text>
+          </View>
+        </View>
+        <View style={[styles.snapshotCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.snapshotHeader}>
+            <Text style={[styles.snapshotTitle, { color: theme.text.primary }]}>{t.report_snapshot}</Text>
+            <Text style={[styles.snapshotMeta, { color: theme.text.muted }]}>{range ? range.label : t.custom_range}</Text>
+          </View>
+          <View style={styles.chartRow}>
+            <Text style={[styles.chartLabel, { color: theme.text.muted }]}>{t.income}</Text>
+            <View style={[styles.chartTrack, { backgroundColor: theme.bg.secondary }]}>
+              <View style={[styles.chartBar, { width: `${incomePct}%`, backgroundColor: theme.finance.income }]} />
+            </View>
+          </View>
+          <View style={styles.chartRow}>
+            <Text style={[styles.chartLabel, { color: theme.text.muted }]}>{t.expense}</Text>
+            <View style={[styles.chartTrack, { backgroundColor: theme.bg.secondary }]}>
+              <View style={[styles.chartBar, { width: `${expensePct}%`, backgroundColor: theme.finance.expense }]} />
+            </View>
           </View>
         </View>
         <View style={styles.filterRow}>
@@ -383,6 +410,19 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 20, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
+  snapshotCard: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[4],
+    gap: spacing[3],
+  },
+  snapshotHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3], alignItems: 'center' },
+  snapshotTitle: { fontSize: 15, fontWeight: '700' },
+  snapshotMeta: { fontSize: 12, flex: 1, textAlign: 'right' },
+  chartRow: { gap: spacing[1] },
+  chartLabel: { fontSize: 11, fontWeight: '600' },
+  chartTrack: { height: 10, borderRadius: radius.full, overflow: 'hidden' },
+  chartBar: { height: '100%', borderRadius: radius.full },
   filterRow: { flexDirection: 'row', gap: spacing[2] },
   filterPill: {
     flex: 1,

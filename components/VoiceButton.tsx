@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Pressable, Animated, StyleSheet, ActivityIndicator, Alert, View } from 'react-native'
+import { Pressable, Animated, StyleSheet, ActivityIndicator, Alert, View, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { useTranslation } from '@services/i18n'
@@ -67,6 +67,15 @@ function WaveformBars({ color, size }: { color: string; size: number }) {
 }
 
 const MAX_RECORDING_MS = 120000
+
+function confirmPermissionPrompt(title: string, message: string, cancel: string, next: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: cancel, style: 'cancel', onPress: () => resolve(false) },
+      { text: next, onPress: () => resolve(true) },
+    ])
+  })
+}
 
 export function VoiceButton({ onResult, disabled, size = 36, module = 'unknown' }: Props) {
   const theme = useTheme()
@@ -144,10 +153,21 @@ export function VoiceButton({ onResult, disabled, size = 36, module = 'unknown' 
       Alert.alert(t.no_api_key, t.voice_no_key)
       return
     }
+    const shouldRequest = await confirmPermissionPrompt(
+      t.mic_permission_title,
+      t.mic_permission_hint,
+      t.cancel,
+      t.onboarding_next
+    )
+    if (!shouldRequest) return
+
     const granted = await requestMicPermission()
     if (!granted) {
       track('voice_failed', { module, reason: 'permission_denied' })
-      Alert.alert(t.mic_permission_title, t.mic_denied)
+      Alert.alert(t.mic_permission_title, t.mic_denied, [
+        { text: t.cancel, style: 'cancel' },
+        { text: t.go_to_settings, onPress: () => { void Linking.openSettings() } },
+      ])
       return
     }
     try {

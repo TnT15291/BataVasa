@@ -169,6 +169,16 @@ export function HabitListScreen() {
           <Text style={styles.emptyIcon}>💪</Text>
           <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_habits}</Text>
           <Text style={[styles.emptyMsg, { color: theme.text.muted }]}>{t.no_habits_msg}</Text>
+          <View style={styles.emptySamples}>
+            {[t.habit_sample_water, t.habit_sample_exercise, t.habit_sample_read].map((sample) => (
+              <Text
+                key={sample}
+                style={[styles.emptySample, { color: theme.text.secondary, backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+              >
+                {sample}
+              </Text>
+            ))}
+          </View>
           <Pressable
             onPress={() => router.push('/habit' as any)}
             style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
@@ -273,6 +283,8 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyMsg: { fontSize: 14, textAlign: 'center' },
+  emptySamples: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing[2], marginTop: spacing[1] },
+  emptySample: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2], fontSize: 12 },
   emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
   emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   fab: {

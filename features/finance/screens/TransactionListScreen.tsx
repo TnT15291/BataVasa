@@ -364,8 +364,15 @@ export function TransactionListScreen() {
             </View>
           ) : (
             <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>ðŸ’³</Text>
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_transactions}</Text>
               <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.tap_to_add}</Text>
+              <Pressable
+                onPress={() => router.push('/new' as any)}
+                style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
+              >
+                <Text style={styles.emptyBtnText}>{t.nav_new_transaction}</Text>
+              </Pressable>
             </View>
           )
         }
@@ -458,9 +465,12 @@ const styles = StyleSheet.create({
   aiBtnFull: { flex: 0, flexDirection: 'row', width: '100%', justifyContent: 'center', gap: spacing[2] },
   aiBtnIcon: { fontSize: 18 },
   aiBtnLabel: { fontSize: 11, fontWeight: '500', textAlign: 'center' },
-  empty: { alignItems: 'center', marginTop: spacing[12] },
+  empty: { alignItems: 'center', marginTop: spacing[12], gap: spacing[2] },
+  emptyIcon: { fontSize: 44, marginBottom: spacing[1] },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
   emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[8] },
+  emptyBtn: { paddingHorizontal: spacing[5], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
+  emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   footer: { alignItems: 'center', paddingVertical: spacing[4] },
   loadMoreBtn: {
     paddingHorizontal: spacing[6],

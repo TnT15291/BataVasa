@@ -224,6 +224,9 @@ export function JournalListScreen() {
         <Text style={styles.emptyIcon}>📖</Text>
         <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_journals}</Text>
         <Text style={[styles.emptyMsg, { color: theme.text.muted }]}>{t.no_journals_msg}</Text>
+        <Text style={[styles.emptyPrompt, { color: theme.text.secondary, backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          {t.journal_empty_prompt}
+        </Text>
         <Pressable
           onPress={() => router.push('/journal' as any)}
           style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
@@ -379,6 +382,7 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48 },
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyMsg: { fontSize: 14, textAlign: 'center' },
+  emptyPrompt: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[3], fontSize: 14, marginTop: spacing[1] },
   emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
   emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   reflectBtn: {

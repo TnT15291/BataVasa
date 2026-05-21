@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Linking } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -42,6 +42,15 @@ function SectionHeader({ label }: { label: string }) {
   return (
     <Text style={[styles.sectionHeader, { color: theme.text.muted }]}>{label.toUpperCase()}</Text>
   )
+}
+
+function confirmPermissionPrompt(title: string, message: string, cancel: string, next: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: cancel, style: 'cancel', onPress: () => resolve(false) },
+      { text: next, onPress: () => resolve(true) },
+    ])
+  })
 }
 
 export function SettingsScreen() {
@@ -88,9 +97,19 @@ export function SettingsScreen() {
 
   const toggleLocation = async (next: boolean) => {
     if (next) {
+      const shouldRequest = await confirmPermissionPrompt(
+        t.location_access,
+        t.location_access_hint,
+        t.cancel,
+        t.onboarding_next
+      )
+      if (!shouldRequest) return
       const granted = await requestLocationPermission()
       if (!granted) {
-        Alert.alert(t.location_permission_denied, t.location_permission_denied_msg)
+        Alert.alert(t.location_permission_denied, t.location_permission_denied_msg, [
+          { text: t.cancel, style: 'cancel' },
+          { text: t.go_to_settings, onPress: () => { void Linking.openSettings() } },
+        ])
         return
       }
     }
@@ -98,13 +117,23 @@ export function SettingsScreen() {
   }
 
   const requestMicrophone = async () => {
+    const shouldRequest = await confirmPermissionPrompt(t.mic_permission_title, t.mic_permission_hint, t.cancel, t.onboarding_next)
+    if (!shouldRequest) return
     const granted = await requestMicPermission()
-    Alert.alert(granted ? t.permission_ready : t.mic_permission_title, granted ? t.mic_permission_ready_msg : t.mic_denied)
+    Alert.alert(granted ? t.permission_ready : t.mic_permission_title, granted ? t.mic_permission_ready_msg : t.mic_denied, granted ? undefined : [
+      { text: t.cancel, style: 'cancel' },
+      { text: t.go_to_settings, onPress: () => { void Linking.openSettings() } },
+    ])
   }
 
   const requestNotifications = async () => {
+    const shouldRequest = await confirmPermissionPrompt(t.notification_permission_title, t.notification_permission_hint, t.cancel, t.onboarding_next)
+    if (!shouldRequest) return
     const granted = await requestNotificationPermission()
-    Alert.alert(granted ? t.permission_ready : t.notification_permission_title, granted ? t.notification_permission_ready_msg : t.notification_permission_denied_msg)
+    Alert.alert(granted ? t.permission_ready : t.notification_permission_title, granted ? t.notification_permission_ready_msg : t.notification_permission_denied_msg, granted ? undefined : [
+      { text: t.cancel, style: 'cancel' },
+      { text: t.go_to_settings, onPress: () => { void Linking.openSettings() } },
+    ])
   }
 
   return (
