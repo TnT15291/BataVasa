@@ -5,6 +5,7 @@ import { useTheme } from '@design/useTheme'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { hapticVoiceStart, hapticVoiceStop } from '@services/haptics'
+import { track } from '@services/analytics'
 import {
   requestMicPermission,
   startRecording,
@@ -19,6 +20,7 @@ type Props = {
   onResult: (text: string) => void
   disabled?: boolean
   size?: number
+  module?: string
 }
 
 function WaveformBars({ color, size }: { color: string; size: number }) {
@@ -64,13 +66,17 @@ function WaveformBars({ color, size }: { color: string; size: number }) {
   )
 }
 
-export function VoiceButton({ onResult, disabled, size = 36 }: Props) {
+const MAX_RECORDING_MS = 120000
+
+export function VoiceButton({ onResult, disabled, size = 36, module = 'unknown' }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const [state, setState] = useState<State>('idle')
   const scaleAnim = useRef(new Animated.Value(1)).current
   const animRef = useRef<Animated.CompositeAnimation | null>(null)
+  const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const recordingStartedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (state === 'recording') {
@@ -88,39 +94,75 @@ export function VoiceButton({ onResult, disabled, size = 36 }: Props) {
     return () => animRef.current?.stop()
   }, [state])
 
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearTimeout(recordingTimerRef.current)
+      void stopRecording()
+    }
+  }, [])
+
+  const stopAndTranscribe = async () => {
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+    setState('transcribing')
+    void hapticVoiceStop()
+    const startedAt = recordingStartedAtRef.current
+    recordingStartedAtRef.current = null
+    const uri = await stopRecording()
+    if (!uri) {
+      track('voice_failed', { module, reason: 'empty_recording' })
+      setState('idle')
+      return
+    }
+    const text = await transcribeAudio(uri, language)
+    setState('idle')
+    if (text) {
+      track('voice_transcribed', { module, duration_ms: startedAt ? Date.now() - startedAt : undefined })
+      onResult(text)
+    } else {
+      track('voice_failed', { module, reason: 'transcribe_failed' })
+      Alert.alert(t.ai_error, t.parse_failed, [
+        { text: t.cancel, style: 'cancel' },
+        { text: t.retry, onPress: () => { void handlePress() } },
+      ])
+    }
+  }
+
   const handlePress = async () => {
     if (disabled || state === 'transcribing') return
 
     if (state === 'recording') {
-      setState('transcribing')
-      void hapticVoiceStop()
-      const uri = await stopRecording()
-      if (!uri) { setState('idle'); return }
-      const text = await transcribeAudio(uri, language)
-      setState('idle')
-      if (text) {
-        onResult(text)
-      } else {
-        Alert.alert(t.ai_error, t.parse_failed)
-      }
+      await stopAndTranscribe()
       return
     }
 
     const keyOk = await hasVoiceKey()
     if (!keyOk) {
+      track('voice_failed', { module, reason: 'missing_key' })
       Alert.alert(t.no_api_key, t.voice_no_key)
       return
     }
     const granted = await requestMicPermission()
     if (!granted) {
-      Alert.alert('', t.mic_denied)
+      track('voice_failed', { module, reason: 'permission_denied' })
+      Alert.alert(t.mic_permission_title, t.mic_denied)
       return
     }
     try {
       await startRecording()
       void hapticVoiceStart()
+      track('voice_started', { module })
+      recordingStartedAtRef.current = Date.now()
+      recordingTimerRef.current = setTimeout(() => {
+        track('voice_failed', { module, reason: 'recording_timeout' })
+        Alert.alert(t.voice_timeout_title, t.voice_timeout_msg)
+        void stopAndTranscribe()
+      }, MAX_RECORDING_MS)
       setState('recording')
     } catch {
+      track('voice_failed', { module, reason: 'recording_failed' })
       Alert.alert(t.ai_error, t.parse_failed)
     }
   }

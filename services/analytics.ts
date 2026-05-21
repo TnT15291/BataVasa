@@ -1,5 +1,10 @@
-import * as Sentry from '@sentry/react-native'
 import { logger } from '@services/logger'
+
+type SentryApi = {
+  addBreadcrumb: (breadcrumb: Record<string, unknown>) => void
+}
+
+declare const require: ((id: string) => SentryApi) | undefined
 
 export type AnalyticsEvent =
   | 'app_open'
@@ -8,6 +13,12 @@ export type AnalyticsEvent =
   | 'auth_login'
   | 'auth_logout'
   | 'transaction_created'
+  | 'data_exported'
+  | 'data_deleted'
+  | 'report_generated'
+  | 'voice_started'
+  | 'voice_transcribed'
+  | 'voice_failed'
   | 'insight_generated'
   | 'sync_failed'
   | 'feature_used'
@@ -19,6 +30,12 @@ export type AnalyticsProps = {
   auth_login: Record<string, never>
   auth_logout: Record<string, never>
   transaction_created: { category_kind?: string; source?: string }
+  data_exported: { module?: string; item_count?: number }
+  data_deleted: { module?: string; item_count?: number }
+  report_generated: { module?: string; kind?: string; item_count?: number }
+  voice_started: { module?: string }
+  voice_transcribed: { module?: string; duration_ms?: number }
+  voice_failed: { module?: string; reason?: string }
   insight_generated: { module?: string; kind?: string; cache_hit?: boolean }
   sync_failed: { table?: string; error_code?: string }
   feature_used: { feature_name?: string }
@@ -36,6 +53,12 @@ const ALLOWED_KEYS: { [E in AnalyticsEvent]: ReadonlyArray<keyof AnalyticsProps[
   auth_login: [],
   auth_logout: [],
   transaction_created: ['category_kind', 'source'],
+  data_exported: ['module', 'item_count'],
+  data_deleted: ['module', 'item_count'],
+  report_generated: ['module', 'kind', 'item_count'],
+  voice_started: ['module'],
+  voice_transcribed: ['module', 'duration_ms'],
+  voice_failed: ['module', 'reason'],
   insight_generated: ['module', 'kind', 'cache_hit'],
   sync_failed: ['table', 'error_code'],
   feature_used: ['feature_name'],
@@ -43,6 +66,14 @@ const ALLOWED_KEYS: { [E in AnalyticsEvent]: ReadonlyArray<keyof AnalyticsProps[
 
 const PII_KEY_PATTERN = /amount|merchant|note|content|body|journal|mood|email|phone|location|lat|lng/i
 let transport: AnalyticsTransport | null = null
+
+function getSentry(): SentryApi | null {
+  try {
+    return typeof require === 'function' ? require('@sentry/react-native') : null
+  } catch {
+    return null
+  }
+}
 
 export function setAnalyticsTransport(next: AnalyticsTransport | null) {
   transport = next
@@ -71,7 +102,7 @@ export function track<E extends AnalyticsEvent>(event: E, props?: Partial<Analyt
   const safe = sanitizeAnalyticsProps(event, props as Partial<Record<string, unknown>>)
 
   try {
-    Sentry.addBreadcrumb({ category: 'analytics', message: event, data: safe, level: 'info' })
+    getSentry()?.addBreadcrumb({ category: 'analytics', message: event, data: safe, level: 'info' })
     void transport?.(event, safe)
   } catch (e) {
     logger.warn('analytics', 'track failed', { event, error: String(e) })

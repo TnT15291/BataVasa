@@ -13,6 +13,7 @@ import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/u
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
 import { formatAmount } from '@features/finance/services'
 import { UniversalAddSheet } from '../components/UniversalAddSheet'
+import { OnboardingModal } from '../components/OnboardingModal'
 
 function greeting(t: any): string {
   const h = new Date().getHours()
@@ -69,6 +70,7 @@ export function DailyDigestScreen() {
   const cats = useCategories()
   const reminders = useReminders()
   const habits = useHabits()
+  const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding)
   const [showAdd, setShowAdd] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -201,6 +203,7 @@ export function DailyDigestScreen() {
       </Pressable>
 
       <UniversalAddSheet visible={showAdd} onClose={() => setShowAdd(false)} />
+      <OnboardingModal visible={!hasSeenOnboarding} />
     </View>
   )
 }

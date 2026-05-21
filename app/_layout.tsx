@@ -13,6 +13,7 @@ import { track } from '@services/analytics'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAuthStore } from '@store/authStore'
 import { AuthScreen } from '@features/auth/AuthScreen'
+import { startSyncWorker, drainQueue } from '@services/sync'
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
 if (SENTRY_DSN) {
@@ -46,12 +47,19 @@ export default function RootLayout() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let stopSync: (() => void) | undefined
     runMigrations()
       .then(() => loadSettings())
       .then(() => useAuthStore.getState().init())
+      .then(() => { stopSync = startSyncWorker() })
       .then(() => setReady(true))
       .catch((e) => setError(String(e)))
+    return () => stopSync?.()
   }, [])
+
+  useEffect(() => {
+    if (session) void drainQueue()
+  }, [session])
 
   useEffect(() => {
     if (!ready) return
@@ -103,6 +111,7 @@ export default function RootLayout() {
             options={{ title: t.nav_new_transaction, presentation: 'modal' }}
           />
           <Stack.Screen name="settings" options={{ title: t.nav_settings }} />
+          <Stack.Screen name="data-management" options={{ title: t.data_management }} />
           <Stack.Screen name="appearance" options={{ title: t.nav_appearance }} />
           <Stack.Screen name="language" options={{ title: t.nav_language }} />
           <Stack.Screen name="ai-settings" options={{ title: t.nav_ai_settings }} />

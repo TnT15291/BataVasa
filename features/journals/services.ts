@@ -4,6 +4,8 @@ import { logger } from '@services/logger'
 import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/journals/queries'
+import { enqueue } from '@db/sync/queue'
+import { track } from '@services/analytics'
 import {
   CreateJournalInputSchema,
   UpdateJournalInputSchema,
@@ -39,6 +41,8 @@ export async function createJournal(
       synced_at: null,
     }
     await q.insertJournal(journal)
+    void enqueue('journal', journal.id, 'upsert')
+    track('feature_used', { feature_name: 'journal_created' })
     logger.info(MODULE, 'journal created', { id: journal.id })
     return ok(journal)
   } catch (e) {
@@ -69,7 +73,7 @@ export async function updateJournal(
     if (data.location_label !== undefined) patch.location_label = data.location_label
 
     await q.updateJournal(data.id, patch)
-
+    void enqueue('journal', data.id, 'upsert')
     const fresh = await q.getJournal(data.id)
     if (!fresh) return appErr('INTERNAL', 'Updated journal entry vanished')
     logger.info(MODULE, 'journal updated', { id: data.id })
@@ -86,6 +90,7 @@ export async function deleteJournal(id: string): Promise<Result<void, AppError>>
     if (!existing) return appErr('NOT_FOUND', 'Journal entry not found')
 
     await q.softDeleteJournal(id, nowIso())
+    void enqueue('journal', id, 'upsert')
     logger.info(MODULE, 'journal deleted', { id })
     return ok(undefined)
   } catch (e) {
@@ -107,6 +112,7 @@ export async function loadJournals(): Promise<Result<Journal[], AppError>> {
 export async function wipeAllJournals(): Promise<Result<{ deleted: number }, AppError>> {
   try {
     const deleted = await q.wipeJournals()
+    void enqueue('journal', 'ALL', 'wipe')
     logger.info(MODULE, 'wiped all journals', { deleted })
     return ok({ deleted })
   } catch (e) {

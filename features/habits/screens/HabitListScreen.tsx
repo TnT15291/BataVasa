@@ -154,7 +154,7 @@ export function HabitListScreen() {
           onSubmitEditing={() => handleParse()}
           editable={!parsing}
         />
-        <VoiceButton onResult={(text) => handleParse(text)} disabled={parsing} size={36} />
+        <VoiceButton onResult={(text) => handleParse(text)} disabled={parsing} size={36} module="habits" />
         <Pressable
           onPress={() => handleParse()}
           disabled={parsing || !nlText.trim()}

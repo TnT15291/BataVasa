@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { generateReport, type ReportType } from '@services/ai/reports'
 import { getDateFnsLocale } from '@services/locale'
 import { useSettingsStore } from '@store/settingsStore'
 import { getProviderKey } from '@services/ai/openai'
+import { track } from '@services/analytics'
 
 type Period = ReportType
 
@@ -71,6 +72,7 @@ export function ReportsScreen() {
   const [anchorDate, setAnchorDate] = useState(new Date())
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  const [kindFilter, setKindFilter] = useState<'all' | 'income' | 'expense'>('all')
   const [report, setReport] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -121,6 +123,24 @@ export function ReportsScreen() {
     else if (period === 'yearly') setAnchorDate((d) => dir === 1 ? addYears(d, 1) : subYears(d, 1))
   }
 
+  const range = getRange()
+  const rangeTxs = useMemo(() => {
+    if (!range) return []
+    const fromIso = range.from.toISOString()
+    const toIso = range.to.toISOString()
+    return allTxs.filter((tx) => {
+      if (tx.occurred_at < fromIso || tx.occurred_at > toIso) return false
+      if (kindFilter === 'income') return tx.amount_cents > 0
+      if (kindFilter === 'expense') return tx.amount_cents < 0
+      return true
+    })
+  }, [allTxs, range?.from, range?.to, kindFilter])
+  const summary = useMemo(() => {
+    const income = rangeTxs.filter((tx) => tx.amount_cents > 0).reduce((s, tx) => s + tx.amount_cents, 0)
+    const expense = rangeTxs.filter((tx) => tx.amount_cents < 0).reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+    return { count: rangeTxs.length, income, expense }
+  }, [rangeTxs])
+
   const generate = useCallback(async () => {
     const range = getRange()
     if (!range) {
@@ -128,15 +148,14 @@ export function ReportsScreen() {
       return
     }
     const { from, to, label } = range
-    const fromIso = from.toISOString()
-    const toIso = to.toISOString()
-    const filtered = allTxs.filter((tx) => tx.occurred_at >= fromIso && tx.occurred_at <= toIso)
+    const filtered = rangeTxs
 
     setLoading(true)
     setReport(null)
     try {
       const text = await generateReport(filtered, cats, label, period)
       setReport(text)
+      track('report_generated', { module: 'finance', kind: period, item_count: filtered.length })
     } catch (e: any) {
       if (e?.message === 'NO_API_KEY') {
         setHasApiKey(false)
@@ -148,7 +167,7 @@ export function ReportsScreen() {
     } finally {
       setLoading(false)
     }
-  }, [getRange, allTxs, cats, period, t, router])
+  }, [getRange, rangeTxs, cats, period, t, router])
 
   const shareReport = useCallback(async () => {
     if (!report) return
@@ -165,8 +184,6 @@ export function ReportsScreen() {
     { key: 'yearly', label: t.yearly },
     { key: 'custom_range' as any, label: t.custom_range },
   ].map((x) => ({ key: x.key === ('custom_range' as any) ? 'custom' : x.key, label: x.label })) as { key: Period; label: string }[]
-
-  const range = getRange()
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
@@ -229,6 +246,33 @@ export function ReportsScreen() {
 
       {/* Report content */}
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.statsGrid}>
+          <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.statValue, { color: theme.text.primary }]}>{summary.count}</Text>
+            <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_entries}</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.statValue, { color: theme.text.primary }]}>{Math.round(summary.income / 100)}</Text>
+            <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.income}</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.statValue, { color: theme.text.primary }]}>{Math.round(summary.expense / 100)}</Text>
+            <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.expense}</Text>
+          </View>
+        </View>
+        <View style={styles.filterRow}>
+          {(['all', 'income', 'expense'] as const).map((key) => (
+            <Pressable
+              key={key}
+              onPress={() => { setKindFilter(key); setReport(null) }}
+              style={[styles.filterPill, { backgroundColor: kindFilter === key ? theme.brand.primary : theme.bg.elevated, borderColor: theme.border.subtle }]}
+            >
+              <Text style={[styles.filterText, { color: kindFilter === key ? '#fff' : theme.text.secondary }]}>
+                {key === 'all' ? t.all_period : key === 'income' ? t.income : t.expense}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
         {report ? (
           <>
             <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
@@ -328,6 +372,26 @@ const styles = StyleSheet.create({
   },
   dateSep: { fontSize: 18, paddingBottom: spacing[2] },
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
+  statsGrid: { flexDirection: 'row', gap: spacing[3] },
+  statCard: {
+    flex: 1,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[3],
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  statValue: { fontSize: 20, fontWeight: '700' },
+  statLabel: { fontSize: 11, textAlign: 'center' },
+  filterRow: { flexDirection: 'row', gap: spacing[2] },
+  filterPill: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.full,
+    paddingVertical: spacing[2],
+    alignItems: 'center',
+  },
+  filterText: { fontSize: 12, fontWeight: '600' },
   card: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,

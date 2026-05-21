@@ -18,6 +18,8 @@ import { matchCategory } from '@features/finance/i18n'
 import { useCategories } from '@features/finance/hooks/useFinance'
 import { useFinanceStore } from '@store/financeStore'
 import { useRemindersStore } from '@store/remindersStore'
+import { useHabitsStore } from '@store/habitsStore'
+import { useJournalsStore } from '@store/journalsStore'
 import { formatAmount } from '@features/finance/services'
 
 const MODULE_META: Record<string, { icon: string; color: string }> = {
@@ -38,6 +40,8 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
   const cats = useCategories()
   const createTransaction = useFinanceStore((s) => s.createTransaction)
   const createReminder = useRemindersStore((s) => s.createReminder)
+  const createHabit = useHabitsStore((s) => s.createHabit)
+  const createJournal = useJournalsStore((s) => s.createJournal)
 
   const [text, setText] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
@@ -111,9 +115,37 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
       return
     }
 
-    // habits / journal — placeholder
-    setSaving(false)
-    Alert.alert(result.module === 'habits' ? t.classified_habits : t.classified_journal, t.coming_soon)
+    if (result.module === 'habits') {
+      const cadence = result.frequency === 'daily'
+        ? 'daily'
+        : result.frequency === 'weekdays'
+        ? 'weekdays'
+        : 'weekly'
+      const res = await createHabit({
+        name: result.title,
+        cadence,
+        target_per_period: 1,
+        icon: '✅',
+        color: '#4CAF50',
+      })
+      setSaving(false)
+      if (!res.ok) { Alert.alert(t.could_not_save, res.error); return }
+      void hapticSaveSuccess()
+      handleClose()
+      return
+    }
+
+    if (result.module === 'journal') {
+      const res = await createJournal({
+        content: result.content,
+        occurred_at: new Date().toISOString(),
+      })
+      setSaving(false)
+      if (!res.ok) { Alert.alert(t.could_not_save, res.error); return }
+      void hapticSaveSuccess()
+      handleClose()
+      return
+    }
   }
 
   const renderSummary = () => {
@@ -188,7 +220,7 @@ export function UniversalAddSheet({ visible, onClose }: Props) {
               />
               <Text style={[styles.examples, { color: theme.text.muted }]}>{t.universal_add_examples}</Text>
               <View style={styles.analyzeRow}>
-                <VoiceButton onResult={(t) => onAnalyze(t)} disabled={analyzing} size={44} />
+                <VoiceButton onResult={(t) => onAnalyze(t)} disabled={analyzing} size={44} module="quick_add" />
                 <Pressable
                   onPress={() => onAnalyze()}
                   disabled={analyzing || !text.trim()}

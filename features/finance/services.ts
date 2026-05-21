@@ -4,6 +4,8 @@ import { logger } from '@services/logger'
 import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/finance/queries'
+import { enqueue } from '@db/sync/queue'
+import { track } from '@services/analytics'
 import {
   CreateTransactionInputSchema,
   UpdateTransactionInputSchema,
@@ -58,6 +60,8 @@ export async function createTransaction(
       synced_at: null,
     }
     await q.insertTransaction(tx)
+    void enqueue('finance_transaction', tx.id, 'upsert')
+    track('transaction_created', { category_kind: data.amount_cents >= 0 ? 'income' : undefined, source: data.source })
     logger.info(MODULE, 'transaction created', { id: tx.id, source: tx.source })
     return ok(tx)
   } catch (e) {
@@ -119,6 +123,7 @@ export async function updateTransaction(
     }
 
     await q.updateTransaction(data.id, patch)
+    void enqueue('finance_transaction', data.id, 'upsert')
     logger.info(MODULE, 'transaction updated', { id: data.id })
     const fresh = await q.getTransaction(data.id)
     if (!fresh) return appErr('INTERNAL', 'Updated row vanished')
@@ -134,6 +139,7 @@ export async function deleteTransaction(id: string): Promise<Result<void, AppErr
     const existing = await q.getTransaction(id)
     if (!existing) return appErr('NOT_FOUND', 'Transaction not found')
     await q.softDeleteTransaction(id, nowIso())
+    void enqueue('finance_transaction', id, 'upsert')
     logger.info(MODULE, 'transaction deleted', { id })
     return ok(undefined)
   } catch (e) {
@@ -152,12 +158,12 @@ export async function listCategories(): Promise<Result<Category[], AppError>> {
   }
 }
 
-// Cross-Module Rule 1: hard-delete all finance data for current user.
-// TODO when sync engine is built: also queue tombstone op to Supabase.
 export async function wipeAllData(): Promise<Result<{ deleted: number }, AppError>> {
   try {
     const { transactions, categories } = await q.wipeFinanceData()
     const total = transactions + categories
+    void enqueue('finance_transaction', 'ALL', 'wipe')
+    void enqueue('finance_category', 'ALL', 'wipe')
     logger.info(MODULE, 'wipeAllData succeeded', { count: total })
     return ok({ deleted: total })
   } catch (e) {
@@ -193,6 +199,7 @@ export async function createCategory(
       synced_at: null,
     }
     await q.insertCategory(cat)
+    void enqueue('finance_category', cat.id, 'upsert')
     logger.info(MODULE, 'category created', { id: cat.id, name: cat.name })
     return ok(cat)
   } catch (e) {
@@ -220,6 +227,7 @@ export async function updateCategory(
     if (data.kind !== undefined) patch.kind = data.kind
     if ('monthly_budget_cents' in data) patch.monthly_budget_cents = data.monthly_budget_cents ?? null
     await q.updateCategory(data.id, patch)
+    void enqueue('finance_category', data.id, 'upsert')
     const fresh = await q.getCategory(data.id)
     if (!fresh) return appErr('INTERNAL', 'Updated category vanished')
     return ok(fresh)
@@ -235,6 +243,7 @@ export async function deleteCategory(id: string): Promise<Result<void, AppError>
     if (!existing) return appErr('NOT_FOUND', 'Category not found')
     if (existing.user_id === null) return appErr('AUTH_FORBIDDEN', 'Cannot delete system categories')
     await q.softDeleteCategory(id, nowIso())
+    void enqueue('finance_category', id, 'upsert')
     logger.info(MODULE, 'category deleted', { id })
     return ok(undefined)
   } catch (e) {

@@ -21,6 +21,7 @@ export async function initSettingsSchema(db: SQLiteDatabase): Promise<void> {
     { key: 'color_mode', value: 'system' },
     { key: 'theme_name', value: 'default' },
     { key: 'ai_provider', value: 'openai' },
+    { key: 'has_seen_onboarding', value: 'false' },
   ]
   for (const s of defaults) {
     await db.runAsync(

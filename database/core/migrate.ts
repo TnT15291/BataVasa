@@ -5,6 +5,7 @@ import { initSettingsSchema } from '../settings/schema'
 import { createReminderSchema } from '../reminders/schema'
 import { createJournalSchema } from '../journals/schema'
 import { createHabitSchema } from '../habits/schema'
+import { createSyncQueueSchema } from '../sync/schema'
 import { logger } from '@services/logger'
 
 // Each entry creates one schema version. user_version starts at 0 (fresh DB)
@@ -40,6 +41,10 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   // v7 — advance_minutes on reminder (remind X minutes before the event)
   async (db) => {
     await safeAddColumn(db, 'reminder', 'advance_minutes', 'INTEGER NOT NULL DEFAULT 0')
+  },
+  // v8 — sync_queue table for offline-first cloud sync
+  async (db) => {
+    await createSyncQueueSchema(db)
   },
 ]
 

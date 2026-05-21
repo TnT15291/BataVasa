@@ -1,18 +1,12 @@
-import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Share } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
-import { useFinanceStore } from '@store/financeStore'
 import { requestLocationPermission } from '@services/location'
-import { exportAllData } from '@features/finance/services'
-import { useRemindersStore } from '@store/remindersStore'
-import { exportAllReminders } from '@features/reminders/services'
-import { useJournalsStore } from '@store/journalsStore'
-import { exportAllJournals } from '@features/journals/services'
-import { useHabitsStore } from '@store/habitsStore'
-import { exportAllHabits } from '@features/habits/services'
+import { requestMicPermission } from '@services/voice'
+import { requestNotificationPermission } from '@services/notifications'
 import { useAuthStore } from '@store/authStore'
 
 type RowProps = {
@@ -67,10 +61,6 @@ export function SettingsScreen() {
   const setSyncHabits = useSettingsStore((s) => s.setSyncHabits)
   const syncJournals = useSettingsStore((s) => s.syncJournals)
   const setSyncJournals = useSettingsStore((s) => s.setSyncJournals)
-  const wipeFinance = useFinanceStore((s) => s.wipeAll)
-  const wipeReminders = useRemindersStore((s) => s.wipeAll)
-  const wipeJournals = useJournalsStore((s) => s.wipeAll)
-  const wipeHabits = useHabitsStore((s) => s.wipeAll)
   const authConfigured = useAuthStore((s) => s.configured)
   const session = useAuthStore((s) => s.session)
   const signOut = useAuthStore((s) => s.signOut)
@@ -80,75 +70,6 @@ export function SettingsScreen() {
       { text: t.cancel, style: 'cancel' },
       { text: t.auth_sign_out, style: 'destructive', onPress: () => { void signOut() } },
     ])
-  }
-
-  const onExportReminders = async () => {
-    const r = await exportAllReminders()
-    if (!r.ok) { Alert.alert(t.could_not_save, r.error.message); return }
-    await Share.share({ message: r.value, title: 'BataVasa reminders.json' })
-  }
-
-  const onDeleteReminders = () => {
-    Alert.alert(t.delete_all_reminders, t.delete_all_reminders_hint, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete, style: 'destructive',
-        onPress: async () => {
-          const r = await wipeReminders()
-          if (r.ok) Alert.alert(t.wipe_success.replace('{{count}}', String(r.deleted ?? 0)))
-          else Alert.alert(t.could_not_save, r.error ?? '')
-        },
-      },
-    ])
-  }
-
-  const onExportJournals = async () => {
-    const r = await exportAllJournals()
-    if (!r.ok) { Alert.alert(t.could_not_save, r.error.message); return }
-    await Share.share({ message: r.value, title: 'BataVasa journals.json' })
-  }
-
-  const onDeleteJournals = () => {
-    Alert.alert(t.delete_all_journals, t.delete_all_journals_hint, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete, style: 'destructive',
-        onPress: async () => {
-          const r = await wipeJournals()
-          if (r.ok) Alert.alert(t.wipe_success.replace('{{count}}', String(r.deleted ?? 0)))
-          else Alert.alert(t.could_not_save, r.error ?? '')
-        },
-      },
-    ])
-  }
-
-  const onExportHabits = async () => {
-    const r = await exportAllHabits()
-    if (!r.ok) { Alert.alert(t.could_not_save, r.error.message); return }
-    await Share.share({ message: r.value, title: 'BataVasa habits.json' })
-  }
-
-  const onDeleteHabits = () => {
-    Alert.alert(t.delete_all_habits, t.delete_all_habits_hint, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete, style: 'destructive',
-        onPress: async () => {
-          const r = await wipeHabits()
-          if (r.ok) Alert.alert(t.wipe_success.replace('{{count}}', String(r.deleted ?? 0)))
-          else Alert.alert(t.could_not_save, r.error ?? '')
-        },
-      },
-    ])
-  }
-
-  const onExportData = async () => {
-    const r = await exportAllData()
-    if (!r.ok) {
-      Alert.alert(t.could_not_save, r.error.message)
-      return
-    }
-    await Share.share({ message: r.value, title: 'BataVasa export.json' })
   }
 
   const toggleLocation = async (next: boolean) => {
@@ -162,32 +83,14 @@ export function SettingsScreen() {
     await setLocationAccess(next)
   }
 
-  const onDeleteFinanceData = () => {
-    // Double-confirm pattern for destructive action
-    Alert.alert(t.confirm_wipe_title, t.confirm_wipe_msg, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete,
-        style: 'destructive',
-        onPress: () => {
-          Alert.alert(t.confirm_wipe_final_title, t.confirm_wipe_final_msg, [
-            { text: t.cancel, style: 'cancel' },
-            {
-              text: t.delete,
-              style: 'destructive',
-              onPress: async () => {
-                const r = await wipeFinance()
-                if (r.ok) {
-                  Alert.alert(t.wipe_success.replace('{{count}}', String(r.deleted ?? 0)))
-                } else {
-                  Alert.alert(t.could_not_save, r.error ?? '')
-                }
-              },
-            },
-          ])
-        },
-      },
-    ])
+  const requestMicrophone = async () => {
+    const granted = await requestMicPermission()
+    Alert.alert(granted ? t.permission_ready : t.mic_permission_title, granted ? t.mic_permission_ready_msg : t.mic_denied)
+  }
+
+  const requestNotifications = async () => {
+    const granted = await requestNotificationPermission()
+    Alert.alert(granted ? t.permission_ready : t.notification_permission_title, granted ? t.notification_permission_ready_msg : t.notification_permission_denied_msg)
   }
 
   return (
@@ -235,19 +138,19 @@ export function SettingsScreen() {
         <SettingRow label={t.display_currency} value={displayCurrency} onPress={() => router.push('/display-currency' as any)} />
         <SettingRow label={t.categories} onPress={() => router.push('/categories' as any)} />
         <Pressable
-          onPress={onExportData}
+          onPress={() => router.push('/data-management?module=finance' as any)}
           style={({ pressed }) => [
             styles.row,
             { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
           ]}
         >
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_data}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_data_hint}</Text>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.data_management}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.data_management_hint}</Text>
           </View>
         </Pressable>
         <Pressable
-          onPress={onDeleteFinanceData}
+          onPress={() => router.push('/data-management?module=finance' as any)}
           style={({ pressed }) => [
             styles.row,
             styles.rowLast,
@@ -256,7 +159,7 @@ export function SettingsScreen() {
         >
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_data}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_data_hint}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.data_management_delete_hint}</Text>
           </View>
         </Pressable>
       </View>
@@ -272,7 +175,7 @@ export function SettingsScreen() {
         </View>
         <SettingRow label={t.reminders} onPress={() => router.push('/reminders' as any)} />
         <Pressable
-          onPress={onExportReminders}
+          onPress={() => router.push('/data-management?module=reminders' as any)}
           style={({ pressed }) => [
             styles.row,
             { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
@@ -284,7 +187,7 @@ export function SettingsScreen() {
           </View>
         </Pressable>
         <Pressable
-          onPress={onDeleteReminders}
+          onPress={() => router.push('/data-management?module=reminders' as any)}
           style={({ pressed }) => [
             styles.row,
             styles.rowLast,
@@ -309,7 +212,7 @@ export function SettingsScreen() {
         </View>
         <SettingRow label={t.habits} onPress={() => router.push('/habits' as any)} />
         <Pressable
-          onPress={onExportHabits}
+          onPress={() => router.push('/data-management?module=habits' as any)}
           style={({ pressed }) => [styles.row, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
         >
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
@@ -318,7 +221,7 @@ export function SettingsScreen() {
           </View>
         </Pressable>
         <Pressable
-          onPress={onDeleteHabits}
+          onPress={() => router.push('/data-management?module=habits' as any)}
           style={({ pressed }) => [styles.row, styles.rowLast, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
         >
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
@@ -339,7 +242,7 @@ export function SettingsScreen() {
         </View>
         <SettingRow label={t.journals} onPress={() => router.push('/journals' as any)} />
         <Pressable
-          onPress={onExportJournals}
+          onPress={() => router.push('/data-management?module=journals' as any)}
           style={({ pressed }) => [
             styles.row,
             { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
@@ -351,7 +254,7 @@ export function SettingsScreen() {
           </View>
         </Pressable>
         <Pressable
-          onPress={onDeleteJournals}
+          onPress={() => router.push('/data-management?module=journals' as any)}
           style={({ pressed }) => [
             styles.row,
             styles.rowLast,
@@ -367,13 +270,38 @@ export function SettingsScreen() {
 
       <SectionHeader label={t.privacy} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <View style={[styles.row, styles.rowLast, { borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.location_access}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.location_access_hint}</Text>
           </View>
           <Switch value={locationAccess} onValueChange={toggleLocation} />
         </View>
+        <Pressable
+          onPress={requestMicrophone}
+          style={({ pressed }) => [
+            styles.row,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.mic_permission_title}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.mic_permission_hint}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={requestNotifications}
+          style={({ pressed }) => [
+            styles.row,
+            styles.rowLast,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.notification_permission_title}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.notification_permission_hint}</Text>
+          </View>
+        </Pressable>
       </View>
 
       <SectionHeader label="AI" />

@@ -3,6 +3,7 @@ import { getSecure } from '@services/secureStorage'
 import { logger } from '@services/logger'
 
 let _recording: Audio.Recording | null = null
+const TRANSCRIBE_TIMEOUT_MS = 30000
 
 export async function requestMicPermission(): Promise<boolean> {
   const { status } = await Audio.requestPermissionsAsync()
@@ -26,6 +27,16 @@ export async function stopRecording(): Promise<string | null> {
   return rec.getURI() ?? null
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, controller: AbortController): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      controller.abort()
+      reject(new Error('VOICE_TIMEOUT'))
+    }, ms)
+    promise.then(resolve, reject).finally(() => clearTimeout(timer))
+  })
+}
+
 // Tries OpenAI Whisper first, falls back to Groq Whisper (both are OpenAI-compatible)
 export async function transcribeAudio(uri: string, language: string): Promise<string | null> {
   const openaiKey = await getSecure('openai_api_key')
@@ -44,11 +55,13 @@ export async function transcribeAudio(uri: string, language: string): Promise<st
   formData.append('language', language.slice(0, 2)) // 'vi' → 'vi', already correct
 
   try {
-    const res = await fetch(endpoint, {
+    const controller = new AbortController()
+    const res = await withTimeout(fetch(endpoint, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: formData,
-    })
+      signal: controller.signal,
+    }), TRANSCRIBE_TIMEOUT_MS, controller)
     if (!res.ok) {
       logger.warn('voice', `Whisper error ${res.status}`)
       return null

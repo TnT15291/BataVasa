@@ -4,6 +4,8 @@ import { logger } from '@services/logger'
 import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/habits/queries'
+import { enqueue } from '@db/sync/queue'
+import { track } from '@services/analytics'
 import {
   CreateHabitInputSchema,
   UpdateHabitInputSchema,
@@ -43,6 +45,8 @@ export async function createHabit(
       synced_at: null,
     }
     await q.insertHabit(habit)
+    void enqueue('habit', habit.id, 'upsert')
+    track('feature_used', { feature_name: 'habit_created' })
     logger.info(MODULE, 'habit created', { id: habit.id })
     return ok(habit)
   } catch (e) {
@@ -71,6 +75,7 @@ export async function updateHabit(
     if (data.target_per_period !== undefined) patch.target_per_period = data.target_per_period
 
     await q.updateHabit(data.id, patch)
+    void enqueue('habit', data.id, 'upsert')
     const fresh = await q.getHabit(data.id)
     if (!fresh) return appErr('INTERNAL', 'Updated habit vanished')
     return ok(fresh)
@@ -85,6 +90,7 @@ export async function deleteHabit(id: string): Promise<Result<void, AppError>> {
     const existing = await q.getHabit(id)
     if (!existing) return appErr('NOT_FOUND', 'Habit not found')
     await q.softDeleteHabit(id, nowIso())
+    void enqueue('habit', id, 'upsert')
     logger.info(MODULE, 'habit deleted', { id })
     return ok(undefined)
   } catch (e) {
@@ -106,6 +112,8 @@ export async function loadHabits(): Promise<Result<Habit[], AppError>> {
 export async function wipeAllHabits(): Promise<Result<{ deleted: number }, AppError>> {
   try {
     const deleted = await q.wipeHabits()
+    void enqueue('habit', 'ALL', 'wipe')
+    void enqueue('habit_log', 'ALL', 'wipe')
     logger.info(MODULE, 'wiped all habits', { deleted })
     return ok({ deleted })
   } catch (e) {
@@ -147,6 +155,8 @@ export async function logHabit(
       synced_at: null,
     }
     await q.insertHabitLog(log)
+    void enqueue('habit_log', log.id, 'upsert')
+    track('feature_used', { feature_name: 'habit_logged' })
     logger.info(MODULE, 'habit logged', { habit_id: data.habit_id })
     return ok(log)
   } catch (e) {
@@ -163,6 +173,7 @@ export async function unlogHabit(
     const log = await q.getLogForDate(habitId, dateStr)
     if (!log) return ok(undefined)
     await q.softDeleteHabitLog(log.id, nowIso())
+    void enqueue('habit_log', log.id, 'upsert')
     logger.info(MODULE, 'habit unlogged', { habit_id: habitId, date: dateStr })
     return ok(undefined)
   } catch (e) {

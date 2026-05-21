@@ -249,7 +249,7 @@ export function JournalListScreen() {
           editable={!parsing}
           multiline={false}
         />
-        <VoiceButton onResult={(text) => handleNlParse(text)} disabled={parsing} size={36} />
+        <VoiceButton onResult={(text) => handleNlParse(text)} disabled={parsing} size={36} module="journals" />
         <Pressable
           onPress={() => handleNlParse()}
           disabled={parsing || !nlText.trim()}

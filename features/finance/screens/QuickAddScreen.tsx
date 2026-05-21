@@ -340,7 +340,7 @@ export function QuickAddScreen() {
               style={[styles.smartInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.secondary }]}
             />
             <View style={styles.smartActions}>
-              <VoiceButton onResult={(text) => onParseSmartEntry(text, 'voice')} disabled={parsing} size={44} />
+              <VoiceButton onResult={(text) => onParseSmartEntry(text, 'voice')} disabled={parsing} size={44} module="finance" />
               <Pressable
                 onPress={() => onParseSmartEntry()}
                 disabled={parsing || !smartText.trim()}

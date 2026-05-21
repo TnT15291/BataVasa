@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, Pressable, StyleSheet, ScrollView, TextInput,
+  View, Text, Pressable, StyleSheet, ScrollView, TextInput, Share,
 } from 'react-native'
 import {
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -13,6 +13,7 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
+import { track } from '@services/analytics'
 import { useJournalsBootstrap, useJournals } from '../hooks/useJournals'
 
 type Period = 'weekly' | 'monthly' | 'yearly' | 'custom'
@@ -117,6 +118,11 @@ export function JournalsReportScreen() {
   }, [getRange, journals])
 
   const range = getRange()
+  const exportSummary = async () => {
+    if (!stats || !range) return
+    track('report_generated', { module: 'journals', kind: period, item_count: stats.entries })
+    await Share.share({ message: JSON.stringify({ module: 'journals', period, range: range.label, stats: { entries: stats.entries, avgMood: stats.avgMood, trend: stats.trend } }, null, 2), title: 'batavasa-journals-report.json' })
+  }
 
   const TABS: { key: Period; label: string }[] = [
     { key: 'weekly', label: t.weekly },
@@ -200,6 +206,9 @@ export function JournalsReportScreen() {
                 })}
               </View>
             )}
+            <Pressable onPress={exportSummary} style={[styles.exportBtn, { borderColor: theme.border.strong }]}>
+              <Text style={[styles.exportText, { color: theme.text.secondary }]}>{t.export_report}</Text>
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -237,4 +246,6 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
   emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[6] },
+  exportBtn: { paddingVertical: spacing[3], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
+  exportText: { fontSize: 14, fontWeight: '600' },
 })

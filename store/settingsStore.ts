@@ -21,6 +21,7 @@ type SettingsState = {
   syncReminders: boolean
   syncHabits: boolean
   syncJournals: boolean
+  hasSeenOnboarding: boolean
   loaded: boolean
 
   loadSettings: () => Promise<void>
@@ -36,6 +37,7 @@ type SettingsState = {
   setSyncReminders: (enabled: boolean) => Promise<void>
   setSyncHabits: (enabled: boolean) => Promise<void>
   setSyncJournals: (enabled: boolean) => Promise<void>
+  setHasSeenOnboarding: (value: boolean) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -51,6 +53,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   syncReminders: true,
   syncHabits: true,
   syncJournals: true,
+  hasSeenOnboarding: false,
   loaded: false,
 
   async loadSettings() {
@@ -71,8 +74,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       syncReminders: all['sync_reminders'] !== 'false',
       syncHabits: all['sync_habits'] !== 'false',
       syncJournals: all['sync_journals'] !== 'false',
+      hasSeenOnboarding: all['has_seen_onboarding'] === 'true',
       loaded: true,
     })
+  },
+
+  async setHasSeenOnboarding(value) {
+    set({ hasSeenOnboarding: value })
+    await db.setSetting('has_seen_onboarding', value ? 'true' : 'false')
   },
 
   async setLanguage(language) {

@@ -201,7 +201,7 @@ export function ReminderListScreen() {
           onSubmitEditing={() => handleNlParse()}
           editable={!parsing}
         />
-        <VoiceButton onResult={(text) => handleNlParse(text)} disabled={parsing} size={36} />
+        <VoiceButton onResult={(text) => handleNlParse(text)} disabled={parsing} size={36} module="reminders" />
         <Pressable
           onPress={() => handleNlParse()}
           disabled={parsing || !nlText.trim()}

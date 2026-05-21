@@ -4,7 +4,9 @@ import { logger } from '@services/logger'
 import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/reminders/queries'
+import { enqueue } from '@db/sync/queue'
 import { scheduleReminderNotification, cancelNotification, cancelAllNotifications } from '@services/notifications'
+import { track } from '@services/analytics'
 import {
   CreateReminderInputSchema,
   UpdateReminderInputSchema,
@@ -51,7 +53,8 @@ export async function createReminder(
       reminder.id, reminder.title, reminder.note ?? '', new Date(reminder.remind_at)
     )
     if (notifId) notifCache.set(reminder.id, notifId)
-
+    void enqueue('reminder', reminder.id, 'upsert')
+    track('feature_used', { feature_name: 'reminder_created' })
     logger.info(MODULE, 'reminder created', { id: reminder.id })
     return ok(reminder)
   } catch (e) {
@@ -100,6 +103,7 @@ export async function updateReminder(
       }
     }
 
+    void enqueue('reminder', data.id, 'upsert')
     const fresh = await q.getReminder(data.id)
     if (!fresh) return appErr('INTERNAL', 'Updated reminder vanished')
     return ok(fresh)
@@ -118,6 +122,7 @@ export async function deleteReminder(id: string): Promise<Result<void, AppError>
     if (notifId) { await cancelNotification(notifId); notifCache.delete(id) }
 
     await q.softDeleteReminder(id, nowIso())
+    void enqueue('reminder', id, 'upsert')
     logger.info(MODULE, 'reminder deleted', { id })
     return ok(undefined)
   } catch (e) {
@@ -141,6 +146,7 @@ export async function wipeAllReminders(): Promise<Result<{ deleted: number }, Ap
     await cancelAllNotifications()
     notifCache.clear()
     const deleted = await q.wipeReminders()
+    void enqueue('reminder', 'ALL', 'wipe')
     logger.info(MODULE, 'wiped all reminders', { deleted })
     return ok({ deleted })
   } catch (e) {
