@@ -25,7 +25,7 @@
 - [x] **H12. Web SQLite Firefox warning — DONE 2026-05-19** 🔁 cross-module · `DailyDigestScreen` shows a non-blocking web Firefox banner because SQLite persistence may be in-memory there. Covered by `__tests__/webPersistence.test.ts`.
 - [x] **H16. Onboarding flow — DONE (2026-05-21)** — `features/home/components/OnboardingModal.tsx` (3-step: language → AI key → feature intro). Triggered khi user chưa có AI key. `DataManagementScreen` wired vào Settings.
 - [x] **H17. Biometric lock — DONE (2026-05-21)** — `expo-local-authentication` + `services/biometric.ts` (getBiometricSupport, authenticate). `components/BiometricLockScreen.tsx` (full-screen lock, auto-trigger, retry). `settingsStore.biometricLock` persisted SQLite. `app/_layout.tsx`: AppState timer 30s → `setLocked(true)`. Toggle Settings → Privacy với check device support. i18n 9 keys × 6 ngôn ngữ.
-- [ ] **H18. App Store assets** — App icon production-ready, splash screen, privacy policy URL, screenshots chưa có. Cần trước khi submit App Store / Play Store.
+- [ ] **H18. App Store assets — IN PROGRESS (2026-05-21)** — Production icon/splash/favicon replaced from template assets. Privacy policy source: `docs/privacy-policy.md`. Store copy + screenshot checklist: `docs/store-listing.md`. `app.json` includes `extra.privacyPolicyUrl` / `extra.supportUrl`. **Còn lại:** capture production screenshots on device/emulator + fill App Store Connect / Play Console metadata.
 - [x] **H19. Voice force-confirm — DONE 2026-05-19** — `QuickAddScreen` voice input luôn mở ConfirmSheet trước khi lưu, kể cả khi `aiAutoConfirm=false`. Confirmed voice transactions giữ `source: 'voice'`.
 
 ---
@@ -91,6 +91,7 @@
 - ✅ Onboarding modal: 3-step (language → AI key → features), triggered on first launch (H16)
 - ✅ Data Management screen: export/wipe per module với double-confirm
 - ✅ B1/B2 validation service (`services/b1b2-validate.ts`) + smoke tests
+- ✅ H18 partial: production icon/splash/favicon + privacy policy + store listing source copy
 - ✅ Test infra: Jest coverage gate (`test:ci`) + per-file 90% locks on pure helpers; 153+ tests across 14+ suites (B5 partial)
 
 ---

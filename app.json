@@ -65,6 +65,8 @@
     },
     "extra": {
       "router": {},
+      "privacyPolicyUrl": "https://github.com/TnT15291/BataVasa/blob/main/docs/privacy-policy.md",
+      "supportUrl": "https://github.com/TnT15291/BataVasa",
       "eas": {
         "projectId": "be67fd7e-b54b-4646-92fb-04bd104919ee"
       }
