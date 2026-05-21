@@ -1,6 +1,8 @@
 # Sync & Offline
 
 > Offline-first architecture. SQLite = source of truth. Supabase = cloud mirror.
+> **Status: IMPLEMENTED (2026-05-21)** — migration v8, `database/sync/`, `services/sync.ts`, 4 modules wired.
+> Supabase tables: run `docs/supabase-setup.sql` on Supabase Dashboard → SQL Editor.
 
 ## Principles
 

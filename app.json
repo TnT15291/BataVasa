@@ -16,7 +16,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "BataVasa uses your microphone for voice input to quickly add transactions, habits, journal entries, and reminders."
+        "NSMicrophoneUsageDescription": "BataVasa uses your microphone for voice input to quickly add transactions, habits, journal entries, and reminders.",
+        "NSFaceIDUsageDescription": "BataVasa uses Face ID to protect your private finance, journal, habit, and reminder data."
       }
     },
     "android": {
@@ -40,6 +41,12 @@
       "expo-sqlite",
       "expo-av",
       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "BataVasa uses Face ID to protect your private finance, journal, habit, and reminder data."
+        }
+      ],
       "expo-router",
       "expo-notifications",
       "@react-native-community/datetimepicker",

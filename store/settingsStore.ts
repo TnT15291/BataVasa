@@ -22,6 +22,7 @@ type SettingsState = {
   syncHabits: boolean
   syncJournals: boolean
   hasSeenOnboarding: boolean
+  biometricLock: boolean
   loaded: boolean
 
   loadSettings: () => Promise<void>
@@ -38,6 +39,7 @@ type SettingsState = {
   setSyncHabits: (enabled: boolean) => Promise<void>
   setSyncJournals: (enabled: boolean) => Promise<void>
   setHasSeenOnboarding: (value: boolean) => Promise<void>
+  setBiometricLock: (enabled: boolean) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -54,6 +56,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   syncHabits: true,
   syncJournals: true,
   hasSeenOnboarding: false,
+  biometricLock: false,
   loaded: false,
 
   async loadSettings() {
@@ -75,6 +78,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       syncHabits: all['sync_habits'] !== 'false',
       syncJournals: all['sync_journals'] !== 'false',
       hasSeenOnboarding: all['has_seen_onboarding'] === 'true',
+      biometricLock: all['biometric_lock'] === 'true',
       loaded: true,
     })
   },
@@ -145,5 +149,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   async setSyncJournals(enabled) {
     set({ syncJournals: enabled })
     await db.setSetting('sync_journals', enabled ? 'true' : 'false')
+  },
+
+  async setBiometricLock(enabled) {
+    set({ biometricLock: enabled })
+    await db.setSetting('biometric_lock', enabled ? 'true' : 'false')
   },
 }))

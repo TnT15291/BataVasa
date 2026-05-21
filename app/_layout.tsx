@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler'
 import * as Sentry from '@sentry/react-native'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppState, View, Text, ActivityIndicator, Pressable } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -14,6 +14,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAuthStore } from '@store/authStore'
 import { AuthScreen } from '@features/auth/AuthScreen'
 import { startSyncWorker, drainQueue } from '@services/sync'
+import { BiometricLockScreen } from '@/components/BiometricLockScreen'
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
 if (SENTRY_DSN) {
@@ -38,13 +39,18 @@ function SettingsButton() {
   )
 }
 
+const LOCK_TIMEOUT_MS = 30_000
+
 export default function RootLayout() {
   const theme = useTheme()
   const loadSettings = useSettingsStore((s) => s.loadSettings)
+  const biometricLock = useSettingsStore((s) => s.biometricLock)
   const session = useAuthStore((s) => s.session)
   const { t } = useTranslation()
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [locked, setLocked] = useState(false)
+  const backgroundedAt = useRef<number | null>(null)
 
   useEffect(() => {
     let stopSync: (() => void) | undefined
@@ -66,10 +72,19 @@ export default function RootLayout() {
     track('app_open')
 
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background') track('app_background')
+      if (state === 'background') {
+        track('app_background')
+        backgroundedAt.current = Date.now()
+      } else if (state === 'active') {
+        const elapsed = backgroundedAt.current ? Date.now() - backgroundedAt.current : 0
+        if (biometricLock && session && elapsed > LOCK_TIMEOUT_MS) {
+          setLocked(true)
+        }
+        backgroundedAt.current = null
+      }
     })
     return () => sub.remove()
-  }, [ready])
+  }, [ready, biometricLock, session])
 
   if (error) {
     return (
@@ -85,6 +100,10 @@ export default function RootLayout() {
         <ActivityIndicator color={theme.brand.primary} />
       </View>
     )
+  }
+
+  if (locked) {
+    return <BiometricLockScreen onUnlocked={() => setLocked(false)} />
   }
 
   return (

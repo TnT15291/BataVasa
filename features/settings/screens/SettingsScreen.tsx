@@ -8,6 +8,7 @@ import { requestLocationPermission } from '@services/location'
 import { requestMicPermission } from '@services/voice'
 import { requestNotificationPermission } from '@services/notifications'
 import { useAuthStore } from '@store/authStore'
+import { getBiometricSupport } from '@services/biometric'
 
 type RowProps = {
   label: string
@@ -61,6 +62,8 @@ export function SettingsScreen() {
   const setSyncHabits = useSettingsStore((s) => s.setSyncHabits)
   const syncJournals = useSettingsStore((s) => s.syncJournals)
   const setSyncJournals = useSettingsStore((s) => s.setSyncJournals)
+  const biometricLock = useSettingsStore((s) => s.biometricLock)
+  const setBiometricLock = useSettingsStore((s) => s.setBiometricLock)
   const authConfigured = useAuthStore((s) => s.configured)
   const session = useAuthStore((s) => s.session)
   const signOut = useAuthStore((s) => s.signOut)
@@ -70,6 +73,17 @@ export function SettingsScreen() {
       { text: t.cancel, style: 'cancel' },
       { text: t.auth_sign_out, style: 'destructive', onPress: () => { void signOut() } },
     ])
+  }
+
+  const toggleBiometric = async (next: boolean) => {
+    if (next) {
+      const { available } = await getBiometricSupport()
+      if (!available) {
+        Alert.alert('', t.biometric_unavailable)
+        return
+      }
+    }
+    await setBiometricLock(next)
   }
 
   const toggleLocation = async (next: boolean) => {
@@ -270,6 +284,13 @@ export function SettingsScreen() {
 
       <SectionHeader label={t.privacy} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.biometric_lock}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.biometric_lock_hint}</Text>
+          </View>
+          <Switch value={biometricLock} onValueChange={toggleBiometric} />
+        </View>
         <View style={[styles.row, { borderColor: theme.border.subtle }]}>
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.location_access}</Text>
