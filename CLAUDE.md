@@ -184,6 +184,7 @@ Implementation pattern:
 
 | Topic | File |
 |---|---|
+| **Current sprint status, what's built, pending tasks** | **`docs/current-state.md`** ← read this first |
 | System design, layers, data flow | `docs/architecture.md` |
 | SQLite + Supabase schema, migrations | `docs/database.md` |
 | API contracts, endpoints, conventions | `docs/api.md` |
