@@ -384,6 +384,17 @@ export const zh: Translations = {
   habit_sample_water: 'Drink water',
   habit_sample_exercise: 'Exercise',
   habit_sample_read: 'Read',
+  habit_streak_milestone: '🔥 连续{{n}}天！继续加油！',
+  habit_insight_title: '习惯洞察',
+  habit_insight_generate: '生成AI洞察',
+  habit_insight_loading: '正在分析你的习惯…',
+  habit_insight_min_data: '至少记录3天数据才能解锁AI洞察。',
+  habit_insight_consistency: '一致性',
+  habit_insight_strongest: '最强习惯',
+  habit_insight_attention: '需要关注',
+  habit_insight_encouragement: '鼓励',
+  habit_insight_tip: '建议',
+  habit_last_7_days: '最近7天',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth

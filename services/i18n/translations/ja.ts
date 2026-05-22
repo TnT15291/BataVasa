@@ -384,6 +384,17 @@ export const ja: Translations = {
   habit_sample_water: 'Drink water',
   habit_sample_exercise: 'Exercise',
   habit_sample_read: 'Read',
+  habit_streak_milestone: '🔥 {{n}}日連続！続けよう！',
+  habit_insight_title: '習慣インサイト',
+  habit_insight_generate: 'AIインサイトを生成',
+  habit_insight_loading: '習慣を分析中…',
+  habit_insight_min_data: 'AIインサイトを利用するには3日以上のデータが必要です。',
+  habit_insight_consistency: '一貫性',
+  habit_insight_strongest: '最も優れた習慣',
+  habit_insight_attention: '要改善',
+  habit_insight_encouragement: '励まし',
+  habit_insight_tip: 'ヒント',
+  habit_last_7_days: '過去7日間',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth

@@ -384,6 +384,17 @@ export const ko: Translations = {
   habit_sample_water: 'Drink water',
   habit_sample_exercise: 'Exercise',
   habit_sample_read: 'Read',
+  habit_streak_milestone: '🔥 {{n}}일 연속! 계속 해봐요!',
+  habit_insight_title: '습관 인사이트',
+  habit_insight_generate: 'AI 인사이트 생성',
+  habit_insight_loading: '습관을 분석하는 중…',
+  habit_insight_min_data: 'AI 인사이트를 잠금 해제하려면 최소 3일의 데이터가 필요합니다.',
+  habit_insight_consistency: '일관성',
+  habit_insight_strongest: '가장 강한 습관',
+  habit_insight_attention: '주의 필요',
+  habit_insight_encouragement: '격려',
+  habit_insight_tip: '팁',
+  habit_last_7_days: '최근 7일',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth

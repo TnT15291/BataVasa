@@ -1,24 +1,27 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   View, Text, Pressable, StyleSheet, ScrollView,
-  ActivityIndicator, Share, Platform,
+  ActivityIndicator, Share, Platform, Alert,
 } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import {
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   startOfYear, endOfYear,
   addWeeks, subWeeks, addMonths, subMonths, addYears, subYears,
-  format, parseISO, isValid, differenceInDays,
+  format, parseISO, isValid, differenceInDays, subDays,
 } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
+import { getProviderKey } from '@services/ai/openai'
+import { generateHabitInsight, type HabitInsight } from '@services/ai/habitInsight'
 import { exportAllHabits } from '../services'
 import { track } from '@services/analytics'
 import { useHabitsBootstrap, useHabits } from '../hooks/useHabits'
-import type { HabitLog } from '../types'
+import type { Habit, HabitLog } from '../types'
 
 type Period = 'weekly' | 'monthly' | 'yearly' | 'custom'
 
@@ -61,6 +64,9 @@ export function HabitsReportScreen() {
   const [datePickerTarget, setDatePickerTarget] = useState<'from' | 'to' | null>(null)
   const [allLogs, setAllLogs] = useState<HabitLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [insight, setInsight] = useState<HabitInsight | null>(null)
+  const [generatingInsight, setGeneratingInsight] = useState(false)
+  const aiProvider = useSettingsStore((s) => s.aiProvider)
 
   useEffect(() => {
     exportAllHabits().then((r) => {
@@ -133,6 +139,50 @@ export function HabitsReportScreen() {
   }, [getRange, allLogs, habits])
 
   const range = getRange()
+
+  const last7Days = useMemo(() => {
+    const today = new Date()
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = subDays(today, 6 - i)
+      return d.toISOString().split('T')[0]!
+    })
+  }, [])
+
+  const logDatesByHabit = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const log of allLogs) {
+      const date = log.occurred_at.split('T')[0]
+      if (!map.has(log.habit_id)) map.set(log.habit_id, new Set())
+      map.get(log.habit_id)!.add(date!)
+    }
+    return map
+  }, [allLogs])
+
+  const handleGenerateInsight = async () => {
+    const key = await getProviderKey(aiProvider)
+    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (allLogs.length < 3) { Alert.alert(t.habit_insight_title, t.habit_insight_min_data); return }
+    setGeneratingInsight(true)
+    try {
+      const baseHabits = habits.map(({ id, user_id, name, icon, color, cadence, target_per_period,
+        location_lat, location_lng, location_label, created_at, updated_at, deleted_at, synced_at }) => ({
+        id, user_id, name, icon, color, cadence, target_per_period,
+        location_lat, location_lng, location_label, created_at, updated_at, deleted_at, synced_at,
+      }) as Habit)
+      const result = await generateHabitInsight(baseHabits, allLogs)
+      if (result) {
+        setInsight(result)
+        track('feature_used', { feature_name: 'habit_insight_generated' })
+      } else {
+        Alert.alert(t.ai_error, t.parse_failed)
+      }
+    } catch {
+      Alert.alert(t.ai_error, t.parse_failed)
+    } finally {
+      setGeneratingInsight(false)
+    }
+  }
+
   const exportSummary = async () => {
     if (!stats || !range) return
     track('report_generated', { module: 'habits', kind: period, item_count: stats.totalCompletions })
@@ -226,20 +276,86 @@ export function HabitsReportScreen() {
               <StatCard label={t.report_best_streak} value={`${stats.bestStreak} ${t.report_days}`} theme={theme} />
             </View>
 
+            {/* Per-habit heatmap */}
             <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.habits}</Text>
+              <View style={styles.cardTitleRow}>
+                <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.habits}</Text>
+                <Text style={[styles.cardTitle, { color: theme.text.muted }]}>{t.habit_last_7_days}</Text>
+              </View>
               {habits.map((h) => (
                 <View key={h.id} style={styles.habitRow}>
                   <Text style={styles.habitIcon}>{h.icon}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.habitName, { color: theme.text.primary }]}>{h.name}</Text>
-                    <Text style={[styles.habitMeta, { color: theme.text.muted }]}>
-                      {t.report_best_streak}: {h.streak} {t.report_days}
-                    </Text>
+                    <View style={styles.heatmapRow}>
+                      {last7Days.map((day) => {
+                        const done = logDatesByHabit.get(h.id)?.has(day) ?? false
+                        return (
+                          <View
+                            key={day}
+                            style={[styles.heatDot, { backgroundColor: done ? h.color : theme.border.subtle }]}
+                          />
+                        )
+                      })}
+                      <Text style={[styles.habitMeta, { color: theme.text.muted, marginLeft: 4 }]}>
+                        {h.streak}{t.report_days[0]}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               ))}
             </View>
+
+            {/* AI Habit Insight */}
+            <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+              <View style={styles.cardTitleRow}>
+                <Feather name="cpu" size={14} color={theme.brand.primary} />
+                <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.habit_insight_title}</Text>
+              </View>
+
+              {insight ? (
+                <View style={styles.insightBody}>
+                  {([
+                    { key: t.habit_insight_consistency, val: insight.consistency_summary },
+                    { key: t.habit_insight_strongest, val: insight.strongest_habit },
+                    { key: t.habit_insight_attention, val: insight.needs_attention },
+                    { key: t.habit_insight_encouragement, val: insight.encouragement },
+                    { key: t.habit_insight_tip, val: insight.tip },
+                  ] as { key: string; val: string }[]).map(({ key, val }) => (
+                    <View key={key} style={[styles.insightRow, { borderColor: theme.border.subtle }]}>
+                      <Text style={[styles.insightLabel, { color: theme.brand.primary }]}>{key}</Text>
+                      <Text style={[styles.insightValue, { color: theme.text.primary }]}>{val}</Text>
+                    </View>
+                  ))}
+                  <Pressable
+                    onPress={handleGenerateInsight}
+                    style={[styles.insightRefresh, { borderColor: theme.border.strong }]}
+                  >
+                    <Feather name="refresh-cw" size={13} color={theme.text.muted} />
+                    <Text style={[styles.insightRefreshText, { color: theme.text.muted }]}>{t.habit_insight_generate}</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={handleGenerateInsight}
+                  disabled={generatingInsight}
+                  style={[styles.insightGenBtn, { backgroundColor: theme.brand.primary + (generatingInsight ? '80' : 'FF') }]}
+                >
+                  {generatingInsight ? (
+                    <>
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text style={styles.insightGenText}>{t.habit_insight_loading}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="zap" size={15} color="#fff" />
+                      <Text style={styles.insightGenText}>{t.habit_insight_generate}</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
+            </View>
+
             <Pressable onPress={exportSummary} style={[styles.exportBtn, { borderColor: theme.border.strong }]}>
               <Text style={[styles.exportText, { color: theme.text.secondary }]}>{t.export_report}</Text>
             </Pressable>
@@ -278,11 +394,22 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
   cardTitle: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   habitRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   habitIcon: { fontSize: 24 },
   habitName: { fontSize: 15, fontWeight: '500' },
   habitMeta: { fontSize: 12 },
+  heatmapRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  heatDot: { width: 12, height: 12, borderRadius: 3 },
+  insightBody: { gap: spacing[2] },
+  insightRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2], gap: 2 },
+  insightLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  insightValue: { fontSize: 14, lineHeight: 20 },
+  insightRefresh: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], justifyContent: 'center', borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing[2], marginTop: spacing[1] },
+  insightRefreshText: { fontSize: 13 },
+  insightGenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], borderRadius: radius.md, paddingVertical: spacing[3] },
+  insightGenText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
   emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },

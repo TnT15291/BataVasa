@@ -13,6 +13,7 @@ import { getProviderKey } from '@services/ai/openai'
 import { parseHabitLog, type ParsedHabitLog } from '@services/ai/habitParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
+import { useHabitsStore } from '@store/habitsStore'
 
 function HabitRow({
   habit,
@@ -47,11 +48,16 @@ function HabitRow({
       </View>
       <View style={styles.rowBody}>
         <Text style={[styles.rowName, { color: theme.text.primary }]}>{habit.name}</Text>
-        <Text style={[styles.rowMeta, { color: theme.text.muted }]}>
-          {done
-            ? `${t.habit_done_today} / ${habit.streak}`
-            : `${habit.todayCount}/${habit.target_per_period} / ${habit.streak}`}
-        </Text>
+        <View style={styles.rowMetaRow}>
+          {habit.streak > 0 ? (
+            <Text style={styles.flameIcon}>🔥</Text>
+          ) : null}
+          <Text style={[styles.rowMeta, { color: theme.text.muted }]}>
+            {done
+              ? `${t.habit_done_today} · ${habit.streak}d`
+              : `${habit.todayCount}/${habit.target_per_period} · ${habit.streak}d`}
+          </Text>
+        </View>
       </View>
       <View style={[styles.checkCircle, {
         backgroundColor: done ? habit.color : 'transparent',
@@ -76,6 +82,20 @@ export function HabitListScreen() {
   const [parsing, setParsing] = useState(false)
   const [parsed, setParsed] = useState<ParsedHabitLog | null>(null)
   const [originalText, setOriginalText] = useState('')
+
+  const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100]
+
+  const handleToggleWithMilestone = async (habitId: string) => {
+    const oldStreak = useHabitsStore.getState().habits.find((h) => h.id === habitId)?.streak ?? 0
+    await toggleTodayLog(habitId)
+    const newStreak = useHabitsStore.getState().habits.find((h) => h.id === habitId)?.streak ?? 0
+    if (newStreak > oldStreak && STREAK_MILESTONES.includes(newStreak)) {
+      Alert.alert(
+        t.habit_streak_milestone.replace('{{n}}', String(newStreak)),
+        ''
+      )
+    }
+  }
 
   const handleParse = async (override?: string) => {
     const input = (override ?? nlText).trim()
@@ -135,7 +155,7 @@ export function HabitListScreen() {
             <HabitRow
               key={habit.id}
               habit={habit}
-              onToggle={() => toggleTodayLog(habit.id)}
+              onToggle={() => handleToggleWithMilestone(habit.id)}
               onEdit={() => router.push({ pathname: '/habit', params: { id: habit.id } } as any)}
             />
           ))}
@@ -338,6 +358,8 @@ const styles = StyleSheet.create({
   },
   rowBody: { flex: 1, paddingVertical: spacing[3], gap: 3 },
   rowName: { fontSize: 16, fontWeight: '500' },
+  rowMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  flameIcon: { fontSize: 12, lineHeight: 16 },
   rowMeta: { fontSize: 12 },
   checkCircle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: spacing[3] },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6], gap: spacing[3] },

@@ -401,6 +401,17 @@ export const vi = {
   habit_sample_water: 'Uống nước',
   habit_sample_exercise: 'Tập thể dục',
   habit_sample_read: 'Đọc sách',
+  habit_streak_milestone: '🔥 Chuỗi {{n}} ngày! Tiếp tục nào!',
+  habit_insight_title: 'Phân tích thói quen',
+  habit_insight_generate: 'Tạo phân tích AI',
+  habit_insight_loading: 'Đang phân tích thói quen của bạn…',
+  habit_insight_min_data: 'Cần ít nhất 3 ngày dữ liệu để mở phân tích AI.',
+  habit_insight_consistency: 'Tính nhất quán',
+  habit_insight_strongest: 'Thói quen tốt nhất',
+  habit_insight_attention: 'Cần chú ý',
+  habit_insight_encouragement: 'Khích lệ',
+  habit_insight_tip: 'Mẹo',
+  habit_last_7_days: '7 ngày qua',
   journal_empty_prompt: 'Hôm nay tôi nhận ra...',
 
   // Auth

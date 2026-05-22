@@ -384,6 +384,17 @@ export const en: Translations = {
   habit_sample_water: 'Drink water',
   habit_sample_exercise: 'Exercise',
   habit_sample_read: 'Read',
+  habit_streak_milestone: '🔥 {{n}}-day streak! Keep going!',
+  habit_insight_title: 'Habit Insight',
+  habit_insight_generate: 'Generate AI Insight',
+  habit_insight_loading: 'Analyzing your habits…',
+  habit_insight_min_data: 'Log habits for at least 3 days to unlock AI insight.',
+  habit_insight_consistency: 'Consistency',
+  habit_insight_strongest: 'Strongest Habit',
+  habit_insight_attention: 'Needs Attention',
+  habit_insight_encouragement: 'Encouragement',
+  habit_insight_tip: 'Tip',
+  habit_last_7_days: 'Last 7 Days',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth
