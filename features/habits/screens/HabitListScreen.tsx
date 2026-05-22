@@ -210,38 +210,6 @@ export function HabitListScreen() {
             </View>
           </View>
 
-          <View style={[styles.commandCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <View style={styles.commandHeader}>
-              <View style={[styles.commandIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
-                <Feather name="zap" size={16} color={theme.brand.primary} />
-              </View>
-              <Text style={[styles.commandTitle, { color: theme.text.primary }]}>{t.smart_entry}</Text>
-            </View>
-            <View style={[styles.nlInputWrap, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}>
-              <TextInput
-                value={nlText}
-                onChangeText={setNlText}
-                placeholder={t.nl_placeholder_habits}
-                placeholderTextColor={theme.text.muted}
-                style={[styles.nlInput, { color: theme.text.primary }]}
-                returnKeyType="done"
-                onSubmitEditing={() => handleParse()}
-                editable={!parsing}
-                multiline
-              />
-              <View style={styles.nlActions}>
-                <VoiceButton onResult={(text) => handleParse(text)} disabled={parsing} size={38} module="habits" />
-                <Pressable
-                  onPress={() => handleParse()}
-                  disabled={parsing || !nlText.trim()}
-                  style={[styles.nlBtn, { backgroundColor: (parsing || !nlText.trim()) ? theme.border.strong : theme.brand.primary }]}
-                >
-                  {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
-                </Pressable>
-              </View>
-            </View>
-          </View>
-
           {renderGroup(t.reminder_upcoming, pendingHabits)}
           {renderGroup(t.habit_done_today, doneHabits)}
         </ScrollView>
@@ -340,36 +308,6 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 20, fontWeight: '800' },
   statLabel: { fontSize: 11, fontWeight: '700', marginTop: 2 },
-  commandCard: {
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing[4],
-    gap: spacing[3],
-  },
-  commandHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  commandIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  commandTitle: { fontSize: 15, fontWeight: '800' },
-  nlInputWrap: {
-    minHeight: 88,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing[3],
-    paddingBottom: 46,
-  },
-  nlActions: {
-    position: 'absolute',
-    right: spacing[2],
-    bottom: spacing[2],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
   nlInput: {
     minHeight: 42,
     fontSize: 14,

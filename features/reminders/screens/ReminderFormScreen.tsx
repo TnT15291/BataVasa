@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, Pressable, StyleSheet,
   ScrollView, Alert, ActivityIndicator, Platform,
 } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { format } from 'date-fns'
@@ -12,6 +13,9 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
+import { getProviderKey } from '@services/ai/openai'
+import { parseReminderEntry } from '@services/ai/reminderParser'
+import { VoiceButton } from '@components/VoiceButton'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Recurrence } from '../types'
 
@@ -26,6 +30,7 @@ export function ReminderFormScreen() {
   const language = useSettingsStore((s) => s.language)
   const reminders = useReminders()
   const { createReminder, updateReminder, deleteReminder } = useReminderActions()
+  const aiProvider = useSettingsStore((s) => s.aiProvider)
 
   const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
@@ -46,6 +51,8 @@ export function ReminderFormScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [prefilled, setPrefilled] = useState(false)
+  const [smartText, setSmartText] = useState('')
+  const [parsing, setParsing] = useState(false)
 
   useEffect(() => {
     if (!editingReminder || prefilled) return
@@ -131,149 +138,336 @@ export function ReminderFormScreen() {
     ])
   }
 
+  const handleSmartParse = async (override?: string) => {
+    const input = (override ?? smartText).trim()
+    if (!input || parsing) return
+    const key = await getProviderKey(aiProvider)
+    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (override) setSmartText(override)
+    setParsing(true)
+    try {
+      const parsed = await parseReminderEntry(input)
+      if (!parsed) { Alert.alert(t.ai_error, t.parse_failed); return }
+      setTitle(parsed.title)
+      setNote(parsed.note || '')
+      setAdvanceMinutes(parsed.advance_minutes ?? 0)
+      setRecurrence(parsed.recurrence)
+      setRemindAt(new Date(parsed.remind_at))
+      setSmartText('')
+    } catch {
+      Alert.alert(t.ai_error, t.parse_failed)
+    } finally {
+      setParsing(false)
+    }
+  }
+
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.bg.primary }}
-      contentContainerStyle={styles.body}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* Title */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_reminder.toUpperCase()}</Text>
-      <TextInput
-        value={title}
-        onChangeText={setTitle}
-        placeholder={t.reminder_title_placeholder}
-        placeholderTextColor={theme.text.muted}
-        style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
-        autoFocus={!isEditing}
-      />
-
-      {/* Note */}
-      <TextInput
-        value={note}
-        onChangeText={setNote}
-        placeholder={t.reminder_note_placeholder}
-        placeholderTextColor={theme.text.muted}
-        multiline
-        numberOfLines={3}
-        style={[styles.input, styles.noteInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
-      />
-
-      {/* Date & Time */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.event_time.toUpperCase()}</Text>
-      <View style={styles.dateRow}>
-        <Pressable
-          onPress={() => { setShowTimePicker(false); setShowDatePicker(true) }}
-          style={[styles.datePill, { backgroundColor: theme.bg.elevated, borderColor: theme.border.strong }]}
-        >
-          <Text style={{ color: theme.text.primary, fontSize: 15 }}>📅 {dateStr}</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => { setShowDatePicker(false); setShowTimePicker(true) }}
-          style={[styles.datePill, { backgroundColor: theme.bg.elevated, borderColor: theme.border.strong }]}
-        >
-          <Text style={{ color: theme.text.primary, fontSize: 15 }}>🕐 {timeStr}</Text>
-        </Pressable>
-      </View>
-
-      {showDatePicker && (
-        <DateTimePicker
-          value={remindAt}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          onChange={(_, date) => { setShowDatePicker(Platform.OS === 'ios'); if (date) setRemindAt((prev) => { const d = new Date(date); d.setHours(prev.getHours(), prev.getMinutes(), 0, 0); return d }) }}
-        />
-      )}
-      {showTimePicker && (
-        <DateTimePicker
-          value={remindAt}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(_, date) => { setShowTimePicker(Platform.OS === 'ios'); if (date) setRemindAt((prev) => { const d = new Date(prev); d.setHours(date.getHours(), date.getMinutes(), 0, 0); return d }) }}
-        />
-      )}
-
-      {/* Advance notice */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.remind_before.toUpperCase()}</Text>
-      <View style={styles.recurrenceRow}>
-        {ADVANCE_OPTIONS.map((mins) => {
-          const active = advanceMinutes === mins
-          return (
-            <Pressable
-              key={mins}
-              onPress={() => setAdvanceMinutes(mins)}
-              style={[styles.recurrenceBtn, {
-                backgroundColor: active ? theme.brand.primary : theme.bg.elevated,
-                borderColor: active ? theme.brand.primary : theme.border.subtle,
-              }]}
-            >
-              <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '600' }}>
-                {advanceLabel(mins)}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
-      {notifyTimeStr && (
-        <Text style={[styles.notifyHint, { color: theme.text.muted }]}>
-          🔔 {notifyTimeStr}
-        </Text>
-      )}
-
-      {/* Recurrence */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.reminder_recurrence.toUpperCase()}</Text>
-      <View style={styles.recurrenceRow}>
-        {RECURRENCES.map((r) => {
-          const active = recurrence === r
-          return (
-            <Pressable
-              key={r}
-              onPress={() => setRecurrence(r)}
-              style={[styles.recurrenceBtn, {
-                backgroundColor: active ? theme.brand.primary : theme.bg.elevated,
-                borderColor: active ? theme.brand.primary : theme.border.subtle,
-              }]}
-            >
-              <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '600' }}>
-                {recurrenceLabel(r)}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
-
-      {/* Save */}
-      <Pressable
-        onPress={onSave}
-        disabled={submitting}
-        style={[styles.saveBtn, { backgroundColor: submitting ? theme.text.muted : theme.brand.primary }]}
+    <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
       >
-        {submitting
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
-      </Pressable>
+        <View style={[styles.previewCard, { backgroundColor: '#2196F314', borderColor: '#2196F344' }]}>
+          <View style={[styles.previewIcon, { backgroundColor: '#2196F31F' }]}>
+            <Feather name="bell" size={26} color="#2196F3" />
+          </View>
+          <View style={styles.previewBody}>
+            <Text style={[styles.previewKicker, { color: theme.text.muted }]}>{isEditing ? t.update : t.new_reminder}</Text>
+            <Text style={[styles.previewTitle, { color: theme.text.primary }]} numberOfLines={2}>
+              {title.trim() || t.reminder_title_placeholder}
+            </Text>
+            <View style={styles.previewMetaRow}>
+              <Feather name="calendar" size={13} color={theme.text.muted} />
+              <Text style={[styles.previewMeta, { color: theme.text.muted }]}>{dateStr} / {timeStr}</Text>
+            </View>
+            {notifyTimeStr ? (
+              <View style={styles.previewMetaRow}>
+                <Feather name="clock" size={13} color="#2196F3" />
+                <Text style={[styles.previewMeta, { color: theme.text.muted }]}>{t.remind_before}: {notifyTimeStr}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
 
-      {isEditing && (
-        <Pressable onPress={onDelete} style={styles.deleteBtn}>
-          <Text style={[styles.deleteBtnText, { color: theme.semantic.danger }]}>{t.delete_reminder}</Text>
+        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
+              <Feather name="zap" size={16} color={theme.brand.primary} />
+            </View>
+            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.smart_entry}</Text>
+          </View>
+          <View style={[styles.smartInputWrap, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}>
+            <TextInput
+              value={smartText}
+              onChangeText={setSmartText}
+              placeholder={t.nl_placeholder_reminder}
+              placeholderTextColor={theme.text.muted}
+              style={[styles.smartInput, { color: theme.text.primary }]}
+              returnKeyType="done"
+              editable={!parsing}
+              multiline
+              onSubmitEditing={() => handleSmartParse()}
+            />
+            <View style={styles.smartActions}>
+              <VoiceButton onResult={(text) => handleSmartParse(text)} disabled={parsing} size={38} module="reminders" />
+              <Pressable
+                onPress={() => handleSmartParse()}
+                disabled={parsing || !smartText.trim()}
+                style={[styles.smartSend, { backgroundColor: parsing || !smartText.trim() ? theme.border.strong : theme.brand.primary }]}
+              >
+                {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <Text style={[styles.label, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            placeholder={t.reminder_title_placeholder}
+            placeholderTextColor={theme.text.muted}
+            style={[styles.titleInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
+            autoFocus={!isEditing}
+          />
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder={t.reminder_note_placeholder}
+            placeholderTextColor={theme.text.muted}
+            multiline
+            numberOfLines={3}
+            style={[styles.input, styles.noteInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
+          />
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
+              <Feather name="calendar" size={16} color={theme.brand.primary} />
+            </View>
+            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.event_time}</Text>
+          </View>
+          <View style={styles.dateRow}>
+            <Pressable
+              onPress={() => { setShowTimePicker(false); setShowDatePicker(true) }}
+              style={[styles.datePill, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}
+            >
+              <Feather name="calendar" size={16} color={theme.brand.primary} />
+              <Text style={[styles.datePillText, { color: theme.text.primary }]}>{dateStr}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { setShowDatePicker(false); setShowTimePicker(true) }}
+              style={[styles.datePill, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}
+            >
+              <Feather name="clock" size={16} color={theme.brand.primary} />
+              <Text style={[styles.datePillText, { color: theme.text.primary }]}>{timeStr}</Text>
+            </Pressable>
+          </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={remindAt}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              onChange={(_, date) => { setShowDatePicker(Platform.OS === 'ios'); if (date) setRemindAt((prev) => { const d = new Date(date); d.setHours(prev.getHours(), prev.getMinutes(), 0, 0); return d }) }}
+            />
+          )}
+          {showTimePicker && (
+            <DateTimePicker
+              value={remindAt}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={(_, date) => { setShowTimePicker(Platform.OS === 'ios'); if (date) setRemindAt((prev) => { const d = new Date(prev); d.setHours(date.getHours(), date.getMinutes(), 0, 0); return d }) }}
+            />
+          )}
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIcon, { backgroundColor: '#2196F31F' }]}>
+              <Feather name="bell" size={16} color="#2196F3" />
+            </View>
+            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.remind_before}</Text>
+          </View>
+          <View style={styles.optionRow}>
+            {ADVANCE_OPTIONS.map((mins) => {
+              const active = advanceMinutes === mins
+              return (
+                <Pressable
+                  key={mins}
+                  onPress={() => setAdvanceMinutes(mins)}
+                  style={[styles.optionBtn, {
+                    backgroundColor: active ? theme.brand.primary : theme.bg.primary,
+                    borderColor: active ? theme.brand.primary : theme.border.subtle,
+                  }]}
+                >
+                  <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700' }}>
+                    {advanceLabel(mins)}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+          {notifyTimeStr ? (
+            <View style={styles.notifyHintRow}>
+              <Feather name="clock" size={13} color={theme.text.muted} />
+              <Text style={[styles.notifyHint, { color: theme.text.muted }]}>{notifyTimeStr}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
+              <Feather name="repeat" size={16} color={theme.brand.primary} />
+            </View>
+            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.reminder_recurrence}</Text>
+          </View>
+          <View style={styles.optionRow}>
+            {RECURRENCES.map((r) => {
+              const active = recurrence === r
+              return (
+                <Pressable
+                  key={r}
+                  onPress={() => setRecurrence(r)}
+                  style={[styles.optionBtn, {
+                    backgroundColor: active ? theme.brand.primary : theme.bg.primary,
+                    borderColor: active ? theme.brand.primary : theme.border.subtle,
+                  }]}
+                >
+                  <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700' }}>
+                    {recurrenceLabel(r)}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </View>
+
+        {isEditing && (
+          <Pressable onPress={onDelete} style={[styles.deleteBtn, { borderColor: theme.semantic.danger + '55' }]}>
+            <Feather name="trash-2" size={16} color={theme.semantic.danger} />
+            <Text style={[styles.deleteBtnText, { color: theme.semantic.danger }]}>{t.delete_reminder}</Text>
+          </Pressable>
+        )}
+      </ScrollView>
+
+      <View style={[styles.footer, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <Pressable
+          onPress={onSave}
+          disabled={submitting}
+          style={[styles.saveBtn, { backgroundColor: submitting ? theme.text.muted : theme.brand.primary }]}
+        >
+          {submitting
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
         </Pressable>
-      )}
-    </ScrollView>
+      </View>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  body: { padding: spacing[4], gap: spacing[3], paddingBottom: spacing[8] },
-  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  body: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
+  previewCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[4],
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  previewIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewBody: { flex: 1, gap: spacing[1] },
+  previewKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  previewTitle: { fontSize: 21, lineHeight: 27, fontWeight: '800' },
+  previewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  previewMeta: { fontSize: 12, lineHeight: 17 },
+  card: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[4],
+    gap: spacing[3],
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  cardIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: { fontSize: 15, fontWeight: '800' },
+  smartInputWrap: {
+    minHeight: 88,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing[3],
+    paddingBottom: 46,
+  },
+  smartInput: { minHeight: 42, fontSize: 14, lineHeight: 19 },
+  smartActions: {
+    position: 'absolute',
+    right: spacing[2],
+    bottom: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  smartSend: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  label: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  titleInput: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 17, fontWeight: '700' },
   input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
   noteInput: { minHeight: 80, textAlignVertical: 'top' },
   dateRow: { flexDirection: 'row', gap: spacing[3] },
-  datePill: { flex: 1, borderWidth: 1, borderRadius: radius.md, padding: spacing[3], alignItems: 'center' },
-  recurrenceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  recurrenceBtn: { paddingVertical: spacing[2], paddingHorizontal: spacing[3], borderRadius: radius.md, borderWidth: 1 },
-  notifyHint: { fontSize: 12, fontStyle: 'italic', marginTop: -spacing[1] },
-  saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[2] },
+  datePill: {
+    flex: 1,
+    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  datePillText: { fontSize: 15, fontWeight: '700' },
+  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  optionBtn: { paddingVertical: spacing[2], paddingHorizontal: spacing[3], borderRadius: radius.full, borderWidth: 1 },
+  notifyHintRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  notifyHint: { fontSize: 12, fontStyle: 'italic' },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: spacing[4],
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteBtn: { alignItems: 'center', paddingVertical: spacing[3] },
-  deleteBtnText: { fontSize: 15 },
+  deleteBtn: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  deleteBtnText: { fontSize: 15, fontWeight: '700' },
 })

@@ -12,6 +12,10 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
+import { getProviderKey } from '@services/ai/openai'
+import { parseJournalEntry } from '@services/ai/journalParser'
+import { VoiceButton } from '@components/VoiceButton'
+import { Feather } from '@expo/vector-icons'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
 
 const MOODS = [
@@ -30,6 +34,7 @@ export function JournalFormScreen() {
   const language = useSettingsStore((s) => s.language)
   const journals = useJournals()
   const { createJournal, updateJournal, deleteJournal } = useJournalActions()
+  const aiProvider = useSettingsStore((s) => s.aiProvider)
 
   const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
@@ -45,6 +50,8 @@ export function JournalFormScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [prefilled, setPrefilled] = useState(false)
+  const [smartText, setSmartText] = useState('')
+  const [parsing, setParsing] = useState(false)
 
   useEffect(() => {
     if (!editingJournal || prefilled) return
@@ -107,12 +114,65 @@ export function JournalFormScreen() {
     ])
   }
 
+  const handleSmartParse = async (override?: string) => {
+    const input = (override ?? smartText).trim()
+    if (!input || parsing) return
+    const key = await getProviderKey(aiProvider)
+    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (override) setSmartText(override)
+    setParsing(true)
+    try {
+      const parsed = await parseJournalEntry(input)
+      if (!parsed) { Alert.alert(t.ai_error, t.parse_failed); return }
+      setContent(parsed.content)
+      setMood(parsed.mood)
+      setOccurredAt(new Date(parsed.occurred_at))
+      setSmartText('')
+    } catch {
+      Alert.alert(t.ai_error, t.parse_failed)
+    } finally {
+      setParsing(false)
+    }
+  }
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.bg.primary }}
       contentContainerStyle={styles.body}
       keyboardShouldPersistTaps="handled"
     >
+      <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={styles.cardHeader}>
+          <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
+            <Feather name="zap" size={16} color={theme.brand.primary} />
+          </View>
+          <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.smart_entry}</Text>
+        </View>
+        <View style={[styles.smartInputWrap, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}>
+          <TextInput
+            value={smartText}
+            onChangeText={setSmartText}
+            placeholder={t.nl_placeholder_journal}
+            placeholderTextColor={theme.text.muted}
+            style={[styles.smartInput, { color: theme.text.primary }]}
+            returnKeyType="done"
+            editable={!parsing}
+            multiline
+            onSubmitEditing={() => handleSmartParse()}
+          />
+          <View style={styles.smartActions}>
+            <VoiceButton onResult={(text) => handleSmartParse(text)} disabled={parsing} size={38} module="journals" />
+            <Pressable
+              onPress={() => handleSmartParse()}
+              disabled={parsing || !smartText.trim()}
+              style={[styles.smartSend, { backgroundColor: parsing || !smartText.trim() ? theme.border.strong : theme.brand.primary }]}
+            >
+              {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
       {/* Date */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.date.toUpperCase()}</Text>
       <Pressable
@@ -196,6 +256,39 @@ export function JournalFormScreen() {
 
 const styles = StyleSheet.create({
   body: { padding: spacing[4], gap: spacing[3], paddingBottom: spacing[8] },
+  card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  cardIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: { fontSize: 15, fontWeight: '800' },
+  smartInputWrap: {
+    minHeight: 88,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing[3],
+    paddingBottom: 46,
+  },
+  smartInput: { minHeight: 42, fontSize: 14, lineHeight: 19 },
+  smartActions: {
+    position: 'absolute',
+    right: spacing[2],
+    bottom: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  smartSend: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   datePill: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3] },
   moodRow: { flexDirection: 'row', gap: spacing[3] },
