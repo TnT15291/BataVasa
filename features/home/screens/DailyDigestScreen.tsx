@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { format, startOfDay, endOfDay } from 'date-fns'
@@ -17,8 +17,8 @@ import { useFinanceStore } from '@store/financeStore'
 import { useRemindersStore } from '@store/remindersStore'
 import { useHabitsStore } from '@store/habitsStore'
 import { useJournalsStore } from '@store/journalsStore'
-import { VoiceButton } from '@components/VoiceButton'
 import { formatAmount } from '@features/finance/services'
+import { convertMinorAmount, getRates } from '@services/fx'
 import { UniversalAddSheet } from '../components/UniversalAddSheet'
 import { OnboardingModal } from '../components/OnboardingModal'
 
@@ -99,6 +99,7 @@ export function DailyDigestScreen() {
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const currency = useSettingsStore((s) => s.currency)
+  const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const txs = useTransactions()
   const reminders = useReminders()
   const habits = useHabits()
@@ -111,22 +112,34 @@ export function DailyDigestScreen() {
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding)
   const [showAdd, setShowAdd] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [smartText, setSmartText] = useState('')
-  const [sheetText, setSheetText] = useState('')
-  const [autoAnalyzeToken, setAutoAnalyzeToken] = useState(0)
+  const [fxRates, setFxRates] = useState<Record<string, number> | null>(null)
 
   const locale = getDateFnsLocale(language)
   const now = new Date()
   const dateStr = format(now, 'EEEE, dd MMMM', { locale })
 
+  useEffect(() => {
+    getRates(displayCurrency).then(setFxRates)
+  }, [displayCurrency])
+
   const todayExpense = useMemo(() => {
     const from = startOfDay(now)
     const to = endOfDay(now)
     return txs
-      .filter((tx) => tx.currency === currency && tx.amount_cents < 0)
+      .filter((tx) => tx.amount_cents < 0)
       .filter((tx) => { const d = new Date(tx.occurred_at); return d >= from && d <= to })
-      .reduce((sum, tx) => sum + Math.abs(tx.amount_cents), 0)
-  }, [txs, currency, now])
+      .reduce((sum, tx) => {
+        if (tx.currency === displayCurrency) return sum + Math.abs(tx.amount_cents)
+        if (fxRates) {
+          const converted = convertMinorAmount(tx.amount_cents, tx.currency, displayCurrency, fxRates)
+          return sum + (converted === null ? 0 : Math.abs(converted))
+        }
+        if (tx.currency === currency) return sum + Math.abs(tx.amount_cents)
+        return sum
+      }, 0)
+  }, [txs, currency, displayCurrency, fxRates, now])
+
+  const todayExpenseCurrency = fxRates ? displayCurrency : currency
 
   const todayJournals = useMemo(() => {
     const from = startOfDay(now)
@@ -154,7 +167,7 @@ export function DailyDigestScreen() {
   }, [reminders, nextReminder, now])
 
   const financeSubtitle = todayExpense > 0
-    ? `${t.today_spent} ${formatAmount(todayExpense, currency, language)}`
+    ? `${t.today_spent} ${formatAmount(todayExpense, todayExpenseCurrency, language)}`
     : t.today_no_spending
 
   const reminderSubtitle = nextReminder
@@ -173,19 +186,6 @@ export function DailyDigestScreen() {
     ? t.habits_card_subtitle
     : t.habits_done_today.replace('{{done}}', String(habitsDoneCount)).replace('{{total}}', String(habitsTotal))
   const journalSubtitle = todayJournals > 0 ? `${todayJournals} ${t.today}` : t.journal_card_subtitle
-
-  const openSmartAdd = useCallback((input?: string) => {
-    const value = (input ?? smartText).trim()
-    if (!value) {
-      setSheetText('')
-      setShowAdd(true)
-      return
-    }
-    setSheetText(value)
-    setAutoAnalyzeToken((n) => n + 1)
-    setShowAdd(true)
-    setSmartText('')
-  }, [smartText])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -231,7 +231,7 @@ export function DailyDigestScreen() {
             <View style={styles.heroMetricText}>
               <Text style={[styles.heroMetricLabel, { color: theme.text.muted }]}>{t.today_spent}</Text>
               <Text style={[styles.heroMetricValue, { color: theme.finance.expense }]} numberOfLines={1} adjustsFontSizeToFit>
-                {formatAmount(todayExpense, currency, language)}
+                {formatAmount(todayExpense, todayExpenseCurrency, language)}
               </Text>
             </View>
             <View style={[styles.heroMetricIcon, { backgroundColor: theme.finance.expense + '1F' }]}>
@@ -258,41 +258,6 @@ export function DailyDigestScreen() {
               value={todayJournals > 0 ? String(todayJournals) : '-'}
               color="#9C27B0"
             />
-          </View>
-        </View>
-
-        <View style={[styles.smartCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          <View style={styles.smartHeader}>
-            <View style={[styles.smartIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
-              <Feather name="zap" size={16} color={theme.brand.primary} />
-            </View>
-            <Text style={[styles.smartTitle, { color: theme.text.primary }]}>{t.universal_add_title}</Text>
-          </View>
-          <View style={[styles.smartInputWrap, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}>
-            <TextInput
-              value={smartText}
-              onChangeText={setSmartText}
-              placeholder={t.universal_add_hint}
-              placeholderTextColor={theme.text.muted}
-              multiline
-              style={[styles.smartInput, { color: theme.text.primary }]}
-              textAlignVertical="top"
-            />
-            <View style={styles.smartActions}>
-              <VoiceButton onResult={(value) => openSmartAdd(value)} size={38} module="home" />
-              <Pressable
-                onPress={() => openSmartAdd()}
-                accessibilityRole="button"
-                accessibilityLabel={t.parse_btn}
-                disabled={!smartText.trim()}
-                style={[
-                  styles.smartSend,
-                  { backgroundColor: smartText.trim() ? theme.brand.primary : theme.border.strong },
-                ]}
-              >
-                <Feather name="send" size={16} color="#fff" />
-              </Pressable>
-            </View>
           </View>
         </View>
 
@@ -388,7 +353,7 @@ export function DailyDigestScreen() {
       </ScrollView>
 
       <Pressable
-        onPress={() => { setSheetText(''); setShowAdd(true) }}
+        onPress={() => setShowAdd(true)}
         accessibilityRole="button"
         accessibilityLabel={t.universal_add_title}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}
@@ -399,8 +364,8 @@ export function DailyDigestScreen() {
       <UniversalAddSheet
         visible={showAdd}
         onClose={() => setShowAdd(false)}
-        initialText={sheetText}
-        autoAnalyzeToken={autoAnalyzeToken}
+        initialText=""
+        autoAnalyzeToken={0}
       />
       <OnboardingModal visible={!hasSeenOnboarding} />
     </View>
@@ -461,44 +426,6 @@ const styles = StyleSheet.create({
   },
   summaryValue: { fontSize: 15, fontWeight: '800' },
   summaryLabel: { fontSize: 10, fontWeight: '700' },
-  smartCard: {
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing[4],
-    gap: spacing[3],
-  },
-  smartHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  smartIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  smartTitle: { fontSize: 15, fontWeight: '700' },
-  smartInputWrap: {
-    minHeight: 88,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing[3],
-    paddingBottom: 46,
-  },
-  smartInput: { minHeight: 42, fontSize: 15, lineHeight: 20 },
-  smartActions: {
-    position: 'absolute',
-    right: spacing[2],
-    bottom: spacing[2],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  smartSend: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   todayPanel: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,

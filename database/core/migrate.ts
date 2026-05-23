@@ -46,6 +46,39 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   async (db) => {
     await createSyncQueueSchema(db)
   },
+  // v9 - P0 product fields
+  async (db) => {
+    await safeAddColumn(db, 'journal', 'is_important', 'INTEGER NOT NULL DEFAULT 0')
+    await safeAddColumn(db, 'reminder', 'priority', "TEXT NOT NULL DEFAULT 'medium'")
+    await safeAddColumn(db, 'habit_log', 'skipped', 'INTEGER NOT NULL DEFAULT 0')
+    await safeAddColumn(db, 'finance_transaction', 'needs_review', 'INTEGER NOT NULL DEFAULT 0')
+    await safeAddColumn(db, 'finance_transaction', 'review_reason', 'TEXT')
+  },
+  // v10 - finance merchant/category rules
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS finance_rule (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT,
+        merchant_pattern TEXT NOT NULL,
+        category_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT,
+        synced_at TEXT,
+        FOREIGN KEY (category_id) REFERENCES finance_category(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_rule_merchant ON finance_rule(merchant_pattern) WHERE deleted_at IS NULL;
+    `)
+  },
+  // v11 - reminder inbox items
+  async (db) => {
+    await safeAddColumn(db, 'reminder', 'is_inbox', 'INTEGER NOT NULL DEFAULT 0')
+  },
+  // v12 - custom habit schedules
+  async (db) => {
+    await safeAddColumn(db, 'habit', 'schedule_days', 'TEXT')
+  },
 ]
 
 async function safeAddColumn(

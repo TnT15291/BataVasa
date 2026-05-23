@@ -109,7 +109,9 @@ export function JournalsReportScreen() {
     const fromIso = range.from.toISOString()
     const toIso = range.to.toISOString()
     const filtered = journals.filter((j) => j.occurred_at >= fromIso && j.occurred_at <= toIso)
-    if (filtered.length === 0) return { entries: 0, avgMood: null, moodCounts: new Map<number, number>(), trend: null }
+    if (filtered.length === 0) {
+      return { entries: 0, avgMood: null, moodCounts: new Map<number, number>(), trend: null, importantCount: 0, importantEntries: [] }
+    }
 
     const withMood = filtered.filter((j) => j.mood != null)
     const avgMood = withMood.length > 0
@@ -132,7 +134,11 @@ export function JournalsReportScreen() {
       trend = diff > 0.3 ? 'up' : diff < -0.3 ? 'down' : 'stable'
     }
 
-    return { entries: filtered.length, avgMood, moodCounts, trend }
+    const importantEntries = filtered
+      .filter((j) => (j.is_important ?? 0) === 1)
+      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
+
+    return { entries: filtered.length, avgMood, moodCounts, trend, importantCount: importantEntries.length, importantEntries: importantEntries.slice(0, 5) }
   }, [getRange, journals])
 
   const range = getRange()
@@ -226,6 +232,7 @@ export function JournalsReportScreen() {
               <StatCard label={t.report_mood_trend}
                 value={stats.trend === 'up' ? '↑' : stats.trend === 'down' ? '↓' : stats.trend === 'stable' ? '→' : '—'}
                 theme={theme} />
+              <StatCard label="Important" value={String(stats.importantCount)} theme={theme} />
             </View>
 
             {stats.moodCounts.size > 0 && (
@@ -245,6 +252,21 @@ export function JournalsReportScreen() {
                     </View>
                   )
                 })}
+              </View>
+            )}
+            {stats.importantEntries.length > 0 && (
+              <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+                <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>Important events</Text>
+                {stats.importantEntries.map((entry) => (
+                  <View key={entry.id} style={[styles.importantRow, { borderColor: theme.border.subtle }]}>
+                    <Text style={[styles.importantDate, { color: theme.brand.primary }]}>
+                      {format(new Date(entry.occurred_at), 'dd/MM', { locale: dfLocale })}
+                    </Text>
+                    <Text style={[styles.importantText, { color: theme.text.primary }]} numberOfLines={2}>
+                      {entry.content}
+                    </Text>
+                  </View>
+                ))}
               </View>
             )}
             <Pressable onPress={exportSummary} style={[styles.exportBtn, { borderColor: theme.border.strong }]}>
@@ -280,8 +302,8 @@ const styles = StyleSheet.create({
   dateInputText: { fontSize: 13, fontFamily: 'Courier' },
   dateSep: { fontSize: 18, paddingBottom: spacing[2] },
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
-  statsGrid: { flexDirection: 'row', gap: spacing[3] },
-  statCard: { flex: 1, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
+  statCard: { width: '47%', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
   statValue: { fontSize: 22, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
@@ -291,6 +313,9 @@ const styles = StyleSheet.create({
   moodBar: { flex: 1, height: 8, borderRadius: radius.full, overflow: 'hidden' },
   moodFill: { height: '100%', borderRadius: radius.full },
   moodPct: { fontSize: 12, width: 24, textAlign: 'right' },
+  importantRow: { flexDirection: 'row', gap: spacing[3], borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2] },
+  importantDate: { width: 44, fontSize: 12, fontWeight: '800' },
+  importantText: { flex: 1, fontSize: 14, lineHeight: 20 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
   emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },

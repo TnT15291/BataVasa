@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS finance_category (
   synced_at            TIMESTAMPTZ
 );
 ALTER TABLE finance_category ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their categories" ON finance_category;
 CREATE POLICY "users own their categories" ON finance_category
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
@@ -34,6 +35,8 @@ CREATE TABLE IF NOT EXISTS finance_transaction (
   occurred_at    TIMESTAMPTZ NOT NULL,
   mood           TEXT,
   source         TEXT NOT NULL,
+  needs_review   SMALLINT NOT NULL DEFAULT 0,
+  review_reason  TEXT,
   location_lat   REAL,
   location_lng   REAL,
   location_label TEXT,
@@ -43,7 +46,23 @@ CREATE TABLE IF NOT EXISTS finance_transaction (
   synced_at      TIMESTAMPTZ
 );
 ALTER TABLE finance_transaction ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their transactions" ON finance_transaction;
 CREATE POLICY "users own their transactions" ON finance_transaction
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+CREATE TABLE IF NOT EXISTS finance_rule (
+  id               TEXT PRIMARY KEY,
+  user_id          UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  merchant_pattern TEXT NOT NULL,
+  category_id      TEXT NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL,
+  updated_at       TIMESTAMPTZ NOT NULL,
+  deleted_at       TIMESTAMPTZ,
+  synced_at        TIMESTAMPTZ
+);
+ALTER TABLE finance_rule ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their finance rules" ON finance_rule;
+CREATE POLICY "users own their finance rules" ON finance_rule
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- ─── Habits ───────────────────────────────────────────────────────────────────
@@ -56,6 +75,7 @@ CREATE TABLE IF NOT EXISTS habit (
   color             TEXT NOT NULL DEFAULT '#4CAF50',
   cadence           TEXT NOT NULL DEFAULT 'daily',
   target_per_period INTEGER NOT NULL DEFAULT 1,
+  schedule_days     TEXT,
   location_lat      REAL,
   location_lng      REAL,
   location_label    TEXT,
@@ -65,6 +85,7 @@ CREATE TABLE IF NOT EXISTS habit (
   synced_at         TIMESTAMPTZ
 );
 ALTER TABLE habit ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their habits" ON habit;
 CREATE POLICY "users own their habits" ON habit
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
@@ -74,12 +95,14 @@ CREATE TABLE IF NOT EXISTS habit_log (
   user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   occurred_at TIMESTAMPTZ NOT NULL,
   note        TEXT,
+  skipped     SMALLINT NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL,
   updated_at  TIMESTAMPTZ NOT NULL,
   deleted_at  TIMESTAMPTZ,
   synced_at   TIMESTAMPTZ
 );
 ALTER TABLE habit_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their habit logs" ON habit_log;
 CREATE POLICY "users own their habit logs" ON habit_log
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
@@ -90,6 +113,7 @@ CREATE TABLE IF NOT EXISTS journal (
   user_id        UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   content        TEXT NOT NULL,
   mood           INTEGER,
+  is_important   SMALLINT NOT NULL DEFAULT 0,
   occurred_at    TIMESTAMPTZ NOT NULL,
   location_lat   REAL,
   location_lng   REAL,
@@ -100,6 +124,7 @@ CREATE TABLE IF NOT EXISTS journal (
   synced_at      TIMESTAMPTZ
 );
 ALTER TABLE journal ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their journals" ON journal;
 CREATE POLICY "users own their journals" ON journal
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
@@ -113,6 +138,8 @@ CREATE TABLE IF NOT EXISTS reminder (
   remind_at      TIMESTAMPTZ NOT NULL,
   advance_minutes INTEGER NOT NULL DEFAULT 0,
   recurrence     TEXT NOT NULL DEFAULT 'none',
+  priority       TEXT NOT NULL DEFAULT 'medium',
+  is_inbox       SMALLINT NOT NULL DEFAULT 0,
   completed      SMALLINT NOT NULL DEFAULT 0,
   location_lat   REAL,
   location_lng   REAL,
@@ -123,5 +150,16 @@ CREATE TABLE IF NOT EXISTS reminder (
   synced_at      TIMESTAMPTZ
 );
 ALTER TABLE reminder ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their reminders" ON reminder;
 CREATE POLICY "users own their reminders" ON reminder
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- P0 product field migrations for existing Supabase projects.
+ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS needs_review SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS review_reason TEXT;
+CREATE INDEX IF NOT EXISTS idx_finance_rule_merchant ON finance_rule(merchant_pattern) WHERE deleted_at IS NULL;
+ALTER TABLE habit_log ADD COLUMN IF NOT EXISTS skipped SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE habit ADD COLUMN IF NOT EXISTS schedule_days TEXT;
+ALTER TABLE journal ADD COLUMN IF NOT EXISTS is_important SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE reminder ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'medium';
+ALTER TABLE reminder ADD COLUMN IF NOT EXISTS is_inbox SMALLINT NOT NULL DEFAULT 0;

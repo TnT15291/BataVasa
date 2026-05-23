@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS finance_transaction (
   occurred_at TEXT NOT NULL,
   mood TEXT CHECK (mood IN ('great','good','neutral','low','bad') OR mood IS NULL),
   source TEXT NOT NULL CHECK (source IN ('manual','ocr','voice','import')),
+  needs_review INTEGER NOT NULL DEFAULT 0 CHECK (needs_review IN (0,1)),
+  review_reason TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
@@ -40,10 +42,25 @@ CREATE TABLE IF NOT EXISTS finance_transaction (
 );
 `
 
+const CREATE_RULE_SQL = `
+CREATE TABLE IF NOT EXISTS finance_rule (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT,
+  merchant_pattern TEXT NOT NULL,
+  category_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  synced_at TEXT,
+  FOREIGN KEY (category_id) REFERENCES finance_category(id) ON DELETE CASCADE
+);
+`
+
 const INDEXES_SQL = `
 CREATE INDEX IF NOT EXISTS idx_tx_user_occurred ON finance_transaction(user_id, occurred_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_tx_category ON finance_transaction(category_id, occurred_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_cat_user_kind ON finance_category(user_id, kind, sort_order) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_rule_merchant ON finance_rule(merchant_pattern) WHERE deleted_at IS NULL;
 `
 
 type SystemCategory = { name: string; icon: string; color: string; kind: 'essential' | 'discretionary' | 'income' | 'savings' }
@@ -68,6 +85,7 @@ const SYSTEM_CATEGORIES: SystemCategory[] = [
 export async function initFinanceSchema(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(CREATE_CATEGORY_SQL)
   await db.execAsync(CREATE_TRANSACTION_SQL)
+  await db.execAsync(CREATE_RULE_SQL)
   await db.execAsync(INDEXES_SQL)
   await seedSystemCategories(db)
 }

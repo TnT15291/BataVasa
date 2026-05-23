@@ -26,6 +26,39 @@ const MOODS = [
   { value: 5, emoji: '😊' },
 ] as const
 
+const JOURNAL_TEMPLATES = [
+  {
+    key: 'checkin',
+    label: 'Daily check-in',
+    mood: 3,
+    content: 'Today I noticed...\n\nI felt...\n\nOne thing I want to remember is...',
+  },
+  {
+    key: 'gratitude',
+    label: 'Gratitude',
+    mood: 4,
+    content: 'Three things I am grateful for:\n1. \n2. \n3. \n\nWhy this mattered today...',
+  },
+  {
+    key: 'stress',
+    label: 'Stress log',
+    mood: 2,
+    content: 'What stressed me today...\n\nWhat triggered it...\n\nWhat helped, or could help next time...',
+  },
+  {
+    key: 'money',
+    label: 'Money reflection',
+    mood: 3,
+    content: 'A spending or money moment I noticed today...\n\nHow I felt about it...\n\nOne adjustment I want to try...',
+  },
+  {
+    key: 'habit',
+    label: 'Habit reflection',
+    mood: 3,
+    content: 'A habit I kept or missed today...\n\nWhat made it easier or harder...\n\nOne small next step...',
+  },
+] as const
+
 export function JournalFormScreen() {
   useJournalsBootstrap()
   const theme = useTheme()
@@ -46,6 +79,7 @@ export function JournalFormScreen() {
 
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<number | null>(null)
+  const [isImportant, setIsImportant] = useState(false)
   const [occurredAt, setOccurredAt] = useState(new Date())
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -57,6 +91,7 @@ export function JournalFormScreen() {
     if (!editingJournal || prefilled) return
     setContent(editingJournal.content)
     setMood(editingJournal.mood ?? null)
+    setIsImportant((editingJournal.is_important ?? 0) === 1)
     setOccurredAt(new Date(editingJournal.occurred_at))
     setPrefilled(true)
   }, [editingJournal, prefilled])
@@ -67,6 +102,7 @@ export function JournalFormScreen() {
       const p = JSON.parse(params.prefill as string)
       if (p.content) setContent(p.content)
       if (p.mood != null) setMood(Number(p.mood))
+      if (p.is_important != null) setIsImportant(Number(p.is_important) === 1)
       if (p.occurred_at) setOccurredAt(new Date(p.occurred_at))
       setPrefilled(true)
     } catch { /* ignore malformed prefill */ }
@@ -87,11 +123,13 @@ export function JournalFormScreen() {
           id: editingId!,
           content: trimmed,
           mood: mood ?? undefined,
+          is_important: isImportant ? 1 : 0,
           occurred_at: occurredAt.toISOString(),
         })
       : await createJournal({
           content: trimmed,
           mood: mood ?? undefined,
+          is_important: isImportant ? 1 : 0,
           occurred_at: occurredAt.toISOString(),
         })
     setSubmitting(false)
@@ -126,6 +164,7 @@ export function JournalFormScreen() {
       if (!parsed) { Alert.alert(t.ai_error, t.parse_failed); return }
       setContent(parsed.content)
       setMood(parsed.mood)
+      setIsImportant(parsed.is_important === 1)
       setOccurredAt(new Date(parsed.occurred_at))
       setSmartText('')
     } catch {
@@ -133,6 +172,11 @@ export function JournalFormScreen() {
     } finally {
       setParsing(false)
     }
+  }
+
+  const applyTemplate = (template: typeof JOURNAL_TEMPLATES[number]) => {
+    setContent((current) => current.trim() ? `${current.trim()}\n\n${template.content}` : template.content)
+    setMood((current) => current ?? template.mood)
   }
 
   return (
@@ -217,6 +261,34 @@ export function JournalFormScreen() {
         })}
       </View>
 
+      <Text style={[styles.label, { color: theme.text.muted }]}>TEMPLATES</Text>
+      <View style={styles.templateGrid}>
+        {JOURNAL_TEMPLATES.map((template) => (
+          <Pressable
+            key={template.key}
+            onPress={() => applyTemplate(template)}
+            style={[styles.templateChip, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+          >
+            <Text style={[styles.templateText, { color: theme.text.secondary }]}>{template.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Pressable
+        onPress={() => setIsImportant((v) => !v)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isImportant }}
+        style={[styles.importantToggle, {
+          backgroundColor: isImportant ? theme.brand.primary + '18' : theme.bg.elevated,
+          borderColor: isImportant ? theme.brand.primary : theme.border.subtle,
+        }]}
+      >
+        <Feather name="star" size={18} color={isImportant ? theme.brand.primary : theme.text.muted} />
+        <Text style={[styles.importantText, { color: isImportant ? theme.brand.primary : theme.text.secondary }]}>
+          Important event
+        </Text>
+      </Pressable>
+
       {/* Content */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_journal.toUpperCase()}</Text>
       <TextInput
@@ -297,6 +369,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.md, borderWidth: 1.5,
   },
   moodEmoji: { fontSize: 24 },
+  templateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  templateChip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  templateText: { fontSize: 12, fontWeight: '700' },
+  importantToggle: {
+    minHeight: 48,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  importantText: { fontSize: 14, fontWeight: '700' },
   contentInput: {
     borderWidth: 1, borderRadius: radius.md,
     padding: spacing[3], fontSize: 15, lineHeight: 22,

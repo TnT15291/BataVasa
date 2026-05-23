@@ -18,15 +18,18 @@ import { useHabitsStore } from '@store/habitsStore'
 function HabitRow({
   habit,
   onToggle,
+  onSkip,
   onEdit,
 }: {
   habit: ReturnType<typeof useHabits>[number]
   onToggle: () => void
+  onSkip: () => void
   onEdit: () => void
 }) {
   const theme = useTheme()
   const { t } = useTranslation()
   const done = habit.todayCount >= habit.target_per_period
+  const dueToday = habit.dueToday !== false
 
   return (
     <Pressable
@@ -49,11 +52,11 @@ function HabitRow({
       <View style={styles.rowBody}>
         <Text style={[styles.rowName, { color: theme.text.primary }]}>{habit.name}</Text>
         <View style={styles.rowMetaRow}>
-          {habit.streak > 0 ? (
+          {dueToday && habit.streak > 0 ? (
             <Text style={styles.flameIcon}>🔥</Text>
           ) : null}
           <Text style={[styles.rowMeta, { color: theme.text.muted }]}>
-            {done
+            {!dueToday ? 'Not scheduled today' : done
               ? `${t.habit_done_today} · ${habit.streak}d`
               : `${habit.todayCount}/${habit.target_per_period} · ${habit.streak}d`}
           </Text>
@@ -65,6 +68,11 @@ function HabitRow({
       }]}>
         {done ? <Feather name="check" size={14} color="#fff" /> : null}
       </View>
+      {dueToday && !done ? (
+        <Pressable onPress={onSkip} hitSlop={8} style={[styles.skipBtn, { borderColor: theme.border.subtle }]}>
+          <Text style={[styles.skipText, { color: theme.text.muted }]}>Skip</Text>
+        </Pressable>
+      ) : null}
     </Pressable>
   )
 }
@@ -75,7 +83,7 @@ export function HabitListScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const habits = useHabits()
-  const { toggleTodayLog } = useHabitActions()
+  const { toggleTodayLog, skipToday } = useHabitActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
 
   const [nlText, setNlText] = useState('')
@@ -132,14 +140,15 @@ export function HabitListScreen() {
     setNlText('')
   }
 
-  const doneCount = habits.filter((h) => h.todayCount >= h.target_per_period).length
-  const totalCount = habits.length
+  const doneCount = habits.filter((h) => h.dueToday !== false && h.todayCount >= h.target_per_period).length
+  const totalCount = habits.filter((h) => h.dueToday !== false).length
   const progress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0
-  const { pendingHabits, doneHabits, bestStreak } = useMemo(() => {
-    const pendingHabits = habits.filter((h) => h.todayCount < h.target_per_period)
-    const doneHabits = habits.filter((h) => h.todayCount >= h.target_per_period)
+  const { pendingHabits, doneHabits, laterHabits, bestStreak } = useMemo(() => {
+    const pendingHabits = habits.filter((h) => h.dueToday !== false && h.todayCount < h.target_per_period)
+    const doneHabits = habits.filter((h) => h.dueToday !== false && h.todayCount >= h.target_per_period)
+    const laterHabits = habits.filter((h) => h.dueToday === false)
     const bestStreak = habits.reduce((max, h) => Math.max(max, h.streak), 0)
-    return { pendingHabits, doneHabits, bestStreak }
+    return { pendingHabits, doneHabits, laterHabits, bestStreak }
   }, [habits])
 
   const renderGroup = (title: string, items: typeof habits) => {
@@ -156,6 +165,7 @@ export function HabitListScreen() {
               key={habit.id}
               habit={habit}
               onToggle={() => handleToggleWithMilestone(habit.id)}
+              onSkip={() => skipToday(habit.id)}
               onEdit={() => router.push({ pathname: '/habit', params: { id: habit.id } } as any)}
             />
           ))}
@@ -231,6 +241,7 @@ export function HabitListScreen() {
           </View>
 
           {renderGroup(t.reminder_upcoming, pendingHabits)}
+          {renderGroup('Not scheduled today', laterHabits)}
           {renderGroup(t.habit_done_today, doneHabits)}
         </ScrollView>
       )}
@@ -362,6 +373,8 @@ const styles = StyleSheet.create({
   flameIcon: { fontSize: 12, lineHeight: 16 },
   rowMeta: { fontSize: 12 },
   checkCircle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: spacing[3] },
+  skipBtn: { borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[2], paddingVertical: 4, marginRight: spacing[2] },
+  skipText: { fontSize: 11, fontWeight: '700' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6], gap: spacing[3] },
   emptyIconWrap: {
     width: 72,

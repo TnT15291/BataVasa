@@ -35,6 +35,8 @@ const baseTx: Transaction = {
   occurred_at: '2026-01-01T00:00:00.000Z',
   mood: null,
   source: 'manual',
+  needs_review: 0,
+  review_reason: null,
   location_lat: null,
   location_lng: null,
   location_label: null,
@@ -102,14 +104,15 @@ describe('finance queries', () => {
   })
 
   it('wipes finance data with counts', async () => {
-    mockDb.getFirstAsync.mockResolvedValueOnce({ n: 2 }).mockResolvedValueOnce({ n: 1 })
-    await expect(wipeFinanceData()).resolves.toEqual({ transactions: 2, categories: 1 })
+    mockDb.getFirstAsync.mockResolvedValueOnce({ n: 2 }).mockResolvedValueOnce({ n: 1 }).mockResolvedValueOnce({ n: 3 })
+    await expect(wipeFinanceData()).resolves.toEqual({ transactions: 2, categories: 1, rules: 3 })
     expect(mockDb.execAsync).toHaveBeenCalledWith('DELETE FROM finance_transaction')
+    expect(mockDb.execAsync).toHaveBeenCalledWith('DELETE FROM finance_rule')
     expect(mockDb.execAsync).toHaveBeenCalledWith('DELETE FROM finance_category WHERE user_id IS NOT NULL')
   })
 
   it('inserts, updates, deletes, and exports categories', async () => {
-    mockDb.getAllAsync.mockResolvedValueOnce([baseTx]).mockResolvedValueOnce([baseCategory])
+    mockDb.getAllAsync.mockResolvedValueOnce([baseTx]).mockResolvedValueOnce([baseCategory]).mockResolvedValueOnce([])
     await insertCategory(baseCategory)
     await updateCategory('cat-1', { name: 'Groceries', id: 'ignored' } as any)
     await softDeleteCategory('cat-1', '2026-01-02T00:00:00.000Z')

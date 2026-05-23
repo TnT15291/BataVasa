@@ -46,6 +46,9 @@ function JournalRow({ journal, onPress }: { journal: Journal; onPress: () => voi
         <View style={styles.rowHeader}>
           <Text style={[styles.timeStr, { color: theme.text.muted }]}>{timeStr}</Text>
           <Text style={[styles.timeStr, { color: theme.text.muted }]}>{dateStr}</Text>
+          {(journal.is_important ?? 0) === 1 ? (
+            <Feather name="star" size={12} color={theme.brand.primary} />
+          ) : null}
           {journal.location_label ? (
             <View style={styles.locationWrap}>
               <Feather name="map-pin" size={12} color={theme.text.muted} />
@@ -173,7 +176,12 @@ export function JournalListScreen() {
 
   const handleNlConfirm = async () => {
     if (!parsedJournal) return
-    await createJournal({ content: parsedJournal.content, mood: parsedJournal.mood ?? undefined, occurred_at: parsedJournal.occurred_at })
+    await createJournal({
+      content: parsedJournal.content,
+      mood: parsedJournal.mood ?? undefined,
+      is_important: parsedJournal.is_important,
+      occurred_at: parsedJournal.occurred_at,
+    })
     setParsedJournal(null)
     setNlText('')
   }
@@ -220,7 +228,8 @@ export function JournalListScreen() {
     const latest = journals
       .slice()
       .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())[0] ?? null
-    return { todayCount, weekCount, avgMood, latest }
+    const importantCount = journals.filter((j) => (j.is_important ?? 0) === 1).length
+    return { todayCount, weekCount, avgMood, latest, importantCount }
   }, [journals])
 
   async function handleReflect() {
@@ -294,9 +303,9 @@ export function JournalListScreen() {
             </View>
             <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
               <Text style={[styles.statValue, { color: theme.text.primary }]}>
-                {journalStats.avgMood > 0 ? journalStats.avgMood.toFixed(1) : '-'}
+                {journalStats.importantCount}
               </Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.reflect_mood}</Text>
+              <Text style={[styles.statLabel, { color: theme.text.muted }]}>Important</Text>
             </View>
           </View>
         </View>

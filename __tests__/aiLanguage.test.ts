@@ -1,4 +1,3 @@
-// Mutable fake settings state the store mock reads from.
 const fakeState = { language: 'en', currency: 'USD' }
 
 jest.mock('@store/settingsStore', () => ({
@@ -20,11 +19,11 @@ beforeEach(() => {
 })
 
 describe('fmtAI', () => {
-  it('formats VND millions as "M ₫"', () => {
+  it('formats VND millions as M with dong symbol', () => {
     expect(fmtAI(2_500_000, 'VND')).toBe('2.5M ₫')
   })
 
-  it('formats VND thousands as "k ₫"', () => {
+  it('formats VND thousands as k with dong symbol', () => {
     expect(fmtAI(50_000, 'VND')).toBe('50k ₫')
   })
 
@@ -36,7 +35,12 @@ describe('fmtAI', () => {
     expect(fmtAI(12345, 'USD')).toBe('$123.45')
   })
 
-  it('uses absolute value for negative (expense) amounts', () => {
+  it('formats zero-decimal currencies as whole units', () => {
+    expect(fmtAI(500, 'JPY')).toBe('JPY 500')
+    expect(fmtAI(500, 'KRW')).toBe('KRW 500')
+  })
+
+  it('uses absolute value for negative expense amounts', () => {
     expect(fmtAI(-5000, 'USD')).toBe('$50')
   })
 
@@ -78,9 +82,9 @@ describe('getAmountRule', () => {
     expect(getAmountRule('VND')).toContain('raw VND')
   })
 
-  it('describes ×100 for JPY and KRW', () => {
-    expect(getAmountRule('JPY')).toContain('× 100')
-    expect(getAmountRule('KRW')).toContain('× 100')
+  it('describes whole units for JPY and KRW', () => {
+    expect(getAmountRule('JPY')).toContain('whole units')
+    expect(getAmountRule('KRW')).toContain('whole units')
   })
 
   it('describes cents for other currencies', () => {

@@ -126,12 +126,14 @@ describe('parseJournalEntry', () => {
     mockChat.mockResolvedValue(JSON.stringify({
       content: 'Hôm nay mệt nhưng ổn',
       mood: 3,
+      is_important: 0,
       occurred_at: '2026-05-20T21:00:00Z',
     }))
     const r = await parseJournalEntry('hôm nay mệt')
     expect(r).toEqual({
       content: 'Hôm nay mệt nhưng ổn',
       mood: 3,
+      is_important: 0,
       occurred_at: '2026-05-20T21:00:00Z',
     })
   })

@@ -7,11 +7,11 @@ export async function insertHabit(h: Habit): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO habit
-      (id,user_id,name,icon,color,cadence,target_per_period,
+      (id,user_id,name,icon,color,cadence,target_per_period,schedule_days,
        location_lat,location_lng,location_label,
        created_at,updated_at,deleted_at,synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [h.id, h.user_id, h.name, h.icon, h.color, h.cadence, h.target_per_period,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [h.id, h.user_id, h.name, h.icon, h.color, h.cadence, h.target_per_period, h.schedule_days ?? null,
      h.location_lat ?? null, h.location_lng ?? null, h.location_label ?? null,
      h.created_at, h.updated_at, null, null]
   )
@@ -67,10 +67,10 @@ export async function exportHabitsData(): Promise<{ habits: Habit[]; logs: Habit
 export async function insertHabitLog(log: HabitLog): Promise<void> {
   const db = await getDb()
   await db.runAsync(
-    `INSERT INTO habit_log (id,habit_id,user_id,occurred_at,note,created_at,updated_at,deleted_at,synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO habit_log (id,habit_id,user_id,occurred_at,note,skipped,created_at,updated_at,deleted_at,synced_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [log.id, log.habit_id, log.user_id, log.occurred_at, log.note ?? null,
-     log.created_at, log.updated_at, null, null]
+     log.skipped ?? 0, log.created_at, log.updated_at, null, null]
   )
 }
 
@@ -95,6 +95,7 @@ export async function countLogsForDate(habitId: string, dateStr: string): Promis
   const row = await db.getFirstAsync<{ cnt: number }>(
     `SELECT COUNT(*) as cnt FROM habit_log
      WHERE habit_id = ? AND deleted_at IS NULL
+       AND COALESCE(skipped, 0) = 0
        AND substr(occurred_at, 1, 10) = ?`,
     [habitId, dateStr]
   )
@@ -123,6 +124,7 @@ export async function listLogCountsByDate(
     `SELECT substr(occurred_at, 1, 10) as date, COUNT(*) as count
      FROM habit_log
      WHERE habit_id = ? AND deleted_at IS NULL
+       AND COALESCE(skipped, 0) = 0
        AND substr(occurred_at, 1, 10) >= ?
        AND substr(occurred_at, 1, 10) <= ?
      GROUP BY substr(occurred_at, 1, 10)`,

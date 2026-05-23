@@ -40,6 +40,7 @@ const baseHabit: Habit = {
   color: '#22C55E',
   cadence: 'daily',
   target_per_period: 1,
+  schedule_days: null,
   location_lat: null,
   location_lng: null,
   location_label: null,

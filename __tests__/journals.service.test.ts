@@ -44,6 +44,7 @@ const baseJournal: Journal = {
   user_id: null,
   content: 'Had a great day',
   mood: 4,
+  is_important: 0,
   occurred_at: '2026-01-01T10:00:00.000Z',
   location_lat: null,
   location_lng: null,

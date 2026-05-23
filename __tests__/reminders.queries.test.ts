@@ -27,6 +27,8 @@ const baseReminder: Reminder = {
   remind_at: '2026-01-02T09:00:00.000Z',
   advance_minutes: 15,
   recurrence: 'none',
+  priority: 'medium',
+  is_inbox: 0,
   completed: 0,
   location_lat: null,
   location_lng: null,

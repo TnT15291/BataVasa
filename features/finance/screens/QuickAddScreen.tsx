@@ -254,6 +254,8 @@ export function QuickAddScreen() {
       occurred_at: occurredAt.toISOString(),
       mood: mood ?? undefined,
       source: 'manual' as const,
+      needs_review: 0,
+      review_reason: undefined,
       location_lat: trimmedLabel ? location.lat ?? undefined : undefined,
       location_lng: trimmedLabel ? location.lng ?? undefined : undefined,
       location_label: trimmedLabel || undefined,

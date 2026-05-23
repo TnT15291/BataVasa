@@ -7,6 +7,7 @@ export async function createJournalSchema(db: SQLiteDatabase): Promise<void> {
       user_id         TEXT,
       content         TEXT NOT NULL,
       mood            INTEGER,
+      is_important    INTEGER NOT NULL DEFAULT 0,
       occurred_at     TEXT NOT NULL,
       location_lat    REAL,
       location_lng    REAL,

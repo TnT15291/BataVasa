@@ -31,6 +31,7 @@ export async function createJournal(
       user_id: getCurrentUserId(),
       content: data.content,
       mood: data.mood ?? null,
+      is_important: data.is_important ?? 0,
       occurred_at: data.occurred_at,
       location_lat: data.location_lat ?? null,
       location_lng: data.location_lng ?? null,
@@ -67,6 +68,7 @@ export async function updateJournal(
     const patch: Partial<Journal> = { updated_at: nowIso() }
     if (data.content !== undefined) patch.content = data.content
     if (data.mood !== undefined) patch.mood = data.mood
+    if (data.is_important !== undefined) patch.is_important = data.is_important
     if (data.occurred_at !== undefined) patch.occurred_at = data.occurred_at
     if (data.location_lat !== undefined) patch.location_lat = data.location_lat
     if (data.location_lng !== undefined) patch.location_lng = data.location_lng

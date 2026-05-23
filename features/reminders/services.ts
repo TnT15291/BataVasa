@@ -30,29 +30,35 @@ export async function createReminder(
   const data = parsed.data
 
   try {
+    const timestamp = nowIso()
+    const isInbox = data.is_inbox === 1
     const reminder: Reminder = {
       id: uuid(),
       user_id: getCurrentUserId(),
       title: data.title,
       note: data.note ?? null,
-      remind_at: data.remind_at,
-      advance_minutes: data.advance_minutes,
-      recurrence: data.recurrence,
+      remind_at: data.remind_at ?? timestamp,
+      advance_minutes: isInbox ? 0 : data.advance_minutes,
+      recurrence: isInbox ? 'none' : data.recurrence,
+      priority: data.priority ?? 'medium',
+      is_inbox: isInbox ? 1 : 0,
       completed: 0,
       location_lat: data.location_lat ?? null,
       location_lng: data.location_lng ?? null,
       location_label: data.location_label ?? null,
-      created_at: nowIso(),
-      updated_at: nowIso(),
+      created_at: timestamp,
+      updated_at: timestamp,
       deleted_at: null,
       synced_at: null,
     }
     await q.insertReminder(reminder)
 
-    const notifId = await scheduleReminderNotification(
-      reminder.id, reminder.title, reminder.note ?? '', new Date(reminder.remind_at)
-    )
-    if (notifId) notifCache.set(reminder.id, notifId)
+    if (!reminder.is_inbox) {
+      const notifId = await scheduleReminderNotification(
+        reminder.id, reminder.title, reminder.note ?? '', new Date(reminder.remind_at), reminder.priority
+      )
+      if (notifId) notifCache.set(reminder.id, notifId)
+    }
     void enqueue('reminder', reminder.id, 'upsert')
     track('feature_used', { feature_name: 'reminder_created' })
     logger.info(MODULE, 'reminder created', { id: reminder.id })
@@ -81,6 +87,8 @@ export async function updateReminder(
     if (data.note !== undefined) patch.note = data.note
     if (data.remind_at !== undefined) patch.remind_at = data.remind_at
     if (data.recurrence !== undefined) patch.recurrence = data.recurrence
+    if (data.priority !== undefined) patch.priority = data.priority
+    if (data.is_inbox !== undefined) patch.is_inbox = data.is_inbox
     if (data.completed !== undefined) patch.completed = data.completed
     if (data.advance_minutes !== undefined) patch.advance_minutes = data.advance_minutes
     if (data.location_lat !== undefined) patch.location_lat = data.location_lat
@@ -90,13 +98,13 @@ export async function updateReminder(
     await q.updateReminder(data.id, patch)
 
     // Re-schedule notification if time changed
-    if (data.remind_at !== undefined || data.title !== undefined) {
+    if (data.remind_at !== undefined || data.title !== undefined || data.priority !== undefined || data.is_inbox !== undefined || data.completed !== undefined) {
       const oldNotifId = notifCache.get(data.id)
       if (oldNotifId) await cancelNotification(oldNotifId)
       const fresh = await q.getReminder(data.id)
-      if (fresh && !fresh.completed) {
+      if (fresh && !fresh.completed && !fresh.is_inbox) {
         const notifId = await scheduleReminderNotification(
-          fresh.id, fresh.title, fresh.note ?? '', new Date(fresh.remind_at)
+          fresh.id, fresh.title, fresh.note ?? '', new Date(fresh.remind_at), fresh.priority
         )
         if (notifId) notifCache.set(fresh.id, notifId)
         else notifCache.delete(fresh.id)

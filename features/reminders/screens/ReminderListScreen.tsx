@@ -17,6 +17,8 @@ import { VoiceButton } from '@components/VoiceButton'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Reminder } from '../types'
 
+type ReminderFilter = 'all' | 'today' | 'important' | 'inbox'
+
 function RecurrenceBadge({ recurrence }: { recurrence: Reminder['recurrence'] }) {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -34,6 +36,18 @@ function RecurrenceBadge({ recurrence }: { recurrence: Reminder['recurrence'] })
   )
 }
 
+function PriorityBadge({ priority }: { priority: Reminder['priority'] }) {
+  const theme = useTheme()
+  if (!priority || priority === 'medium') return null
+  const color = priority === 'high' ? theme.semantic.danger : theme.text.muted
+  return (
+    <View style={[styles.badge, { backgroundColor: color + '22' }]}>
+      <Feather name="flag" size={10} color={color} />
+      <Text style={[styles.badgeText, { color }]}>{priority}</Text>
+    </View>
+  )
+}
+
 function ReminderRow({ reminder, onPress, onToggle, isLast }: {
   reminder: Reminder
   onPress: () => void
@@ -46,12 +60,13 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
   const isDone = reminder.completed === 1
   const adv = reminder.advance_minutes ?? 0
   const eventTime = new Date(new Date(reminder.remind_at).getTime() + adv * 60000)
+  const isInbox = (reminder.is_inbox ?? 0) === 1
   const now = new Date()
-  const isPast = eventTime < now && !isDone
-  const isToday = eventTime >= startOfDay(now) && eventTime <= endOfDay(now)
+  const isPast = !isInbox && eventTime < now && !isDone
+  const isToday = !isInbox && eventTime >= startOfDay(now) && eventTime <= endOfDay(now)
   const statusColor = isDone ? theme.semantic.success : isPast ? theme.semantic.danger : isToday ? theme.brand.primary : '#2196F3'
-  const statusLabel = isDone ? t.reminder_completed : isPast ? t.reminder_past : isToday ? t.today : t.reminder_upcoming
-  const dateStr = format(eventTime, isToday ? 'HH:mm' : 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
+  const statusLabel = isDone ? t.reminder_completed : isInbox ? 'Inbox' : isPast ? t.reminder_past : isToday ? t.today : t.reminder_upcoming
+  const dateStr = isInbox ? 'Inbox' : format(eventTime, isToday ? 'HH:mm' : 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
 
   return (
     <Pressable
@@ -89,16 +104,17 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
           >
             {reminder.title}
           </Text>
+          <PriorityBadge priority={reminder.priority ?? 'medium'} />
           <RecurrenceBadge recurrence={reminder.recurrence} />
         </View>
         <View style={styles.rowMeta}>
           <View style={[styles.timePill, { backgroundColor: statusColor + '18' }]}>
-            <Feather name="clock" size={11} color={statusColor} />
+            <Feather name={isInbox ? 'inbox' : 'clock'} size={11} color={statusColor} />
             <Text style={[styles.timePillText, { color: statusColor }]}>{dateStr}</Text>
           </View>
           <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
         </View>
-        {adv > 0 && (
+        {adv > 0 && !isInbox && (
           <Text style={[styles.rowAdvance, { color: theme.brand.primary }]}>
             {adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} {t.remind_before.toLowerCase()}
           </Text>
@@ -129,6 +145,7 @@ export function ReminderListScreen() {
   const [parsing, setParsing] = useState(false)
   const [parsedReminder, setParsedReminder] = useState<ParsedReminder | null>(null)
   const [originalNlText, setOriginalNlText] = useState('')
+  const [activeFilter, setActiveFilter] = useState<ReminderFilter>('all')
 
   const handleNlParse = async (override?: string) => {
     const input = (override ?? nlText).trim()
@@ -168,29 +185,41 @@ export function ReminderListScreen() {
     router.push({ pathname: '/reminder', params: p ? { prefill: JSON.stringify(p) } : {} } as any)
   }
 
-  const { overdue, today, upcoming, completed } = useMemo(() => {
+  const { overdue, today, upcoming, completed, inbox } = useMemo(() => {
     const now = new Date()
     const dayStart = startOfDay(now)
     const dayEnd = endOfDay(now)
     const eventAt = (r: Reminder) => new Date(new Date(r.remind_at).getTime() + (r.advance_minutes ?? 0) * 60000)
-    const active = reminders.filter((r) => r.completed === 0)
+    const scoped = reminders.filter((r) => {
+      if (activeFilter === 'today') {
+        const d = eventAt(r)
+        return (r.is_inbox ?? 0) !== 1 && r.completed === 0 && d >= dayStart && d <= dayEnd
+      }
+      if (activeFilter === 'important') return r.priority === 'high' && r.completed === 0
+      if (activeFilter === 'inbox') return (r.is_inbox ?? 0) === 1 && r.completed === 0
+      return true
+    })
+    const active = scoped.filter((r) => r.completed === 0)
     const completed = reminders
       .filter((r) => r.completed === 1)
       .sort((a, b) => eventAt(b).getTime() - eventAt(a).getTime())
+    const inbox = active
+      .filter((r) => (r.is_inbox ?? 0) === 1)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     const overdue = active
-      .filter((r) => eventAt(r) < now)
+      .filter((r) => (r.is_inbox ?? 0) !== 1 && eventAt(r) < now)
       .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
     const today = active
       .filter((r) => {
         const d = eventAt(r)
-        return d >= now && d >= dayStart && d <= dayEnd
+        return (r.is_inbox ?? 0) !== 1 && d >= now && d >= dayStart && d <= dayEnd
       })
       .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
     const upcoming = active
-      .filter((r) => eventAt(r) > dayEnd)
+      .filter((r) => (r.is_inbox ?? 0) !== 1 && eventAt(r) > dayEnd)
       .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
-    return { overdue, today, upcoming, completed }
-  }, [reminders])
+    return { overdue, today, upcoming, completed, inbox }
+  }, [reminders, activeFilter])
 
   const nextReminder = today[0] ?? upcoming[0] ?? overdue[0] ?? null
   const completedCount = completed.length
@@ -207,6 +236,26 @@ export function ReminderListScreen() {
         <View style={styles.groupTitleRow}>
           <Text style={[styles.groupHeader, { color: theme.text.primary }]}>{title}</Text>
           <Text style={[styles.groupCount, { color: theme.text.muted }]}>{items.length}</Text>
+        </View>
+
+        <View style={[styles.filterRow, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          {([
+            { key: 'all', label: t.all_period },
+            { key: 'today', label: t.today },
+            { key: 'important', label: 'Important' },
+            { key: 'inbox', label: 'Inbox' },
+          ] as { key: ReminderFilter; label: string }[]).map((item) => {
+            const active = activeFilter === item.key
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => setActiveFilter(item.key)}
+                style={[styles.filterBtn, { backgroundColor: active ? theme.brand.primary : 'transparent' }]}
+              >
+                <Text style={[styles.filterText, { color: active ? '#fff' : theme.text.secondary }]}>{item.label}</Text>
+              </Pressable>
+            )
+          })}
         </View>
         <View style={styles.listStack}>
           {items.map((r, idx) => (
@@ -279,10 +328,11 @@ export function ReminderListScreen() {
           </View>
         ) : (
           <>
+            {activeFilter === 'all' ? renderGroup('Inbox', inbox) : null}
             {renderGroup(t.reminder_past, overdue)}
             {renderGroup(t.today, today)}
             {renderGroup(t.reminder_upcoming, upcoming)}
-            {renderGroup(t.reminder_completed, completed)}
+            {activeFilter === 'all' ? renderGroup(t.reminder_completed, completed) : null}
           </>
         )}
       </ScrollView>
@@ -378,6 +428,15 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 20, fontWeight: '800' },
   statLabel: { fontSize: 11, fontWeight: '700', marginTop: 2 },
+  filterRow: {
+    flexDirection: 'row',
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 3,
+    gap: 3,
+  },
+  filterBtn: { flex: 1, alignItems: 'center', borderRadius: radius.sm, paddingVertical: spacing[2] },
+  filterText: { fontSize: 11, fontWeight: '800' },
   group: { gap: spacing[2] },
   groupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   groupHeader: { fontSize: 15, fontWeight: '800' },

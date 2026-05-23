@@ -16,10 +16,36 @@ import {
   type CreateCategoryInput,
   type UpdateCategoryInput,
   type Transaction,
+  type TransactionRule,
   type Category,
 } from './types'
 
 const MODULE = 'finance.service'
+
+function normalizeMerchantPattern(merchant: string | null | undefined): string | null {
+  const pattern = merchant?.trim().toLowerCase().replace(/\s+/g, ' ')
+  return pattern && pattern.length >= 2 ? pattern.slice(0, 120) : null
+}
+
+async function learnMerchantRule(merchant: string | null | undefined, categoryId: string): Promise<TransactionRule | null> {
+  const merchantPattern = normalizeMerchantPattern(merchant)
+  if (!merchantPattern) return null
+  const now = nowIso()
+  const existing = await q.findRuleByPattern(merchantPattern)
+  const rule: TransactionRule = {
+    id: existing?.id ?? uuid(),
+    user_id: getCurrentUserId(),
+    merchant_pattern: merchantPattern,
+    category_id: categoryId,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+    deleted_at: null,
+    synced_at: null,
+  }
+  await q.upsertTransactionRule(rule)
+  void enqueue('finance_rule', rule.id, 'upsert')
+  return rule
+}
 
 export async function createTransaction(
   input: CreateTransactionInput
@@ -40,17 +66,23 @@ export async function createTransaction(
     const now = nowIso()
     // Rule 6: if label is empty/missing, store NULL for all three columns
     const hasLocation = !!(data.location_label && data.location_label.trim().length > 0)
+    const merchantRule = data.source !== 'manual' ? await q.findRuleForMerchant(data.merchant ?? null) : null
+    const categoryId = merchantRule?.category_id ?? data.category_id
+    const defaultNeedsReview = data.source === 'voice' || data.source === 'ocr' || data.source === 'import' ? 1 : 0
+    const defaultReviewReason = data.source === 'voice' ? 'voice_entry' : data.source === 'ocr' ? 'ocr_entry' : data.source === 'import' ? 'imported_entry' : null
     const tx: Transaction = {
       id: uuid(),
       user_id: getCurrentUserId(),
       amount_cents: data.amount_cents,
       currency: data.currency,
-      category_id: data.category_id,
+      category_id: categoryId,
       merchant: data.merchant ?? null,
       note: data.note ?? null,
       occurred_at: data.occurred_at,
       mood: data.mood ?? null,
       source: data.source,
+      needs_review: merchantRule ? 0 : data.needs_review ?? defaultNeedsReview,
+      review_reason: merchantRule ? null : data.review_reason ?? defaultReviewReason,
       location_lat: hasLocation ? data.location_lat ?? null : null,
       location_lng: hasLocation ? data.location_lng ?? null : null,
       location_label: hasLocation ? data.location_label!.trim() : null,
@@ -61,6 +93,13 @@ export async function createTransaction(
     }
     await q.insertTransaction(tx)
     void enqueue('finance_transaction', tx.id, 'upsert')
+    if (tx.source === 'manual' && tx.merchant) {
+      try {
+        await learnMerchantRule(tx.merchant, tx.category_id)
+      } catch (ruleError) {
+        logger.warn(MODULE, 'learn rule failed', { id: tx.id, error: String(ruleError) })
+      }
+    }
     track('transaction_created', { category_kind: data.amount_cents >= 0 ? 'income' : undefined, source: data.source })
     logger.info(MODULE, 'transaction created', { id: tx.id, source: tx.source })
     return ok(tx)
@@ -115,6 +154,8 @@ export async function updateTransaction(
     if (data.occurred_at !== undefined) patch.occurred_at = data.occurred_at
     if (data.mood !== undefined) patch.mood = data.mood ?? null
     if (data.source !== undefined) patch.source = data.source
+    if (data.needs_review !== undefined) patch.needs_review = data.needs_review
+    if (data.review_reason !== undefined) patch.review_reason = data.review_reason || null
     if ('location_label' in data) {
       const hasLocation = !!(data.location_label && data.location_label.trim().length > 0)
       patch.location_lat = hasLocation ? data.location_lat ?? null : null
@@ -127,6 +168,13 @@ export async function updateTransaction(
     logger.info(MODULE, 'transaction updated', { id: data.id })
     const fresh = await q.getTransaction(data.id)
     if (!fresh) return appErr('INTERNAL', 'Updated row vanished')
+    if (fresh.needs_review === 0 && fresh.merchant) {
+      try {
+        await learnMerchantRule(fresh.merchant, fresh.category_id)
+      } catch (ruleError) {
+        logger.warn(MODULE, 'learn rule failed', { id: fresh.id, error: String(ruleError) })
+      }
+    }
     return ok(fresh)
   } catch (e) {
     logger.error(MODULE, 'updateTransaction failed', { id: data.id, error: String(e) })
@@ -160,9 +208,10 @@ export async function listCategories(): Promise<Result<Category[], AppError>> {
 
 export async function wipeAllData(): Promise<Result<{ deleted: number }, AppError>> {
   try {
-    const { transactions, categories } = await q.wipeFinanceData()
-    const total = transactions + categories
+    const { transactions, categories, rules } = await q.wipeFinanceData()
+    const total = transactions + categories + rules
     void enqueue('finance_transaction', 'ALL', 'wipe')
+    void enqueue('finance_rule', 'ALL', 'wipe')
     void enqueue('finance_category', 'ALL', 'wipe')
     logger.info(MODULE, 'wipeAllData succeeded', { count: total })
     return ok({ deleted: total })
@@ -254,11 +303,12 @@ export async function deleteCategory(id: string): Promise<Result<void, AppError>
 
 export async function exportAllData(): Promise<Result<string, AppError>> {
   try {
-    const { transactions, categories } = await q.exportFinanceData()
+    const { transactions, categories, rules } = await q.exportFinanceData()
     const payload = {
       exported_at: new Date().toISOString(),
       version: 1,
       categories,
+      rules,
       transactions,
     }
     return ok(JSON.stringify(payload, null, 2))

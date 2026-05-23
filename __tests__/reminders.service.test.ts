@@ -50,6 +50,8 @@ const baseReminder: Reminder = {
   remind_at: '2026-01-02T09:00:00.000Z',
   advance_minutes: 30,
   recurrence: 'none',
+  priority: 'medium',
+  is_inbox: 0,
   completed: 0,
   location_lat: null,
   location_lng: null,
@@ -83,7 +85,7 @@ describe('reminders service', () => {
       advance_minutes: 30,
       completed: 0,
     }))
-    expect(scheduleReminderNotification).toHaveBeenCalledWith(reminderId, 'Dentist', 'Bring card', expect.any(Date))
+    expect(scheduleReminderNotification).toHaveBeenCalledWith(reminderId, 'Dentist', 'Bring card', expect.any(Date), 'medium')
     expect(enqueue).toHaveBeenCalledWith('reminder', reminderId, 'upsert')
   })
 
@@ -105,7 +107,7 @@ describe('reminders service', () => {
 
     expect(result.ok).toBe(true)
     expect(mockQ.updateReminder).toHaveBeenCalledWith(reminderId, expect.objectContaining({ title: 'Doctor' }))
-    expect(scheduleReminderNotification).toHaveBeenCalledWith(reminderId, 'Doctor', 'Bring card', expect.any(Date))
+    expect(scheduleReminderNotification).toHaveBeenCalledWith(reminderId, 'Doctor', 'Bring card', expect.any(Date), 'medium')
   })
 
   it('returns NOT_FOUND when updating or deleting missing reminder', async () => {

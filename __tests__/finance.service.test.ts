@@ -12,6 +12,10 @@ jest.mock('../database/finance/queries', () => ({
   insertCategory: jest.fn(),
   updateCategory: jest.fn(),
   softDeleteCategory: jest.fn(),
+  findRuleForMerchant: jest.fn(),
+  findRuleByPattern: jest.fn(),
+  upsertTransactionRule: jest.fn(),
+  listTransactionRules: jest.fn(),
   wipeFinanceData: jest.fn(),
   exportFinanceData: jest.fn(),
 }))
@@ -60,6 +64,8 @@ const baseTx: Transaction = {
   occurred_at: '2026-01-01T10:00:00.000Z',
   mood: null,
   source: 'manual',
+  needs_review: 0,
+  review_reason: null,
   location_lat: null,
   location_lng: null,
   location_label: null,
@@ -85,7 +91,12 @@ const baseCategory: Category = {
   synced_at: null,
 }
 
-beforeEach(() => jest.resetAllMocks())
+beforeEach(() => {
+  jest.resetAllMocks()
+  mockQ.findRuleForMerchant.mockResolvedValue(null)
+  mockQ.findRuleByPattern.mockResolvedValue(null)
+  mockQ.upsertTransactionRule.mockResolvedValue(undefined)
+})
 
 describe('finance service transactions', () => {
   it('creates transaction, trims location, tracks sync', async () => {
@@ -193,8 +204,8 @@ describe('finance service categories and data management', () => {
   })
 
   it('wipes and exports finance data', async () => {
-    mockQ.wipeFinanceData.mockResolvedValue({ transactions: 2, categories: 1 })
-    mockQ.exportFinanceData.mockResolvedValue({ transactions: [baseTx], categories: [baseCategory] })
+    mockQ.wipeFinanceData.mockResolvedValue({ transactions: 2, categories: 1, rules: 0 })
+    mockQ.exportFinanceData.mockResolvedValue({ transactions: [baseTx], categories: [baseCategory], rules: [] })
 
     const wiped = await wipeAllData()
     expect(wiped.ok).toBe(true)

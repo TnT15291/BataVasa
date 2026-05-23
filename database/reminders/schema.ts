@@ -10,6 +10,9 @@ export async function createReminderSchema(db: SQLiteDatabase) {
       remind_at    TEXT NOT NULL,
       recurrence   TEXT NOT NULL DEFAULT 'none'
                    CHECK (recurrence IN ('none','daily','weekly','monthly')),
+      priority     TEXT NOT NULL DEFAULT 'medium'
+                   CHECK (priority IN ('low','medium','high')),
+      is_inbox     INTEGER NOT NULL DEFAULT 0 CHECK (is_inbox IN (0,1)),
       completed    INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0,1)),
       location_lat  REAL,
       location_lng  REAL,

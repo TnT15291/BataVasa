@@ -17,10 +17,11 @@ import { getProviderKey } from '@services/ai/openai'
 import { parseReminderEntry } from '@services/ai/reminderParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
-import type { Recurrence } from '../types'
+import type { Recurrence, ReminderPriority } from '../types'
 
 const RECURRENCES: Recurrence[] = ['none', 'daily', 'weekly', 'monthly']
 const ADVANCE_OPTIONS = [0, 5, 10, 15, 30, 60, 120, 1440, 2880] as const
+const PRIORITIES: ReminderPriority[] = ['low', 'medium', 'high']
 
 export function ReminderFormScreen() {
   useRemindersBootstrap()
@@ -46,6 +47,8 @@ export function ReminderFormScreen() {
     const d = new Date(); d.setMinutes(d.getMinutes() + 30); d.setSeconds(0, 0); return d
   })
   const [recurrence, setRecurrence] = useState<Recurrence>('none')
+  const [priority, setPriority] = useState<ReminderPriority>('medium')
+  const [isInbox, setIsInbox] = useState(false)
   const [advanceMinutes, setAdvanceMinutes] = useState(0)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showTimePicker, setShowTimePicker] = useState(false)
@@ -64,6 +67,8 @@ export function ReminderFormScreen() {
     setRemindAt(eventTime)
     setAdvanceMinutes(adv)
     setRecurrence(editingReminder.recurrence)
+    setPriority(editingReminder.priority ?? 'medium')
+    setIsInbox((editingReminder.is_inbox ?? 0) === 1)
     setPrefilled(true)
   }, [editingReminder, prefilled])
 
@@ -81,6 +86,9 @@ export function ReminderFormScreen() {
       }
       if (p.recurrence && ['none', 'daily', 'weekly', 'monthly'].includes(p.recurrence))
         setRecurrence(p.recurrence as Recurrence)
+      if (p.priority && ['low', 'medium', 'high'].includes(p.priority))
+        setPriority(p.priority as ReminderPriority)
+      if (p.is_inbox != null) setIsInbox(Number(p.is_inbox) === 1)
       setPrefilled(true)
     } catch { /* ignore malformed prefill */ }
   }, [editingId, prefilled, params.prefill])
@@ -99,7 +107,7 @@ export function ReminderFormScreen() {
   const dateStr = format(remindAt, 'dd/MM/yyyy', { locale })
   const timeStr = format(remindAt, 'HH:mm', { locale })
   const notifyAt = new Date(remindAt.getTime() - advanceMinutes * 60000)
-  const notifyTimeStr = advanceMinutes > 0 ? format(notifyAt, 'HH:mm dd/MM', { locale }) : null
+  const notifyTimeStr = !isInbox && advanceMinutes > 0 ? format(notifyAt, 'HH:mm dd/MM', { locale }) : null
 
   const advanceLabel = (mins: number): string => {
     if (mins === 0) return t.at_event_time
@@ -115,9 +123,18 @@ export function ReminderFormScreen() {
       return
     }
     setSubmitting(true)
+    const payload = {
+      title: trimmed,
+      note: note.trim() || undefined,
+      remind_at: isInbox ? undefined : notifyAt.toISOString(),
+      advance_minutes: isInbox ? 0 : advanceMinutes,
+      recurrence: isInbox ? 'none' as const : recurrence,
+      priority,
+      is_inbox: isInbox ? 1 : 0,
+    }
     const res = isEditing
-      ? await updateReminder({ id: editingId!, title: trimmed, note: note.trim() || undefined, remind_at: notifyAt.toISOString(), advance_minutes: advanceMinutes, recurrence })
-      : await createReminder({ title: trimmed, note: note.trim() || undefined, remind_at: notifyAt.toISOString(), advance_minutes: advanceMinutes, recurrence })
+      ? await updateReminder({ id: editingId!, ...payload })
+      : await createReminder(payload)
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
     void hapticSaveSuccess()
@@ -152,6 +169,8 @@ export function ReminderFormScreen() {
       setNote(parsed.note || '')
       setAdvanceMinutes(parsed.advance_minutes ?? 0)
       setRecurrence(parsed.recurrence)
+      setPriority('medium')
+      setIsInbox(false)
       setRemindAt(new Date(parsed.remind_at))
       setSmartText('')
     } catch {
@@ -178,8 +197,10 @@ export function ReminderFormScreen() {
               {title.trim() || t.reminder_title_placeholder}
             </Text>
             <View style={styles.previewMetaRow}>
-              <Feather name="calendar" size={13} color={theme.text.muted} />
-              <Text style={[styles.previewMeta, { color: theme.text.muted }]}>{dateStr} / {timeStr}</Text>
+              <Feather name={isInbox ? 'inbox' : 'calendar'} size={13} color={theme.text.muted} />
+              <Text style={[styles.previewMeta, { color: theme.text.muted }]}>
+                {isInbox ? 'Inbox' : `${dateStr} / ${timeStr}`}
+              </Text>
             </View>
             {notifyTimeStr ? (
               <View style={styles.previewMetaRow}>
@@ -222,7 +243,23 @@ export function ReminderFormScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <Pressable
+          onPress={() => setIsInbox((v) => !v)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isInbox }}
+          style={[styles.inboxToggle, {
+            backgroundColor: isInbox ? theme.brand.primary + '18' : theme.bg.elevated,
+            borderColor: isInbox ? theme.brand.primary : theme.border.subtle,
+          }]}
+        >
+          <Feather name="inbox" size={18} color={isInbox ? theme.brand.primary : theme.text.muted} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.inboxTitle, { color: isInbox ? theme.brand.primary : theme.text.primary }]}>Inbox</Text>
+            <Text style={[styles.inboxBody, { color: theme.text.muted }]}>No scheduled time yet</Text>
+          </View>
+        </Pressable>
+
+        {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <Text style={[styles.label, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
           <TextInput
             value={title}
@@ -241,9 +278,9 @@ export function ReminderFormScreen() {
             numberOfLines={3}
             style={[styles.input, styles.noteInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
           />
-        </View>
+        </View>}
 
-        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
               <Feather name="calendar" size={16} color={theme.brand.primary} />
@@ -283,9 +320,9 @@ export function ReminderFormScreen() {
               onChange={(_, date) => { setShowTimePicker(Platform.OS === 'ios'); if (date) setRemindAt((prev) => { const d = new Date(prev); d.setHours(date.getHours(), date.getMinutes(), 0, 0); return d }) }}
             />
           )}
-        </View>
+        </View>}
 
-        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIcon, { backgroundColor: '#2196F31F' }]}>
               <Feather name="bell" size={16} color="#2196F3" />
@@ -317,6 +354,34 @@ export function ReminderFormScreen() {
               <Text style={[styles.notifyHint, { color: theme.text.muted }]}>{notifyTimeStr}</Text>
             </View>
           ) : null}
+        </View>}
+
+        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
+              <Feather name="flag" size={16} color={theme.brand.primary} />
+            </View>
+            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>Priority</Text>
+          </View>
+          <View style={styles.optionRow}>
+            {PRIORITIES.map((p) => {
+              const active = priority === p
+              return (
+                <Pressable
+                  key={p}
+                  onPress={() => setPriority(p)}
+                  style={[styles.optionBtn, {
+                    backgroundColor: active ? theme.brand.primary : theme.bg.primary,
+                    borderColor: active ? theme.brand.primary : theme.border.subtle,
+                  }]}
+                >
+                  <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700', textTransform: 'capitalize' }}>
+                    {p}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
@@ -397,6 +462,17 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     gap: spacing[3],
   },
+  inboxToggle: {
+    minHeight: 58,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  inboxTitle: { fontSize: 15, fontWeight: '800' },
+  inboxBody: { fontSize: 12, marginTop: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   cardIcon: {
     width: 30,

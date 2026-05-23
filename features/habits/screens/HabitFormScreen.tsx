@@ -16,7 +16,16 @@ import { useSettingsStore } from '@store/settingsStore'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
 import type { Cadence } from '../types'
 
-const CADENCES: Cadence[] = ['daily', 'weekdays', 'weekly']
+const CADENCES: Cadence[] = ['daily', 'weekdays', 'weekly', 'custom']
+const WEEKDAYS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' },
+]
 
 const PRESET_ICONS = ['✅', '💪', '🏃', '📚', '🧘', '💧', '🥗', '😴', '🎯', '🧹', '💊', '🎸', '✍️', '🌿', '🚴']
 const PRESET_COLORS = [
@@ -45,6 +54,7 @@ export function HabitFormScreen() {
   const [icon, setIcon] = useState('✅')
   const [color, setColor] = useState('#4CAF50')
   const [cadence, setCadence] = useState<Cadence>('daily')
+  const [scheduleDays, setScheduleDays] = useState<number[]>([1, 2, 3, 4, 5])
   const [target, setTarget] = useState('1')
   const [submitting, setSubmitting] = useState(false)
   const [prefilled, setPrefilled] = useState(false)
@@ -57,6 +67,10 @@ export function HabitFormScreen() {
     setIcon(editingHabit.icon)
     setColor(editingHabit.color)
     setCadence(editingHabit.cadence)
+    setScheduleDays((editingHabit.schedule_days ?? '')
+      .split(',')
+      .map((v) => Number(v))
+      .filter((v) => Number.isInteger(v) && v >= 0 && v <= 6))
     setTarget(String(editingHabit.target_per_period))
     setPrefilled(true)
   }, [editingHabit, prefilled])
@@ -66,8 +80,15 @@ export function HabitFormScreen() {
       daily: t.cadence_daily,
       weekdays: t.cadence_weekdays,
       weekly: t.cadence_weekly,
+      custom: 'Selected days',
     }
     return map[c]
+  }
+
+  const toggleScheduleDay = (day: number) => {
+    setScheduleDays((days) => days.includes(day)
+      ? days.filter((d) => d !== day)
+      : [...days, day].sort((a, b) => a - b))
   }
 
   const onSave = async () => {
@@ -82,9 +103,12 @@ export function HabitFormScreen() {
       return
     }
     setSubmitting(true)
+    const schedule_days = cadence === 'custom'
+      ? (scheduleDays.length > 0 ? scheduleDays.join(',') : WEEKDAYS.map((d) => d.value).join(','))
+      : null
     const res = isEditing
-      ? await updateHabit({ id: editingId!, name: trimmed, icon, color, cadence, target_per_period: targetNum })
-      : await createHabit({ name: trimmed, icon, color, cadence, target_per_period: targetNum })
+      ? await updateHabit({ id: editingId!, name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days })
+      : await createHabit({ name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days })
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
     void hapticSaveSuccess()
@@ -224,6 +248,31 @@ export function HabitFormScreen() {
         })}
       </View>
 
+      {cadence === 'custom' ? (
+        <>
+          <Text style={[styles.label, { color: theme.text.muted }]}>SCHEDULE DAYS</Text>
+          <View style={styles.weekdayRow}>
+            {WEEKDAYS.map((day) => {
+              const active = scheduleDays.includes(day.value)
+              return (
+                <Pressable
+                  key={day.value}
+                  onPress={() => toggleScheduleDay(day.value)}
+                  style={[styles.weekdayBtn, {
+                    backgroundColor: active ? theme.brand.primary : theme.bg.elevated,
+                    borderColor: active ? theme.brand.primary : theme.border.subtle,
+                  }]}
+                >
+                  <Text style={[styles.weekdayText, { color: active ? '#fff' : theme.text.secondary }]}>
+                    {day.label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </>
+      ) : null}
+
       {/* Target */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_target.toUpperCase()}</Text>
       <View style={styles.targetRow}>
@@ -305,6 +354,9 @@ const styles = StyleSheet.create({
   colorBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 3 },
   cadenceRow: { flexDirection: 'row', gap: spacing[2] },
   cadenceBtn: { flex: 1, paddingVertical: spacing[3], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
+  weekdayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  weekdayBtn: { minWidth: 48, alignItems: 'center', borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  weekdayText: { fontSize: 12, fontWeight: '800' },
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   targetBtn: { width: 44, height: 44, borderRadius: radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   targetBtnText: { fontSize: 22, fontWeight: '300' },

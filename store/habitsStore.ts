@@ -7,6 +7,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 type HabitWithStats = Habit & {
   todayCount: number
   streak: number
+  dueToday: boolean
 }
 
 type HabitsState = {
@@ -19,6 +20,7 @@ type HabitsState = {
   updateHabit: (input: UpdateHabitInput) => Promise<{ ok: boolean; error?: string }>
   deleteHabit: (id: string) => Promise<{ ok: boolean; error?: string }>
   toggleTodayLog: (habitId: string) => Promise<{ ok: boolean; error?: string }>
+  skipToday: (habitId: string) => Promise<{ ok: boolean; error?: string }>
   wipeAll: () => Promise<{ ok: boolean; deleted?: number; error?: string }>
 }
 
@@ -27,7 +29,7 @@ async function hydrateStats(habit: Habit): Promise<HabitWithStats> {
     svc.getTodayLogCount(habit.id),
     svc.getHabitStreak(habit.id),
   ])
-  return { ...habit, todayCount, streak }
+  return { ...habit, todayCount, streak, dueToday: svc.isHabitDueOnDate(habit, new Date()) }
 }
 
 export const useHabitsStore = create<HabitsState>((set, get) => ({
@@ -91,6 +93,18 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
     if (!r.ok) return r
 
     // Refresh stats for this habit
+    const base = get().habits.find((h) => h.id === habitId)
+    if (base) {
+      const withStats = await hydrateStats(base)
+      set((s) => ({ habits: s.habits.map((h) => h.id === habitId ? withStats : h) }))
+    }
+    return { ok: true }
+  },
+
+  async skipToday(habitId) {
+    const dateStr = new Date().toISOString().split('T')[0]!
+    const res = await svc.skipHabit(habitId, dateStr)
+    if (!res.ok) return { ok: false, error: res.error.message }
     const base = get().habits.find((h) => h.id === habitId)
     if (base) {
       const withStats = await hydrateStats(base)

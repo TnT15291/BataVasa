@@ -34,6 +34,7 @@ import { getDateFnsLocale } from '@services/locale'
 import { useSettingsStore } from '@store/settingsStore'
 import { getProviderKey } from '@services/ai/openai'
 import { track } from '@services/analytics'
+import { convertMinorAmount, getRates } from '@services/fx'
 import { formatAmount } from '../services'
 
 type Period = ReportType
@@ -71,6 +72,7 @@ export function ReportsScreen() {
   const cats = useCategories()
   const language = useSettingsStore((s) => s.language)
   const currency = useSettingsStore((s) => s.currency)
+  const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const dfLocale = getDateFnsLocale(language)
 
@@ -84,6 +86,7 @@ export function ReportsScreen() {
   const [kindFilter, setKindFilter] = useState<'all' | 'income' | 'expense'>('all')
   const [report, setReport] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [fxRates, setFxRates] = useState<Record<string, number> | null>(null)
 
   useEffect(() => {
     getProviderKey(aiProvider).then((k) => {
@@ -91,6 +94,10 @@ export function ReportsScreen() {
       setKeyChecked(true)
     })
   }, [aiProvider])
+
+  useEffect(() => {
+    getRates(displayCurrency).then(setFxRates)
+  }, [displayCurrency])
 
   const onPeriodChange = (p: Period) => {
     setPeriod(p)
@@ -157,6 +164,7 @@ export function ReportsScreen() {
   }
 
   const range = getRange()
+  const reportCurrency = fxRates ? displayCurrency : currency
   const rangeTxs = useMemo(() => {
     if (!range) return []
     const fromIso = range.from.toISOString()
@@ -168,11 +176,25 @@ export function ReportsScreen() {
       return true
     })
   }, [allTxs, range?.from, range?.to, kindFilter])
+
+  const amountInReportCurrency = useCallback((amount: number, txCurrency: string) => {
+    if (txCurrency === reportCurrency) return amount
+    if (fxRates) return convertMinorAmount(amount, txCurrency, reportCurrency, fxRates)
+    if (txCurrency === currency) return amount
+    return null
+  }, [currency, reportCurrency, fxRates])
+
   const summary = useMemo(() => {
-    const income = rangeTxs.filter((tx) => tx.amount_cents > 0).reduce((s, tx) => s + tx.amount_cents, 0)
-    const expense = rangeTxs.filter((tx) => tx.amount_cents < 0).reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+    let income = 0
+    let expense = 0
+    for (const tx of rangeTxs) {
+      const amount = amountInReportCurrency(tx.amount_cents, tx.currency)
+      if (amount === null) continue
+      if (amount > 0) income += amount
+      else expense += Math.abs(amount)
+    }
     return { count: rangeTxs.length, income, expense }
-  }, [rangeTxs])
+  }, [rangeTxs, amountInReportCurrency])
 
   const chartBuckets = useMemo<ChartBucket[]>(() => {
     if (!range) return []
@@ -182,8 +204,10 @@ export function ReportsScreen() {
       for (const tx of rangeTxs) {
         const d = new Date(tx.occurred_at)
         if (d < from || d > to) continue
-        if (tx.amount_cents > 0) income += tx.amount_cents
-        else expense += Math.abs(tx.amount_cents)
+        const amount = amountInReportCurrency(tx.amount_cents, tx.currency)
+        if (amount === null) continue
+        if (amount > 0) income += amount
+        else expense += Math.abs(amount)
       }
       return { key, label, from, to, income, expense }
     }
@@ -212,7 +236,7 @@ export function ReportsScreen() {
     }
     return eachMonthOfInterval({ start: range.from, end: range.to })
       .map((d) => makeBucket(startOfMonth(d), endOfMonth(d), format(d, 'MMM yy', { locale: dfLocale }), format(d, 'yyyy-MM')))
-  }, [range?.from, range?.to, rangeTxs, period, dfLocale])
+  }, [range?.from, range?.to, rangeTxs, period, dfLocale, amountInReportCurrency])
 
   const chartMax = Math.max(...chartBuckets.map((b) => Math.max(b.income, b.expense)), 1)
 
@@ -340,13 +364,13 @@ export function ReportsScreen() {
           </View>
           <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
             <Text style={[styles.statValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
-              {formatAmount(summary.income, currency, language)}
+              {formatAmount(summary.income, reportCurrency, language)}
             </Text>
             <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.income}</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
             <Text style={[styles.statValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
-              {formatAmount(summary.expense, currency, language)}
+              {formatAmount(summary.expense, reportCurrency, language)}
             </Text>
             <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.expense}</Text>
           </View>

@@ -5,12 +5,12 @@ export async function insertReminder(r: Reminder): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO reminder
-      (id,user_id,title,note,remind_at,advance_minutes,recurrence,completed,
+      (id,user_id,title,note,remind_at,advance_minutes,recurrence,priority,is_inbox,completed,
        location_lat,location_lng,location_label,
        created_at,updated_at,deleted_at,synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [r.id, r.user_id, r.title, r.note ?? null, r.remind_at, r.advance_minutes ?? 0,
-     r.recurrence, r.completed, r.location_lat ?? null, r.location_lng ?? null,
+     r.recurrence, r.priority ?? 'medium', r.is_inbox ?? 0, r.completed, r.location_lat ?? null, r.location_lng ?? null,
      r.location_label ?? null, r.created_at, r.updated_at, null, null]
   )
 }

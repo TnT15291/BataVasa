@@ -130,12 +130,23 @@ export function HabitsReportScreen() {
     const fromIso = range.from.toISOString()
     const toIso = range.to.toISOString()
     const periodLogs = allLogs.filter((l) => l.occurred_at >= fromIso && l.occurred_at <= toIso)
-    const totalCompletions = periodLogs.length
+    const completedLogs = periodLogs.filter((l) => (l.skipped ?? 0) !== 1)
+    const skippedLogs = periodLogs.filter((l) => (l.skipped ?? 0) === 1)
+    const totalCompletions = completedLogs.length
     const days = differenceInDays(range.to, range.from) + 1
     const maxPossible = habits.length * days
     const completionRate = maxPossible > 0 ? Math.round((totalCompletions / maxPossible) * 100) : 0
     const bestStreak = habits.length > 0 ? Math.max(...habits.map((h) => h.streak)) : 0
-    return { totalCompletions, completionRate, bestStreak, days }
+    return {
+      totalCompletions,
+      skipCount: skippedLogs.length,
+      completionRate,
+      bestStreak,
+      days,
+      recentSkipped: skippedLogs
+        .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
+        .slice(0, 6),
+    }
   }, [getRange, allLogs, habits])
 
   const range = getRange()
@@ -151,12 +162,26 @@ export function HabitsReportScreen() {
   const logDatesByHabit = useMemo(() => {
     const map = new Map<string, Set<string>>()
     for (const log of allLogs) {
+      if ((log.skipped ?? 0) === 1) continue
       const date = log.occurred_at.split('T')[0]
       if (!map.has(log.habit_id)) map.set(log.habit_id, new Set())
       map.get(log.habit_id)!.add(date!)
     }
     return map
   }, [allLogs])
+
+  const skipDatesByHabit = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const log of allLogs) {
+      if ((log.skipped ?? 0) !== 1) continue
+      const date = log.occurred_at.split('T')[0]
+      if (!map.has(log.habit_id)) map.set(log.habit_id, new Set())
+      map.get(log.habit_id)!.add(date!)
+    }
+    return map
+  }, [allLogs])
+
+  const habitById = useMemo(() => new Map(habits.map((habit) => [habit.id, habit])), [habits])
 
   const handleGenerateInsight = async () => {
     const key = await getProviderKey(aiProvider)
@@ -274,6 +299,7 @@ export function HabitsReportScreen() {
               <StatCard label={t.report_habits_completed} value={String(stats.totalCompletions)} theme={theme} />
               <StatCard label={t.report_completion_rate} value={`${stats.completionRate}%`} theme={theme} />
               <StatCard label={t.report_best_streak} value={`${stats.bestStreak} ${t.report_days}`} theme={theme} />
+              <StatCard label="Skipped" value={String(stats.skipCount)} theme={theme} />
             </View>
 
             {/* Per-habit heatmap */}
@@ -290,10 +316,14 @@ export function HabitsReportScreen() {
                     <View style={styles.heatmapRow}>
                       {last7Days.map((day) => {
                         const done = logDatesByHabit.get(h.id)?.has(day) ?? false
+                        const skipped = skipDatesByHabit.get(h.id)?.has(day) ?? false
                         return (
                           <View
                             key={day}
-                            style={[styles.heatDot, { backgroundColor: done ? h.color : theme.border.subtle }]}
+                            style={[styles.heatDot, {
+                              backgroundColor: done ? h.color : skipped ? theme.bg.secondary : theme.border.subtle,
+                              borderColor: skipped ? theme.text.muted : 'transparent',
+                            }]}
                           />
                         )
                       })}
@@ -305,6 +335,29 @@ export function HabitsReportScreen() {
                 </View>
               ))}
             </View>
+
+            {stats.recentSkipped.length > 0 && (
+              <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+                <View style={styles.cardTitleRow}>
+                  <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>Skip history</Text>
+                  <Text style={[styles.cardTitle, { color: theme.text.muted }]}>{stats.skipCount}</Text>
+                </View>
+                {stats.recentSkipped.map((log) => {
+                  const habit = habitById.get(log.habit_id)
+                  return (
+                    <View key={log.id} style={[styles.skipRow, { borderColor: theme.border.subtle }]}>
+                      <Text style={styles.habitIcon}>{habit?.icon ?? '...'}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.habitName, { color: theme.text.primary }]}>{habit?.name ?? log.habit_id}</Text>
+                        <Text style={[styles.habitMeta, { color: theme.text.muted }]}>
+                          {format(new Date(log.occurred_at), 'EEE, dd MMM', { locale: dfLocale })}
+                        </Text>
+                      </View>
+                    </View>
+                  )
+                })}
+              </View>
+            )}
 
             {/* AI Habit Insight */}
             <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
@@ -389,8 +442,8 @@ const styles = StyleSheet.create({
   dateInputText: { fontSize: 13, fontFamily: 'Courier' },
   dateSep: { fontSize: 18, paddingBottom: spacing[2] },
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
-  statsGrid: { flexDirection: 'row', gap: spacing[3] },
-  statCard: { flex: 1, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
+  statCard: { width: '47%', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
   statValue: { fontSize: 22, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
@@ -401,7 +454,8 @@ const styles = StyleSheet.create({
   habitName: { fontSize: 15, fontWeight: '500' },
   habitMeta: { fontSize: 12 },
   heatmapRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  heatDot: { width: 12, height: 12, borderRadius: 3 },
+  heatDot: { width: 12, height: 12, borderRadius: 3, borderWidth: 1 },
+  skipRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2] },
   insightBody: { gap: spacing[2] },
   insightRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2], gap: 2 },
   insightLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },

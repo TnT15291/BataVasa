@@ -19,6 +19,19 @@ import {
 
 const MODULE = 'habits.service'
 
+export function isHabitDueOnDate(habit: Pick<Habit, 'cadence' | 'schedule_days'>, date: Date): boolean {
+  const day = date.getDay()
+  if (habit.cadence === 'weekdays') return day >= 1 && day <= 5
+  if (habit.cadence === 'custom') {
+    const days = (habit.schedule_days ?? '')
+      .split(',')
+      .map((v) => Number(v))
+      .filter((v) => Number.isInteger(v) && v >= 0 && v <= 6)
+    return days.length === 0 ? true : days.includes(day)
+  }
+  return true
+}
+
 export async function createHabit(
   input: CreateHabitInput
 ): Promise<Result<Habit, AppError>> {
@@ -36,6 +49,7 @@ export async function createHabit(
       color: data.color,
       cadence: data.cadence,
       target_per_period: data.target_per_period,
+      schedule_days: data.cadence === 'custom' ? data.schedule_days ?? null : null,
       location_lat: data.location_lat ?? null,
       location_lng: data.location_lng ?? null,
       location_label: data.location_label ?? null,
@@ -73,6 +87,9 @@ export async function updateHabit(
     if (data.color !== undefined) patch.color = data.color
     if (data.cadence !== undefined) patch.cadence = data.cadence
     if (data.target_per_period !== undefined) patch.target_per_period = data.target_per_period
+    if (data.schedule_days !== undefined || data.cadence !== undefined) {
+      patch.schedule_days = (data.cadence ?? existing.cadence) === 'custom' ? data.schedule_days ?? existing.schedule_days ?? null : null
+    }
 
     await q.updateHabit(data.id, patch)
     void enqueue('habit', data.id, 'upsert')
@@ -149,6 +166,7 @@ export async function logHabit(
       user_id: getCurrentUserId(),
       occurred_at: data.occurred_at,
       note: data.note ?? null,
+      skipped: data.skipped ?? 0,
       created_at: nowIso(),
       updated_at: nowIso(),
       deleted_at: null,
@@ -162,6 +180,35 @@ export async function logHabit(
   } catch (e) {
     logger.error(MODULE, 'logHabit failed', { error: String(e) })
     return appErr('DB_ERROR', 'Failed to log habit', e)
+  }
+}
+
+export async function skipHabit(
+  habitId: string,
+  dateStr: string
+): Promise<Result<HabitLog, AppError>> {
+  try {
+    const existing = await q.getLogForDate(habitId, dateStr)
+    if (existing) return ok(existing)
+    const log: HabitLog = {
+      id: uuid(),
+      habit_id: habitId,
+      user_id: getCurrentUserId(),
+      occurred_at: new Date(`${dateStr}T12:00:00.000Z`).toISOString(),
+      note: 'Skipped',
+      skipped: 1,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+      deleted_at: null,
+      synced_at: null,
+    }
+    await q.insertHabitLog(log)
+    void enqueue('habit_log', log.id, 'upsert')
+    track('feature_used', { feature_name: 'habit_skipped' })
+    return ok(log)
+  } catch (e) {
+    logger.error(MODULE, 'skipHabit failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to skip habit', e)
   }
 }
 
@@ -192,13 +239,17 @@ export async function getHabitStreak(habitId: string): Promise<number> {
     const fromDate = from.toISOString().split('T')[0]!
 
     const logsByDate = await q.listLogCountsByDate(habitId, fromDate, toDate)
+    const habit = await q.getHabit(habitId)
+    if (!habit) return 0
     const logMap = new Map(logsByDate.map((r) => [r.date, r.count]))
 
     let streak = 0
     const cur = new Date(today)
     while (true) {
       const dateStr = cur.toISOString().split('T')[0]!
-      if ((logMap.get(dateStr) ?? 0) >= 1) {
+      if (!isHabitDueOnDate(habit, cur)) {
+        cur.setDate(cur.getDate() - 1)
+      } else if ((logMap.get(dateStr) ?? 0) >= 1) {
         streak++
         cur.setDate(cur.getDate() - 1)
       } else {

@@ -29,15 +29,18 @@ export async function scheduleReminderNotification(
   reminderId: string,
   title: string,
   body: string,
-  triggerDate: Date
+  triggerDate: Date,
+  priority: 'low' | 'medium' | 'high' = 'medium'
 ): Promise<string | null> {
   try {
     const granted = await requestNotificationPermission()
     if (!granted) return null
     if (triggerDate <= new Date()) return null
 
+    const notificationTitle = priority === 'high' ? `High priority: ${title}` : title
+    const notificationBody = priority === 'low' ? body : body || (priority === 'high' ? 'Important reminder' : 'Reminder')
     const id = await Notifications.scheduleNotificationAsync({
-      content: { title, body, data: { reminderId } },
+      content: { title: notificationTitle, body: notificationBody, data: { reminderId, priority } },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: triggerDate },
     })
     return id

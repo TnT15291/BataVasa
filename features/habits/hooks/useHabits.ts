@@ -19,5 +19,6 @@ export function useHabitActions() {
   const updateHabit = useHabitsStore((s) => s.updateHabit)
   const deleteHabit = useHabitsStore((s) => s.deleteHabit)
   const toggleTodayLog = useHabitsStore((s) => s.toggleTodayLog)
-  return { createHabit, updateHabit, deleteHabit, toggleTodayLog }
+  const skipToday = useHabitsStore((s) => s.skipToday)
+  return { createHabit, updateHabit, deleteHabit, toggleTodayLog, skipToday }
 }
