@@ -5,7 +5,7 @@ jest.mock('../services/ai/openai', () => ({
 }))
 
 import { chatCompletion } from '../services/ai/openai'
-import { parseUniversalEntry } from '../services/ai/universalEntry'
+import { parseUniversalCandidates, parseUniversalEntry } from '../services/ai/universalEntry'
 
 const mockedChatCompletion = chatCompletion as jest.MockedFunction<typeof chatCompletion>
 
@@ -31,5 +31,58 @@ describe('parseUniversalEntry', () => {
       module: 'finance',
       occurred_at: '2026-05-19T15:00:00.000Z',
     })
+  })
+
+  it('parses candidate response format', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({
+      candidates: [
+        {
+          confidence: 0.91,
+          reason: 'future task',
+          selectedByDefault: true,
+          entry: {
+            module: 'reminder',
+            title: 'Team meeting',
+            remind_at: '2099-05-19T09:00:00+07:00',
+            recurrence: 'none',
+            note: '',
+          },
+        },
+      ],
+    }))
+
+    const parsed = await parseUniversalCandidates('nhac hop team mai 9h')
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0]).toMatchObject({
+      confidence: 0.91,
+      entry: { module: 'reminder', title: 'Team meeting' },
+    })
+  })
+
+  it('adds journal candidate for financial event with emotion', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({
+      candidates: [
+        {
+          confidence: 0.9,
+          reason: 'income amount',
+          selectedByDefault: true,
+          entry: {
+            module: 'finance',
+            amount_cents: 2000000,
+            direction: 'income',
+            category_hint: 'Other Income',
+            merchant: '',
+            note: '',
+            occurred_at: '2026-05-19T22:00:00+07:00',
+          },
+        },
+      ],
+    }))
+
+    const parsed = await parseUniversalCandidates('hom nay vui vi lam ra 2 trieu dong')
+
+    expect(parsed.map((c) => c.entry.module)).toEqual(['finance', 'journal'])
+    expect(parsed.find((c) => c.entry.module === 'journal')?.selectedByDefault).toBe(true)
   })
 })

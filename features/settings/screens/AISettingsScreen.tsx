@@ -8,6 +8,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -117,10 +119,15 @@ export function AISettingsScreen() {
   const currentConfig = AI_PROVIDERS[selectedTab]
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.bg.primary }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.bg.primary }}
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
     >
       {/* Provider tabs */}
       <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>PROVIDER</Text>
@@ -271,6 +278,7 @@ export function AISettingsScreen() {
         </Text>
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   )
 }
 

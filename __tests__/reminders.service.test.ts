@@ -23,6 +23,7 @@ jest.mock('../services/analytics', () => ({ track: jest.fn() }))
 jest.mock('../services/notifications', () => ({
   scheduleReminderNotification: jest.fn(),
   cancelNotification: jest.fn(),
+  cancelReminderNotifications: jest.fn(),
   cancelAllNotifications: jest.fn(),
 }))
 
@@ -31,6 +32,7 @@ import { enqueue } from '../database/sync/queue'
 import {
   createReminder,
   updateReminder,
+  skipReminder,
   deleteReminder,
   loadReminders,
   wipeAllReminders,
@@ -108,6 +110,37 @@ describe('reminders service', () => {
     expect(result.ok).toBe(true)
     expect(mockQ.updateReminder).toHaveBeenCalledWith(reminderId, expect.objectContaining({ title: 'Doctor' }))
     expect(scheduleReminderNotification).toHaveBeenCalledWith(reminderId, 'Doctor', 'Bring card', expect.any(Date), 'medium')
+  })
+
+  it('skips recurring reminder to next occurrence and reschedules', async () => {
+    mockQ.getReminder
+      .mockResolvedValueOnce({ ...baseReminder, recurrence: 'daily', remind_at: '2099-01-01T09:00:00.000Z' })
+      .mockResolvedValueOnce({ ...baseReminder, recurrence: 'daily', remind_at: '2099-01-02T09:00:00.000Z' })
+    mockQ.updateReminder.mockResolvedValue(undefined)
+    ;(scheduleReminderNotification as jest.Mock).mockResolvedValue('notif-3')
+
+    const result = await skipReminder(reminderId)
+
+    expect(result.ok).toBe(true)
+    expect(mockQ.updateReminder).toHaveBeenCalledWith(reminderId, expect.objectContaining({
+      remind_at: '2099-01-02T09:00:00.000Z',
+      completed: 0,
+    }))
+    expect(scheduleReminderNotification).toHaveBeenCalledWith(reminderId, 'Dentist', 'Bring card', expect.any(Date), 'medium')
+    expect(enqueue).toHaveBeenCalledWith('reminder', reminderId, 'upsert')
+  })
+
+  it('skips one-off reminder by completing it', async () => {
+    mockQ.getReminder
+      .mockResolvedValueOnce(baseReminder)
+      .mockResolvedValueOnce({ ...baseReminder, completed: 1 })
+    mockQ.updateReminder.mockResolvedValue(undefined)
+
+    const result = await skipReminder(reminderId)
+
+    expect(result.ok).toBe(true)
+    expect(mockQ.updateReminder).toHaveBeenCalledWith(reminderId, expect.objectContaining({ completed: 1 }))
+    expect(scheduleReminderNotification).not.toHaveBeenCalled()
   })
 
   it('returns NOT_FOUND when updating or deleting missing reminder', async () => {

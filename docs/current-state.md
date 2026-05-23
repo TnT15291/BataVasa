@@ -1,6 +1,6 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-05-22.
+> Single source of truth for project status. Last updated: 2026-05-23.
 
 ## Overall
 
@@ -48,6 +48,8 @@
 - Inbox items without a scheduled time.
 - Today, Important, Inbox, and All filters on the reminder list.
 - Priority-aware notification wording.
+- Skip action advances recurring reminders to the next occurrence; one-off skips complete the reminder.
+- Completing, deleting, skipping, or changing scheduled reminder fields cancels stale scheduled notifications by reminder id.
 - Local push notifications via `expo-notifications`.
 - Smart add form with text/voice parse and preview-oriented layout.
 - Reports use calendar date selection.
@@ -75,8 +77,10 @@
 
 - Daily Digest home with summary hero, module cards, today panel, and analysis entry.
 - Universal Add Sheet opens from the `+` button only. The direct quick-entry box was removed from the home screen.
+- Universal Add uses candidate-based parsing: AI can propose multiple module entries, the app validates them, and the user selects which candidates to save. Money + reflection can save as Finance + Journal after confirmation.
 - Smart Entry lives inside add/edit forms for modules, not in list/dashboard screens.
 - Voice input remains available in form/add flows and force-confirms before save where applicable.
+- Voice microphone privacy prompt is shown only from voice buttons and can be dismissed permanently with "Do not show again".
 
 ## Key Files
 
@@ -95,6 +99,7 @@
 | Store listing | `docs/store-listing.md` |
 | Privacy policy | `docs/privacy-policy.md` |
 | Supabase SQL | `docs/supabase-setup.sql` |
+| B1/B2 verification | `docs/b1-b2-verification.md` |
 
 ## Current Blockers
 
@@ -103,6 +108,7 @@
 Code is implemented, but public launch still needs manual verification:
 
 - Run `docs/supabase-setup.sql` in the Supabase dashboard for the production project.
+- Follow `docs/b1-b2-verification.md` for the full command/manual checklist.
 - Verify sign up, sign in, sign out, session restore, and login wall on a real device or emulator.
 - Verify create/update/delete/wipe for Finance, Reminders, Habits, and Journals sync from SQLite to Supabase.
 - Verify per-module sync toggles stop/resume queue draining correctly.
@@ -112,19 +118,22 @@ Code is implemented, but public launch still needs manual verification:
 
 Current test infrastructure is ready, but global coverage is still below the public-launch target.
 
-- Latest automated run on 2026-05-22: `npm run test:ci` passed.
-- Current status: 202 tests across 22 suites.
+- Latest automated run on 2026-05-23: `npm test -- --runInBand` passed.
+- Current status: 233 tests across 28 suites.
 - Current coverage: 49.40% statements / 49.10% branches / 47.89% functions / 50.72% lines.
 - Current CI floor: 37% statements / 35% branches / 31% functions / 39% lines.
 - Target before public launch: raise toward 70% global coverage.
 - Completed in this pass:
   - Habits DB query tests.
   - Journals DB query tests.
-- Next tests to add:
+  - Universal Add candidate parser tests.
+  - Reminder skip/notification cancellation service tests.
   - Sync queue and sync worker tests.
   - Settings store persistence tests.
   - Core migration tests.
   - AI insight builder tests for finance/habits/journals/cross-module.
+- Next tests to add:
+  - Continue raising coverage toward the 70% public-launch target.
 
 ### H18 Store Readiness
 
@@ -299,3 +308,10 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 - Implemented P0 minimum viable slice: journal important flag, reminder priority, habit skip/rest day, and finance review markers.
 - Completed the remaining P0 product layer: journal important report/parser hint, finance review filter/rule engine, and richer habit skip report/history.
 - Added pre-closed-beta product polish: reminder inbox/filters/priority notifications, journal templates, habit selected-day schedules, and recurring finance reminder suggestions.
+- Added Universal Add multi-candidate confirmation so ambiguous or multi-intent text is not silently forced into one module.
+- Added reminder skip/reschedule behavior and stale notification cancellation by reminder id.
+- Added "Do not show again" persistence for the pre-microphone privacy prompt.
+- Added sync queue/worker and settings query/store persistence tests.
+- Added core migration coverage for fresh installs, version resume, idempotent additive columns, and in-flight reuse.
+- Added AI insight builder coverage for finance, habits, journals, and cross-module prompts/parsing.
+- Added new-user onboarding/UX polish: global success toast (`store/toastStore.ts` + `components/Toast.tsx`, mounted in `app/_layout.tsx`), "Saved · syncs when online" feedback on all create/update flows + sign-in, a Help/Quick-Tips screen (`app/help.tsx`, linked from Settings and a home header `?` button), a shared "Create → Save offline → Auto-sync" `components/FlowDiagram.tsx` used in onboarding + Help, auth-screen benefit messaging + tagline, quick "create directly" module chips in the Universal Add sheet, and friendlier non-technical wording (removed "backend"/"Supabase" from the auth-not-configured message). Added 33 i18n keys across all 6 languages.

@@ -66,10 +66,10 @@ ai/<module>Insight.ts  ← AI analysis for this module
 1. User taps **+** FAB on home screen → `UniversalAddSheet` opens (`features/home/components/UniversalAddSheet.tsx`)
 2. User types free text (voice planned for V2)
 3. Text goes through **deterministic pre-parser** (`services/ai/smartEntry.ts:extractAmount`) for amount extraction
-4. Pre-parsed text → `services/ai/universalEntry.ts:parseUniversalEntry()` → AI intent classifier → returns typed `UniversalEntry`
+4. Pre-parsed text → `services/ai/universalEntry.ts:parseUniversalCandidates()` → AI intent classifier → returns one or more typed candidates
 5. Prompt includes: language directive, current local datetime, user timezone offset (so "18h00" → `18:00+07:00` not `18:00Z`)
-6. **Confirmation sheet** shown inline (module icon, parsed fields, Save/Edit/Cancel)
-7. On Save → calls the appropriate module's store action (`createTransaction` / `createReminder` / …)
+6. **Confirmation sheet** shown inline with selectable candidate cards (module icon, parsed fields, Save/Edit/Cancel)
+7. On Save → saves every selected candidate through the appropriate module store action (`createTransaction` / `createReminder` / …)
 8. `settingsStore.aiAutoConfirm` toggle (default `true`) controls whether sheet is shown; voice always confirms
 
 ## Cross-Module Rules
@@ -113,7 +113,7 @@ UI: `features/settings/screens/<Module>DataScreen.tsx` → destructive button wi
 
 **Implemented:** `features/home/components/UniversalAddSheet.tsx` — bottom sheet Modal on DailyDigestScreen.
 
-**Intent classifier:** `services/ai/universalEntry.ts:parseUniversalEntry(text)`
+**Intent classifier:** `services/ai/universalEntry.ts:parseUniversalCandidates(text)`
 
 ```ts
 export type UniversalEntry =
@@ -124,9 +124,19 @@ export type UniversalEntry =
 ```
 
 - AI classifies via `chatCompletion()` (multi-provider) at `temperature: 0.1`
+- Universal Add uses `parseUniversalCandidates(text)` for UI flows. `parseUniversalEntry(text)` is compatibility-only and returns the highest-confidence candidate.
+- The classifier returns candidates, not a single forced module: `{ id, entry, confidence, reason, selectedByDefault }[]`.
+- If the text has multiple clear intents, return multiple candidates. Example: money event + feeling/reflection => finance + journal.
+- If the text is ambiguous between modules, return multiple candidates and let the confirmation sheet ask the user through selectable cards.
+- Each module candidate MUST pass module guards before saving:
+  - Finance requires an amount and direction.
+  - Reminder requires a future datetime or reminder/schedule intent.
+  - Habit requires recurrence/cadence or a repeated behavior goal.
+  - Journal requires reflection, feeling, memory, or narrative content.
+- Adding a future module MUST extend the candidate type, prompt rules, guard rules, summary card, and save dispatch together. Do not add a module that can only be selected by prompt text.
 - `extractAmount()` runs deterministically before AI call; enforced if AI result diverges ≥10×
 - All datetimes include user timezone offset in prompt and post-processed via `fixReminderTimezone()` to prevent UTC-vs-local bugs
-- Habits/Journal from sheet: classified and summarized, but save goes directly to module form (full CRUD screens handle the actual write)
+- Selected candidates save directly from the sheet through module store actions.
 
 **Voice:** planned for V2 — will wrap `expo-speech-recognition` behind `services/voice.ts`
 
@@ -175,7 +185,7 @@ User's relative dates ("tomorrow", "hôm qua") should resolve against this.
 
 ### Rule 5 — AI parse → confirm before save
 
-**Implemented** inside `features/home/components/UniversalAddSheet.tsx` as the Step 2 UI after `parseUniversalEntry()` returns.
+**Implemented** inside `features/home/components/UniversalAddSheet.tsx` as the Step 2 UI after `parseUniversalCandidates()` returns.
 
 Layout (Step 2):
 ```
@@ -192,7 +202,16 @@ Layout (Step 2):
 **Settings:**
 - `settingsStore.aiAutoConfirm: boolean` (default `true` = step 2 shown)
 - "Edit" → resets to Step 1 (text input) with same text pre-filled
-- "Save" → calls module store action directly (no navigation)
+- "Save" → calls module store actions for every selected candidate (no navigation)
+
+**Universal candidate rule (mandatory for every current and future module):**
+- AI proposes candidates; app validates candidates; user confirms when there is ambiguity or multiple intents.
+- Never silently force ambiguous text into one module.
+- Never silently save duplicate modules unless separate intents are clear and shown as selected candidate cards.
+- Dual/multi-entry examples:
+  - `Hôm nay thấy vui vì làm ra 2 triệu` → Finance income + Journal reflection.
+  - `Nhắc tôi tập gym mỗi ngày lúc 7h và theo dõi thành thói quen` → Reminder + Habit.
+  - `Đã trả 500k tiền gym tháng này` → Finance only.
 
 **Voice exception:** even if `aiAutoConfirm === false`, voice inputs ALWAYS show the sheet (speech-to-text errors are common). _Voice planned V2._
 

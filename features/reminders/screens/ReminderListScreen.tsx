@@ -38,21 +38,23 @@ function RecurrenceBadge({ recurrence }: { recurrence: Reminder['recurrence'] })
 
 function PriorityBadge({ priority }: { priority: Reminder['priority'] }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   if (!priority || priority === 'medium') return null
   const color = priority === 'high' ? theme.semantic.danger : theme.text.muted
+  const label = priority === 'high' ? t.reminder_priority_high : t.reminder_priority_low
   return (
     <View style={[styles.badge, { backgroundColor: color + '22' }]}>
       <Feather name="flag" size={10} color={color} />
-      <Text style={[styles.badgeText, { color }]}>{priority}</Text>
+      <Text style={[styles.badgeText, { color }]}>{label}</Text>
     </View>
   )
 }
 
-function ReminderRow({ reminder, onPress, onToggle, isLast }: {
+function ReminderRow({ reminder, onPress, onToggle, onSkip }: {
   reminder: Reminder
   onPress: () => void
   onToggle: () => void
-  isLast: boolean
+  onSkip: () => void
 }) {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -65,8 +67,9 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
   const isPast = !isInbox && eventTime < now && !isDone
   const isToday = !isInbox && eventTime >= startOfDay(now) && eventTime <= endOfDay(now)
   const statusColor = isDone ? theme.semantic.success : isPast ? theme.semantic.danger : isToday ? theme.brand.primary : '#2196F3'
-  const statusLabel = isDone ? t.reminder_completed : isInbox ? 'Inbox' : isPast ? t.reminder_past : isToday ? t.today : t.reminder_upcoming
-  const dateStr = isInbox ? 'Inbox' : format(eventTime, isToday ? 'HH:mm' : 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
+  const canSkip = !isDone && !isInbox && reminder.recurrence !== 'none'
+  const statusLabel = isDone ? t.reminder_completed : isInbox ? t.reminder_inbox : isPast ? t.reminder_past : isToday ? t.today : t.reminder_upcoming
+  const dateStr = isInbox ? t.reminder_inbox : format(eventTime, isToday ? 'HH:mm' : 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
 
   return (
     <Pressable
@@ -126,6 +129,17 @@ function ReminderRow({ reminder, onPress, onToggle, isLast }: {
         ) : null}
       </View>
 
+      {canSkip ? (
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); onSkip() }}
+          style={[styles.skipBtn, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}
+          accessibilityRole="button"
+          accessibilityLabel={t.reminder_skip}
+          hitSlop={8}
+        >
+          <Feather name="skip-forward" size={15} color={theme.text.secondary} />
+        </Pressable>
+      ) : null}
       <Feather name="chevron-right" size={20} color={theme.text.muted} />
     </Pressable>
   )
@@ -137,7 +151,7 @@ export function ReminderListScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const reminders = useReminders()
-  const { createReminder, updateReminder } = useReminderActions()
+  const { createReminder, updateReminder, skipReminder } = useReminderActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const language = useSettingsStore((s) => s.language)
 
@@ -229,6 +243,10 @@ export function ReminderListScreen() {
     updateReminder({ id: r.id, completed: r.completed === 1 ? 0 : 1 })
   }
 
+  const skip = (r: Reminder) => {
+    skipReminder(r.id)
+  }
+
   const renderGroup = (title: string, items: Reminder[]) => {
     if (items.length === 0) return null
     return (
@@ -238,33 +256,14 @@ export function ReminderListScreen() {
           <Text style={[styles.groupCount, { color: theme.text.muted }]}>{items.length}</Text>
         </View>
 
-        <View style={[styles.filterRow, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          {([
-            { key: 'all', label: t.all_period },
-            { key: 'today', label: t.today },
-            { key: 'important', label: 'Important' },
-            { key: 'inbox', label: 'Inbox' },
-          ] as { key: ReminderFilter; label: string }[]).map((item) => {
-            const active = activeFilter === item.key
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => setActiveFilter(item.key)}
-                style={[styles.filterBtn, { backgroundColor: active ? theme.brand.primary : 'transparent' }]}
-              >
-                <Text style={[styles.filterText, { color: active ? '#fff' : theme.text.secondary }]}>{item.label}</Text>
-              </Pressable>
-            )
-          })}
-        </View>
         <View style={styles.listStack}>
-          {items.map((r, idx) => (
+          {items.map((r) => (
             <ReminderRow
               key={r.id}
               reminder={r}
               onPress={() => router.push({ pathname: '/reminder', params: { id: r.id } } as any)}
               onToggle={() => toggleDone(r)}
-              isLast={idx === items.length - 1}
+              onSkip={() => skip(r)}
             />
           ))}
         </View>
@@ -312,6 +311,26 @@ export function ReminderListScreen() {
           </View>
         </View>
 
+        <View style={[styles.filterRow, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          {([
+            { key: 'all', label: t.all_period },
+            { key: 'today', label: t.today },
+            { key: 'important', label: t.reminder_important },
+            { key: 'inbox', label: t.reminder_inbox },
+          ] as { key: ReminderFilter; label: string }[]).map((item) => {
+            const active = activeFilter === item.key
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => setActiveFilter(item.key)}
+                style={[styles.filterBtn, { backgroundColor: active ? theme.brand.primary : 'transparent' }]}
+              >
+                <Text style={[styles.filterText, { color: active ? '#fff' : theme.text.secondary }]} numberOfLines={1}>{item.label}</Text>
+              </Pressable>
+            )
+          })}
+        </View>
+
         {reminders.length === 0 ? (
           <View style={styles.empty}>
             <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
@@ -328,7 +347,7 @@ export function ReminderListScreen() {
           </View>
         ) : (
           <>
-            {activeFilter === 'all' ? renderGroup('Inbox', inbox) : null}
+            {activeFilter === 'all' ? renderGroup(t.reminder_inbox, inbox) : null}
             {renderGroup(t.reminder_past, overdue)}
             {renderGroup(t.today, today)}
             {renderGroup(t.reminder_upcoming, upcoming)}
@@ -454,6 +473,14 @@ const styles = StyleSheet.create({
   },
   rowAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
   checkbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  skipBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rowContent: { flex: 1, gap: spacing[1] },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   rowTitle: { fontSize: 15, fontWeight: '700', flex: 1 },

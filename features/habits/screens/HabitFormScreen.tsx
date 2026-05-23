@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   View, Text, TextInput, Pressable, StyleSheet,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -9,6 +9,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { hapticSaveSuccess } from '@services/haptics'
+import { notifySaved } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseHabitLog } from '@services/ai/habitParser'
 import { VoiceButton } from '@components/VoiceButton'
@@ -112,6 +113,7 @@ export function HabitFormScreen() {
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
     void hapticSaveSuccess()
+    notifySaved(t, useSettingsStore.getState().syncHabits)
     router.back()
   }
 
@@ -149,10 +151,15 @@ export function HabitFormScreen() {
   }
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.bg.primary }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.bg.primary }}
       contentContainerStyle={styles.body}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
     >
       <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <View style={styles.cardHeader}>
@@ -308,6 +315,7 @@ export function HabitFormScreen() {
         </Pressable>
       )}
     </ScrollView>
+    </KeyboardAvoidingView>
   )
 }
 

@@ -68,11 +68,18 @@ function WaveformBars({ color, size }: { color: string; size: number }) {
 
 const MAX_RECORDING_MS = 120000
 
-function confirmPermissionPrompt(title: string, message: string, cancel: string, next: string): Promise<boolean> {
+function confirmPermissionPrompt(
+  title: string,
+  message: string,
+  cancel: string,
+  next: string,
+  dontShowAgain: string
+): Promise<'cancel' | 'continue' | 'continue-and-hide'> {
   return new Promise((resolve) => {
     Alert.alert(title, message, [
-      { text: cancel, style: 'cancel', onPress: () => resolve(false) },
-      { text: next, onPress: () => resolve(true) },
+      { text: cancel, style: 'cancel', onPress: () => resolve('cancel') },
+      { text: dontShowAgain, onPress: () => resolve('continue-and-hide') },
+      { text: next, onPress: () => resolve('continue') },
     ])
   })
 }
@@ -81,6 +88,8 @@ export function VoiceButton({ onResult, disabled, size = 36, module = 'unknown' 
   const theme = useTheme()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
+  const hideMicPermissionPrompt = useSettingsStore((s) => s.hideMicPermissionPrompt)
+  const setHideMicPermissionPrompt = useSettingsStore((s) => s.setHideMicPermissionPrompt)
   const [state, setState] = useState<State>('idle')
   const scaleAnim = useRef(new Animated.Value(1)).current
   const animRef = useRef<Animated.CompositeAnimation | null>(null)
@@ -125,11 +134,18 @@ export function VoiceButton({ onResult, disabled, size = 36, module = 'unknown' 
       setState('idle')
       return
     }
-    const text = await transcribeAudio(uri, language)
+    const result = await transcribeAudio(uri, language)
     setState('idle')
-    if (text) {
+    if (result.ok) {
       track('voice_transcribed', { module, duration_ms: startedAt ? Date.now() - startedAt : undefined })
-      onResult(text)
+      onResult(result.text)
+    } else if (result.reason === 'no_speech') {
+      // Silence / no detectable speech — a soft nudge, not a system error.
+      track('voice_failed', { module, reason: 'no_speech' })
+      Alert.alert(t.voice_no_speech_title, t.voice_no_speech_msg, [
+        { text: t.cancel, style: 'cancel' },
+        { text: t.retry, onPress: () => { void handlePress() } },
+      ])
     } else {
       track('voice_failed', { module, reason: 'transcribe_failed' })
       Alert.alert(t.ai_error, t.parse_failed, [
@@ -153,13 +169,17 @@ export function VoiceButton({ onResult, disabled, size = 36, module = 'unknown' 
       Alert.alert(t.no_api_key, t.voice_no_key)
       return
     }
-    const shouldRequest = await confirmPermissionPrompt(
-      t.mic_permission_title,
-      t.mic_permission_hint,
-      t.cancel,
-      t.onboarding_next
-    )
-    if (!shouldRequest) return
+    if (!hideMicPermissionPrompt) {
+      const promptAction = await confirmPermissionPrompt(
+        t.mic_permission_title,
+        t.mic_permission_hint,
+        t.cancel,
+        t.onboarding_next,
+        t.mic_permission_dont_show_again
+      )
+      if (promptAction === 'cancel') return
+      if (promptAction === 'continue-and-hide') await setHideMicPermissionPrompt(true)
+    }
 
     const granted = await requestMicPermission()
     if (!granted) {

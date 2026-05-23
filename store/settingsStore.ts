@@ -23,6 +23,7 @@ type SettingsState = {
   syncJournals: boolean
   hasSeenOnboarding: boolean
   biometricLock: boolean
+  hideMicPermissionPrompt: boolean
   loaded: boolean
 
   loadSettings: () => Promise<void>
@@ -40,6 +41,7 @@ type SettingsState = {
   setSyncJournals: (enabled: boolean) => Promise<void>
   setHasSeenOnboarding: (value: boolean) => Promise<void>
   setBiometricLock: (enabled: boolean) => Promise<void>
+  setHideMicPermissionPrompt: (hidden: boolean) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -57,6 +59,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   syncJournals: true,
   hasSeenOnboarding: false,
   biometricLock: false,
+  hideMicPermissionPrompt: false,
   loaded: false,
 
   async loadSettings() {
@@ -79,6 +82,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       syncJournals: all['sync_journals'] !== 'false',
       hasSeenOnboarding: all['has_seen_onboarding'] === 'true',
       biometricLock: all['biometric_lock'] === 'true',
+      hideMicPermissionPrompt: all['hide_mic_permission_prompt'] === 'true',
       loaded: true,
     })
   },
@@ -154,5 +158,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   async setBiometricLock(enabled) {
     set({ biometricLock: enabled })
     await db.setSetting('biometric_lock', enabled ? 'true' : 'false')
+  },
+
+  async setHideMicPermissionPrompt(hidden) {
+    set({ hideMicPermissionPrompt: hidden })
+    await db.setSetting('hide_mic_permission_prompt', hidden ? 'true' : 'false')
   },
 }))

@@ -5,10 +5,10 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
   ScrollView,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
@@ -39,6 +39,7 @@ import { formatAmount } from '../services'
 import { format as formatDate } from 'date-fns'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
+import { notifySaved } from '@store/toastStore'
 
 type Direction = 'expense' | 'income'
 type SmartEntrySource = 'manual' | 'voice'
@@ -218,6 +219,7 @@ export function QuickAddScreen() {
     setConfirmBusy(false)
     if (res.ok) {
       void hapticSaveSuccess()
+      notifySaved(t, useSettingsStore.getState().syncFinance)
       setConfirmSheet(null)
       router.back()
     } else {
@@ -269,6 +271,7 @@ export function QuickAddScreen() {
       return
     }
     void hapticSaveSuccess()
+    notifySaved(t, useSettingsStore.getState().syncFinance)
     router.back()
   }
 

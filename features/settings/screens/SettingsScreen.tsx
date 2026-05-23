@@ -163,6 +163,11 @@ export function SettingsScreen() {
         </>
       )}
 
+      <SectionHeader label={t.help_title} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <SettingRow label={t.help_quickstart_title} onPress={() => router.push('/help' as any)} last />
+      </View>
+
       <SectionHeader label={t.appearance} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <SettingRow label={t.appearance} onPress={() => router.push('/appearance')} />

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   View, Text, TextInput, Pressable, StyleSheet,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useTheme } from '@design/useTheme'
@@ -9,6 +9,7 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { hapticSaveSuccess } from '@services/haptics'
+import { notifySaved } from '@store/toastStore'
 import { useFinanceBootstrap, useCategories, useCategoryActions } from '../hooks/useFinance'
 import { translateKind } from '../i18n'
 import { displayToCents, centsToDisplay } from '@services/ai/aiLanguage'
@@ -80,6 +81,7 @@ export function CategoryFormScreen() {
       return
     }
     void hapticSaveSuccess()
+    notifySaved(t, useSettingsStore.getState().syncFinance)
     router.back()
   }
 
@@ -99,10 +101,17 @@ export function CategoryFormScreen() {
   }
 
   return (
+    // KeyboardAvoidingView: keep the budget input above the keyboard. Explicit
+    // Android behavior is required because edge-to-edge (app.json) disables auto-resize.
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.bg.primary }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.bg.primary }}
       contentContainerStyle={styles.body}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
     >
       {/* Name */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.category}</Text>
@@ -185,6 +194,7 @@ export function CategoryFormScreen() {
         </Pressable>
       )}
     </ScrollView>
+    </KeyboardAvoidingView>
   )
 }
 

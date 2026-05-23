@@ -141,9 +141,12 @@ export const vi = {
   retry: 'Thử lại',
   mic_permission_title: 'Microphone',
   mic_permission_hint: 'Chỉ dùng khi bạn bấm nút nhập bằng giọng nói.',
+  mic_permission_dont_show_again: 'Không hiển thị lần sau',
   mic_permission_ready_msg: 'Quyền microphone đã sẵn sàng.',
   voice_timeout_title: 'Đã dừng ghi âm',
   voice_timeout_msg: 'Bản ghi đã đạt giới hạn thời gian và sẽ được chuyển thành văn bản.',
+  voice_no_speech_title: 'Không nghe thấy gì',
+  voice_no_speech_msg: 'Mình không nghe thấy giọng nói nào. Hãy thử nói lại nhé.',
   notification_permission_title: 'Thông báo',
   notification_permission_hint: 'Dùng cho các nhắc nhở bạn tạo trong BataVasa.',
   notification_permission_denied_msg: 'Thông báo đang bị tắt. Mở cài đặt hệ điều hành để bật lại.',
@@ -310,6 +313,14 @@ export const vi = {
   delete_reminder_msg: 'Nhắc nhở sẽ bị xoá vĩnh viễn.',
   reminder_done_toggle: 'Đánh dấu hoàn thành',
   mark_incomplete: 'Đánh dấu chưa xong',
+  reminder_inbox: 'Inbox',
+  reminder_inbox_hint: 'Chưa đặt thời gian',
+  reminder_important: 'Quan trọng',
+  reminder_priority: 'Độ ưu tiên',
+  reminder_priority_low: 'Thấp',
+  reminder_priority_medium: 'Vừa',
+  reminder_priority_high: 'Cao',
+  reminder_skip: 'Bỏ qua',
   delete_all_reminders: 'Xóa tất cả nhắc nhở',
   delete_all_reminders_hint: 'Xóa vĩnh viễn tất cả nhắc nhở trên thiết bị này.',
   export_reminders: 'Xuất nhắc nhở',
@@ -428,10 +439,53 @@ export const vi = {
   auth_toggle_to_signin: 'Đã có tài khoản? Đăng nhập',
   auth_check_email: 'Đã tạo tài khoản. Kiểm tra email để xác nhận, rồi đăng nhập.',
   auth_not_configured_title: 'Chưa cấu hình đăng nhập',
-  auth_not_configured_body: 'Cần thiết lập Supabase để bật đăng nhập. Xem hướng dẫn:',
+  auth_not_configured_body: 'Tính năng đăng nhập chưa sẵn sàng. Xem hướng dẫn thiết lập:',
   auth_signed_in_as: 'Đăng nhập bằng',
   auth_sign_out: 'Đăng xuất',
   auth_sign_out_confirm: 'Đăng xuất khỏi tài khoản này? Dữ liệu vẫn giữ trên thiết bị.',
+
+  // Feedback toasts (Cross-Module Rule 7)
+  toast_saved: 'Đã lưu',
+  toast_synced_when_online: 'Sẽ tự động đồng bộ khi có mạng',
+  toast_saved_on_device: 'Đã lưu an toàn trên thiết bị',
+  auth_signin_success: 'Đăng nhập thành công',
+
+  // Onboarding flow + intro
+  flow_title: 'Cách hoạt động',
+  flow_create: 'Tạo một mục',
+  flow_save_offline: 'Lưu trên thiết bị',
+  flow_autosync: 'Tự động đồng bộ',
+  onboarding_value_prop: 'Một nơi gọn gàng cho chi tiêu, thói quen, nhật ký và nhắc nhở — kèm phân tích thông minh giúp bạn hiểu mình hơn.',
+  onboarding_sync_note: 'Đăng nhập để dữ liệu được lưu an toàn và có mặt trên mọi thiết bị. Ứng dụng vẫn hoạt động khi không có mạng.',
+
+  // Auth benefits
+  auth_tagline: 'Chi tiêu, thói quen, nhật ký và nhắc nhở — gói gọn trong một ứng dụng.',
+  auth_benefit_sync: 'Lưu vào tài khoản và có mặt trên mọi thiết bị',
+  auth_benefit_offline: 'Hoạt động cả khi offline — dữ liệu luôn sẵn sàng',
+  auth_benefit_private: 'Riêng tư và an toàn — chỉ mình bạn xem được',
+
+  // Universal Add quick create
+  universal_add_or_create: 'Hoặc tạo trực tiếp',
+
+  // Help & Tips
+  help_title: 'Trợ giúp & Mẹo',
+  help_intro: 'Mới dùng? Vài mẹo nhanh sau giúp bạn tận dụng BataVasa tốt hơn.',
+  help_quickstart_title: 'Bắt đầu nhanh',
+  help_tip_account_title: 'Đăng nhập tài khoản',
+  help_tip_account_body: 'Các mục của bạn được lưu vào tài khoản nên luôn an toàn và hiển thị trên mọi thiết bị.',
+  help_tip_add_title: 'Nhấn + để thêm bất cứ thứ gì',
+  help_tip_add_body: 'Thêm giao dịch, thói quen, nhật ký hay nhắc nhở bằng cách gõ hoặc nói — hoặc chọn loại trực tiếp.',
+  help_tip_reports_title: 'Mở một mục để xem báo cáo',
+  help_tip_reports_body: 'Mỗi mục biến các bản ghi của bạn thành báo cáo tuần và tháng kèm phân tích thông minh.',
+  help_data_title: 'Dữ liệu của bạn được giữ an toàn thế nào',
+  help_data_offline_title: 'Luôn sẵn sàng',
+  help_data_offline_body: 'Mọi thứ được lưu trên thiết bị trước, nên app hoạt động cả khi không có mạng.',
+  help_data_sync_title: 'Tự động đồng bộ',
+  help_data_sync_body: 'Khi có mạng, dữ liệu được sao lưu vào tài khoản và cập nhật trên các thiết bị.',
+  help_data_private_title: 'Riêng tư',
+  help_data_private_body: 'Các mục gắn với tài khoản của bạn. Chỉ mình bạn xem được.',
+  help_permissions_title: 'Các quyền có thể được hỏi',
+  help_footer: 'Bạn có thể đổi ngôn ngữ, giao diện, đồng bộ và quyền riêng tư bất cứ lúc nào trong Cài đặt.',
 }
 
 export type Translations = typeof vi

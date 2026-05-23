@@ -64,7 +64,27 @@
       "Bash(git -C d:/Claude/BataVasa diff HEAD --stat)",
       "Bash(git -C d:/Claude/BataVasa show bdd15e6 --stat)",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('expo-local-authentication:', p.dependencies['expo-local-authentication'] || p.devDependencies?.['expo-local-authentication'] || 'NOT INSTALLED'\\)\")",
-      "Bash(node -e \"require\\('d:/Claude/BataVasa/node_modules/expo-local-authentication'\\)\")"
+      "Bash(node -e \"require\\('d:/Claude/BataVasa/node_modules/expo-local-authentication'\\)\")",
+      "Bash(npm ls *)",
+      "Bash(rm -rf /tmp/bv-export2)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(cd d:/Claude/BataVasa; tmp=$\\(ls -dt /c/Users/Admin/AppData/Local/Temp/expo-bundler-* 2>/dev/null | head -1\\); echo \"tmp dir: $tmp\"; if [ -f \"$tmp/index.js\" ]; then echo \"=== lines 291895-291905 ===\"; sed -n '291895,291905p' \"$tmp/index.js\"; else echo \"temp index.js gone, checking export output\"; find /tmp/bv-export2 -name \"*.js\" 2>/dev/null | head; fi)",
+      "Read(//c/Users/Admin/AppData/Local/Temp/**)",
+      "Bash(grep -v \"\\\\.map$\")",
+      "Bash(rm -rf /tmp/bv-export3)",
+      "Bash(echo \"export exit: $?\")",
+      "Bash(grep -rln \"KeyboardAvoidingView\" features/ app/)",
+      "Bash(find features *)",
+      "Bash(grep -in \"softwareKeyboard\\\\|windowSoftInput\\\\|keyboard\" app.json)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(npm test *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\); console.log\\('expo:', p.dependencies.expo, 'rn:', p.dependencies['react-native']\\)\")",
+      "Bash(echo \"EXPORT_EXIT: $?\")",
+      "Bash(node -e \"console.log\\(require.resolve\\('@react-navigation/elements'\\)\\)\")"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

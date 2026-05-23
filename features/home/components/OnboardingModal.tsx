@@ -14,6 +14,7 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore, type Language } from '@store/settingsStore'
 import { getProviderKey } from '@services/ai/openai'
 import { AI_PROVIDERS } from '@services/ai/providers'
+import { FlowDiagram } from '@components/FlowDiagram'
 
 const LANGUAGE_OPTIONS: Language[] = ['vi', 'en', 'zh', 'ja', 'ko', 'fr']
 
@@ -128,13 +129,20 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
             ) : (
               <View style={styles.section}>
                 <Text style={[styles.title, { color: theme.text.primary }]}>{t.onboarding_intro_title}</Text>
-                <Text style={[styles.description, { color: theme.text.muted }]}>{t.onboarding_intro_desc}</Text>
-                <View style={[styles.bulletList, { borderColor: theme.border.subtle }]}> 
+                <Text style={[styles.description, { color: theme.text.muted }]}>{t.onboarding_value_prop}</Text>
+                <View style={[styles.bulletList, { borderColor: theme.border.subtle }]}>
                   <Text style={[styles.bulletItem, { color: theme.text.primary }]}>• {t.nav_finance}</Text>
                   <Text style={[styles.bulletItem, { color: theme.text.primary }]}>• {t.nav_reminders}</Text>
                   <Text style={[styles.bulletItem, { color: theme.text.primary }]}>• {t.journals}</Text>
                   <Text style={[styles.bulletItem, { color: theme.text.primary }]}>• {t.habits}</Text>
                   <Text style={[styles.bulletItem, { color: theme.text.primary }]}>• {t.smart_entry}</Text>
+                </View>
+
+                <Text style={[styles.flowTitle, { color: theme.text.secondary }]}>{t.flow_title}</Text>
+                <FlowDiagram />
+
+                <View style={[styles.syncNote, { backgroundColor: theme.brand.primary + '14', borderColor: theme.brand.primary + '33' }]}>
+                  <Text style={[styles.syncNoteText, { color: theme.text.secondary }]}>{t.onboarding_sync_note}</Text>
                 </View>
               </View>
             )}
@@ -265,6 +273,23 @@ const styles = StyleSheet.create({
   bulletItem: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  flowTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginTop: spacing[1],
+  },
+  syncNote: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[3],
+    marginTop: spacing[1],
+  },
+  syncNoteText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   footer: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ import { useAuthStore } from '@store/authStore'
 import { AuthScreen } from '@features/auth/AuthScreen'
 import { startSyncWorker, drainQueue } from '@services/sync'
 import { BiometricLockScreen } from '@/components/BiometricLockScreen'
+import { ToastHost } from '@/components/Toast'
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
 if (SENTRY_DSN) {
@@ -26,17 +27,18 @@ if (SENTRY_DSN) {
   })
 }
 
-function SettingsButton() {
+function HeaderActions() {
   const router = useRouter()
   const theme = useTheme()
   return (
-    <Pressable
-      onPress={() => router.push('/settings')}
-      hitSlop={8}
-      style={{ paddingHorizontal: 4 }}
-    >
-      <Feather name="settings" size={22} color={theme.text.secondary} />
-    </Pressable>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+      <Pressable onPress={() => router.push('/help')} hitSlop={8} style={{ paddingHorizontal: 4 }}>
+        <Feather name="help-circle" size={22} color={theme.text.secondary} />
+      </Pressable>
+      <Pressable onPress={() => router.push('/settings')} hitSlop={8} style={{ paddingHorizontal: 4 }}>
+        <Feather name="settings" size={22} color={theme.text.secondary} />
+      </Pressable>
+    </View>
   )
 }
 
@@ -111,6 +113,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ErrorBoundary>
+        <>
         {session ? (
         <Stack
           screenOptions={{
@@ -123,7 +126,7 @@ export default function RootLayout() {
             name="index"
             options={{
               title: 'BataVasa',
-              headerRight: () => <SettingsButton />,
+              headerRight: () => <HeaderActions />,
             }}
           />
           <Stack.Screen
@@ -131,6 +134,7 @@ export default function RootLayout() {
             options={{ title: t.nav_new_transaction, presentation: 'modal' }}
           />
           <Stack.Screen name="settings" options={{ title: t.nav_settings }} />
+          <Stack.Screen name="help" options={{ title: t.help_title }} />
           <Stack.Screen name="data-management" options={{ title: t.data_management }} />
           <Stack.Screen name="appearance" options={{ title: t.nav_appearance }} />
           <Stack.Screen name="language" options={{ title: t.nav_language }} />
@@ -157,6 +161,8 @@ export default function RootLayout() {
         ) : (
           <AuthScreen />
         )}
+        <ToastHost />
+        </>
         </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>

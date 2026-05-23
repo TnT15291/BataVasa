@@ -2,6 +2,14 @@ import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import { logger } from './logger'
 
+type ReminderPriority = 'low' | 'medium' | 'high'
+
+const REMINDER_CHANNEL: Record<ReminderPriority, string> = {
+  low: 'reminders-low',
+  medium: 'reminders',
+  high: 'reminders-important',
+}
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -25,23 +33,46 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 }
 
+async function ensureReminderChannels(): Promise<void> {
+  if (Platform.OS !== 'android') return
+  await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL.low, {
+    name: 'Reminders',
+    importance: Notifications.AndroidImportance.LOW,
+    sound: 'default',
+  })
+  await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL.medium, {
+    name: 'Reminders',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'default',
+    enableVibrate: true,
+  })
+  await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL.high, {
+    name: 'Important reminders',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    enableVibrate: true,
+    vibrationPattern: [0, 250, 250, 250],
+  })
+}
+
 export async function scheduleReminderNotification(
   reminderId: string,
   title: string,
   body: string,
   triggerDate: Date,
-  priority: 'low' | 'medium' | 'high' = 'medium'
+  priority: ReminderPriority = 'medium'
 ): Promise<string | null> {
   try {
     const granted = await requestNotificationPermission()
     if (!granted) return null
     if (triggerDate <= new Date()) return null
+    await ensureReminderChannels()
 
     const notificationTitle = priority === 'high' ? `High priority: ${title}` : title
     const notificationBody = priority === 'low' ? body : body || (priority === 'high' ? 'Important reminder' : 'Reminder')
     const id = await Notifications.scheduleNotificationAsync({
       content: { title: notificationTitle, body: notificationBody, data: { reminderId, priority } },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: triggerDate },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: triggerDate, channelId: REMINDER_CHANNEL[priority] },
     })
     return id
   } catch (e) {
@@ -55,6 +86,19 @@ export async function cancelNotification(notificationId: string): Promise<void> 
     await Notifications.cancelScheduledNotificationAsync(notificationId)
   } catch (e) {
     logger.error('notifications', 'cancelNotification failed', { error: String(e) })
+  }
+}
+
+export async function cancelReminderNotifications(reminderId: string): Promise<void> {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync()
+    await Promise.all(
+      scheduled
+        .filter((notification) => notification.content.data?.reminderId === reminderId)
+        .map((notification) => Notifications.cancelScheduledNotificationAsync(notification.identifier))
+    )
+  } catch (e) {
+    logger.error('notifications', 'cancelReminderNotifications failed', { error: String(e) })
   }
 }
 

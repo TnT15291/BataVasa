@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   View, Text, TextInput, Pressable, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Platform,
+  ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import DateTimePicker from '@react-native-community/datetimepicker'
@@ -13,6 +13,7 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
+import { notifySaved } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseReminderEntry } from '@services/ai/reminderParser'
 import { VoiceButton } from '@components/VoiceButton'
@@ -138,6 +139,7 @@ export function ReminderFormScreen() {
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
     void hapticSaveSuccess()
+    notifySaved(t, useSettingsStore.getState().syncReminders)
     router.back()
   }
 
@@ -181,11 +183,18 @@ export function ReminderFormScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+    // KeyboardAvoidingView wraps both the scroll body and the absolute footer so
+    // the Save button + inputs lift above the keyboard. Explicit Android behavior
+    // is required because edge-to-edge (app.json) disables auto-resize.
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.bg.primary }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
       >
         <View style={[styles.previewCard, { backgroundColor: '#2196F314', borderColor: '#2196F344' }]}>
           <View style={[styles.previewIcon, { backgroundColor: '#2196F31F' }]}>
@@ -199,7 +208,7 @@ export function ReminderFormScreen() {
             <View style={styles.previewMetaRow}>
               <Feather name={isInbox ? 'inbox' : 'calendar'} size={13} color={theme.text.muted} />
               <Text style={[styles.previewMeta, { color: theme.text.muted }]}>
-                {isInbox ? 'Inbox' : `${dateStr} / ${timeStr}`}
+                {isInbox ? t.reminder_inbox : `${dateStr} / ${timeStr}`}
               </Text>
             </View>
             {notifyTimeStr ? (
@@ -254,12 +263,12 @@ export function ReminderFormScreen() {
         >
           <Feather name="inbox" size={18} color={isInbox ? theme.brand.primary : theme.text.muted} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.inboxTitle, { color: isInbox ? theme.brand.primary : theme.text.primary }]}>Inbox</Text>
-            <Text style={[styles.inboxBody, { color: theme.text.muted }]}>No scheduled time yet</Text>
+            <Text style={[styles.inboxTitle, { color: isInbox ? theme.brand.primary : theme.text.primary }]}>{t.reminder_inbox}</Text>
+            <Text style={[styles.inboxBody, { color: theme.text.muted }]}>{t.reminder_inbox_hint}</Text>
           </View>
         </Pressable>
 
-        {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <Text style={[styles.label, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
           <TextInput
             value={title}
@@ -278,7 +287,7 @@ export function ReminderFormScreen() {
             numberOfLines={3}
             style={[styles.input, styles.noteInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
           />
-        </View>}
+        </View>
 
         {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <View style={styles.cardHeader}>
@@ -361,11 +370,16 @@ export function ReminderFormScreen() {
             <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
               <Feather name="flag" size={16} color={theme.brand.primary} />
             </View>
-            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>Priority</Text>
+            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.reminder_priority}</Text>
           </View>
           <View style={styles.optionRow}>
             {PRIORITIES.map((p) => {
               const active = priority === p
+              const label = p === 'low'
+                ? t.reminder_priority_low
+                : p === 'medium'
+                ? t.reminder_priority_medium
+                : t.reminder_priority_high
               return (
                 <Pressable
                   key={p}
@@ -375,8 +389,8 @@ export function ReminderFormScreen() {
                     borderColor: active ? theme.brand.primary : theme.border.subtle,
                   }]}
                 >
-                  <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700', textTransform: 'capitalize' }}>
-                    {p}
+                  <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700' }}>
+                    {label}
                   </Text>
                 </Pressable>
               )
@@ -384,7 +398,7 @@ export function ReminderFormScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
               <Feather name="repeat" size={16} color={theme.brand.primary} />
@@ -410,7 +424,7 @@ export function ReminderFormScreen() {
               )
             })}
           </View>
-        </View>
+        </View>}
 
         {isEditing && (
           <Pressable onPress={onDelete} style={[styles.deleteBtn, { borderColor: theme.semantic.danger + '55' }]}>
@@ -431,7 +445,7 @@ export function ReminderFormScreen() {
             : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 

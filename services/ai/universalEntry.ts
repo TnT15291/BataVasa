@@ -35,6 +35,14 @@ export type JournalEntry = {
 
 export type UniversalEntry = FinanceEntry | ReminderEntry | HabitsEntry | JournalEntry
 
+export type UniversalCandidate = {
+  id: string
+  entry: UniversalEntry
+  confidence: number
+  reason: string
+  selectedByDefault: boolean
+}
+
 function getLocalTzOffset(): string {
   const offsetMin = -new Date().getTimezoneOffset()
   const sign = offsetMin >= 0 ? '+' : '-'
@@ -54,10 +62,8 @@ function toLocalISOString(d: Date): string {
 }
 
 function fixReminderTimezone(isoStr: string): Date {
-  // If AI returned UTC (ends with Z), reinterpret the wall-clock time as local
   if (isoStr.endsWith('Z') || isoStr.endsWith('z')) {
     const utc = new Date(isoStr)
-    // Extract wall-clock parts from UTC representation
     const wallStr = isoStr.replace(/Z$/i, getLocalTzOffset())
     const local = new Date(wallStr)
     if (!isNaN(local.getTime())) return local
@@ -72,7 +78,110 @@ function normalizeAIISOString(isoStr: string | undefined, fallback: Date): strin
   return isNaN(d.getTime()) ? fallback.toISOString() : d.toISOString()
 }
 
-export async function parseUniversalEntry(text: string): Promise<UniversalEntry | null> {
+function extractJson(raw: string): unknown | null {
+  const objectStart = raw.indexOf('{')
+  const arrayStart = raw.indexOf('[')
+  const starts = [objectStart, arrayStart].filter((n) => n >= 0)
+  if (starts.length === 0) return null
+  const start = Math.min(...starts)
+  const end = Math.max(raw.lastIndexOf('}'), raw.lastIndexOf(']'))
+  if (end <= start) return null
+  return JSON.parse(raw.slice(start, end + 1))
+}
+
+function textHasEmotion(text: string): boolean {
+  return /\b(vui|buồn|hạnh phúc|tự hào|cảm thấy|cảm xúc|căng thẳng|lo lắng|biết ơn|happy|sad|proud|grateful|stressed|anxious)\b/i.test(text)
+}
+
+function textHasIncomeIntent(text: string): boolean {
+  return /\b(thu|nhận|lương|làm ra|kiếm|doanh thu|income|earned|received|salary|revenue)\b/i.test(text)
+}
+
+function textHasFinanceIntent(text: string): boolean {
+  return textHasIncomeIntent(text) || /\b(chi|mua|tiêu|trả|bán|spent|bought|paid|sold)\b/i.test(text)
+}
+
+function normalizeConfidence(value: unknown, fallback: number): number {
+  const n = Number(value)
+  if (!isFinite(n)) return fallback
+  return Math.max(0, Math.min(1, n))
+}
+
+function normalizeEntry(entry: any, now: Date, localAmount: number | null): UniversalEntry | null {
+  if (!entry?.module) return null
+
+  if (entry.module === 'finance') {
+    const amount = Math.abs(Number(entry.amount_cents))
+    if (!amount || amount <= 0) return null
+    const normalized: FinanceEntry = {
+      module: 'finance',
+      amount_cents: Math.round(amount),
+      direction: entry.direction === 'income' ? 'income' : 'expense',
+      category_hint: String(entry.category_hint || (entry.direction === 'income' ? 'Other Income' : 'Shopping')),
+      merchant: String(entry.merchant || ''),
+      note: String(entry.note || ''),
+      occurred_at: normalizeAIISOString(entry.occurred_at, now),
+    }
+    if (localAmount !== null) {
+      const ratio = normalized.amount_cents / localAmount
+      if (ratio >= 10 || ratio <= 0.1) normalized.amount_cents = localAmount
+    }
+    return normalized
+  }
+
+  if (entry.module === 'reminder') {
+    if (!entry.title) return null
+    const remindAt = fixReminderTimezone(String(entry.remind_at || ''))
+    const fallback = new Date(now)
+    fallback.setDate(fallback.getDate() + 1)
+    fallback.setHours(9, 0, 0, 0)
+    const normalized: ReminderEntry = {
+      module: 'reminder',
+      title: String(entry.title),
+      remind_at: isNaN(remindAt.getTime()) || remindAt < now ? fallback.toISOString() : remindAt.toISOString(),
+      recurrence: ['none', 'daily', 'weekly', 'monthly'].includes(entry.recurrence) ? entry.recurrence : 'none',
+      note: String(entry.note || ''),
+    }
+    return normalized
+  }
+
+  if (entry.module === 'habits') {
+    if (!entry.title) return null
+    return {
+      module: 'habits',
+      title: String(entry.title),
+      frequency: String(entry.frequency || 'daily'),
+    }
+  }
+
+  if (entry.module === 'journal') {
+    const content = String(entry.content || '').trim()
+    if (!content) return null
+    return { module: 'journal', content }
+  }
+
+  return null
+}
+
+function candidateId(entry: UniversalEntry): string {
+  if (entry.module === 'finance') return `finance:${entry.direction}:${entry.amount_cents}`
+  if (entry.module === 'reminder') return `reminder:${entry.title}:${entry.remind_at}`
+  if (entry.module === 'habits') return `habits:${entry.title}`
+  return `journal:${entry.content.slice(0, 48)}`
+}
+
+function dedupeCandidates(candidates: UniversalCandidate[]): UniversalCandidate[] {
+  const seen = new Set<string>()
+  const result: UniversalCandidate[] = []
+  for (const c of candidates) {
+    if (seen.has(c.entry.module)) continue
+    seen.add(c.entry.module)
+    result.push(c)
+  }
+  return result.sort((a, b) => b.confidence - a.confidence)
+}
+
+export async function parseUniversalCandidates(text: string): Promise<UniversalCandidate[]> {
   const language = getAILanguage()
   const currency = getAICurrency()
   const now = new Date()
@@ -80,32 +189,33 @@ export async function parseUniversalEntry(text: string): Promise<UniversalEntry 
   const tzOffset = getLocalTzOffset()
   const localAmount = extractAmount(text, currency)
 
-  const prompt = `Classify the user input and extract fields. Return ONLY valid JSON.
+  const prompt = `Classify the user input and extract candidate entries. Return ONLY valid JSON.
 
 User input: "${text}"
 Current local time: ${localNow}
 User timezone: UTC${tzOffset}
 Language: ${language}
 Currency: ${currency}
-${localAmount !== null ? `Pre-computed amount: ${localAmount} ${currency} — use this for amount_cents` : ''}
+${localAmount !== null ? `Pre-computed amount: ${localAmount} ${currency} - use this for amount_cents` : ''}
 
-IMPORTANT: All datetime values MUST use the user's timezone offset (UTC${tzOffset}), NOT UTC. Example: "18:00" in the user's time → "2026-05-18T18:00:00${tzOffset}"
+IMPORTANT: All datetime values MUST use the user's timezone offset (UTC${tzOffset}), NOT UTC. Example: "18:00" in the user's time -> "2026-05-18T18:00:00${tzOffset}"
 
 Classification rules:
-- finance: mentions money/amount/spent/bought/received/sold/chi/mua/tiêu/thu
-- reminder: mentions future time/date + task/meeting/appointment/họp/nhắc/lịch/remind
-- habits: recurring behavior goal without specific time (exercise/eat/sleep/read/thói quen/tập/uống)
-- journal: reflection/diary/memory/feeling without action items (nhớ/cảm xúc/ghi lại/kỷ niệm)
+- finance: mentions money/amount/spent/bought/received/sold/chi/mua/tieu/thu
+- reminder: mentions future time/date + task/meeting/appointment/hop/nhac/lich/remind
+- habits: recurring behavior goal without specific time (exercise/eat/sleep/read/thoi quen/tap/uong)
+- journal: reflection/diary/memory/feeling without action items (nho/cam xuc/ghi lai/ky niem)
+- If the input clearly contains both a financial event and a personal feeling/reflection, return TWO candidates: finance and journal.
+- If the input is ambiguous between modules, return multiple candidates with confidence scores.
+- Do not create duplicate candidates unless two different intents are clearly present.
 
-Return ONE of these JSON shapes:
+Return this JSON shape:
+{"candidates":[{"confidence":0.0-1.0,"reason":"short reason","selectedByDefault":true|false,"entry":<one entry>}]}
 
-Finance: {"module":"finance","amount_cents":<positive int>,"direction":"expense|income","category_hint":"<english category name>","merchant":"<store or empty string>","note":"<note or empty string>","occurred_at":"<ISO datetime with UTC${tzOffset} offset>"}
-
-Reminder: {"module":"reminder","title":"<short task title>","remind_at":"<ISO datetime with UTC${tzOffset} offset>","recurrence":"none|daily|weekly|monthly","note":"<note or empty string>"}
-
-Habits: {"module":"habits","title":"<habit name>","frequency":"daily|weekly|custom"}
-
-Journal: {"module":"journal","content":"<full text>"}
+Finance entry: {"module":"finance","amount_cents":<positive int>,"direction":"expense|income","category_hint":"<english category name>","merchant":"<store or empty string>","note":"<note or empty string>","occurred_at":"<ISO datetime with UTC${tzOffset} offset>"}
+Reminder entry: {"module":"reminder","title":"<short task title>","remind_at":"<ISO datetime with UTC${tzOffset} offset>","recurrence":"none|daily|weekly|monthly","note":"<note or empty string>"}
+Habits entry: {"module":"habits","title":"<habit name>","frequency":"daily|weekly|custom"}
+Journal entry: {"module":"journal","content":"<full text>"}
 
 Common finance categories: Food & Groceries, Transport, Housing, Utilities, Healthcare, Dining Out, Entertainment, Shopping, Subscriptions, Salary, Freelance, Other Income, Emergency Fund, Investments`
 
@@ -118,39 +228,60 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
         },
         { role: 'user', content: prompt },
       ],
-      { temperature: 0.1, max_tokens: 300 }
+      { temperature: 0.1, max_tokens: 700 }
     )
 
-    const jsonStr = raw.match(/\{[\s\S]*\}/)?.[0]
-    if (!jsonStr) return null
+    const parsed = extractJson(raw) as any
+    if (!parsed) return []
 
-    const parsed = JSON.parse(jsonStr) as UniversalEntry
+    const rawCandidates = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed.candidates)
+      ? parsed.candidates
+      : [parsed]
 
-    if (!parsed.module) return null
-
-    // Safety: if finance and we have deterministic amount, enforce it
-    if (parsed.module === 'finance' && localAmount !== null) {
-      const ratio = parsed.amount_cents / localAmount
-      if (ratio >= 10 || ratio <= 0.1) parsed.amount_cents = localAmount
+    const candidates: UniversalCandidate[] = []
+    for (const rawCandidate of rawCandidates) {
+      const entry = normalizeEntry(rawCandidate.entry ?? rawCandidate, now, localAmount)
+      if (!entry) continue
+      candidates.push({
+        id: candidateId(entry),
+        entry,
+        confidence: normalizeConfidence(rawCandidate.confidence, 0.7),
+        reason: String(rawCandidate.reason || ''),
+        selectedByDefault: rawCandidate.selectedByDefault !== false,
+      })
     }
-    if (parsed.module === 'finance') {
-      parsed.occurred_at = normalizeAIISOString(parsed.occurred_at, now)
-    }
 
-    // Safety: reminder must have future time; fix UTC-returned times to local
-    if (parsed.module === 'reminder') {
-      const remindAt = fixReminderTimezone(parsed.remind_at)
-      parsed.remind_at = remindAt.toISOString()
-      if (isNaN(remindAt.getTime()) || remindAt < now) {
-        const tomorrow = new Date(now)
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(9, 0, 0, 0)
-        parsed.remind_at = tomorrow.toISOString()
+    const hasFinance = candidates.some((c) => c.entry.module === 'finance')
+    const hasJournal = candidates.some((c) => c.entry.module === 'journal')
+
+    if (localAmount !== null && textHasFinanceIntent(text) && !hasFinance && textHasIncomeIntent(text)) {
+      const entry: FinanceEntry = {
+        module: 'finance',
+        amount_cents: localAmount,
+        direction: 'income',
+        category_hint: /lương|salary/i.test(text) ? 'Salary' : 'Other Income',
+        merchant: '',
+        note: text,
+        occurred_at: now.toISOString(),
       }
+      candidates.push({ id: candidateId(entry), entry, confidence: 0.75, reason: 'Detected income amount', selectedByDefault: true })
     }
 
-    return parsed
+    const hasFinanceAfterGuard = candidates.some((c) => c.entry.module === 'finance')
+    if (localAmount !== null && textHasEmotion(text) && hasFinanceAfterGuard && !hasJournal) {
+      const entry: JournalEntry = { module: 'journal', content: text }
+      candidates.push({ id: candidateId(entry), entry, confidence: 0.72, reason: 'Detected personal feeling with financial event', selectedByDefault: true })
+    }
+
+    return dedupeCandidates(candidates)
   } catch {
-    return null
+    return []
   }
+}
+
+export async function parseUniversalEntry(text: string): Promise<UniversalEntry | null> {
+  const candidates = await parseUniversalCandidates(text)
+  return candidates[0]?.entry ?? null
 }

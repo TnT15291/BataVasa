@@ -17,6 +17,7 @@ export function useReminders() {
 export function useReminderActions() {
   const createReminder = useRemindersStore((s) => s.createReminder)
   const updateReminder = useRemindersStore((s) => s.updateReminder)
+  const skipReminder = useRemindersStore((s) => s.skipReminder)
   const deleteReminder = useRemindersStore((s) => s.deleteReminder)
-  return { createReminder, updateReminder, deleteReminder }
+  return { createReminder, updateReminder, skipReminder, deleteReminder }
 }

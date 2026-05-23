@@ -11,9 +11,10 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
-import { parseUniversalEntry, type UniversalEntry } from '@services/ai/universalEntry'
+import { parseUniversalCandidates, type UniversalCandidate, type UniversalEntry } from '@services/ai/universalEntry'
 import { getProviderKey } from '@services/ai/openai'
 import { hapticSaveSuccess } from '@services/haptics'
+import { notifySaved } from '@store/toastStore'
 import { VoiceButton } from '@components/VoiceButton'
 import { matchCategory } from '@features/finance/i18n'
 import { useCategories } from '@features/finance/hooks/useFinance'
@@ -53,17 +54,28 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
 
   const [text, setText] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
-  const [result, setResult] = useState<UniversalEntry | null>(null)
+  const [candidates, setCandidates] = useState<UniversalCandidate[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   const reset = () => {
     setText('')
-    setResult(null)
+    setCandidates([])
+    setSelectedIds([])
     setAnalyzing(false)
     setSaving(false)
   }
 
   const handleClose = () => { reset(); onClose() }
+
+  const goToForm = (route: string) => { handleClose(); router.push(route as any) }
+
+  const quickModules: { route: string; icon: IconName; color: string; label: string }[] = [
+    { route: '/new', icon: 'dollar-sign', color: '#4CAF50', label: t.nav_new_transaction },
+    { route: '/reminder', icon: 'bell', color: '#2196F3', label: t.new_reminder },
+    { route: '/habit', icon: 'check-circle', color: '#FF9800', label: t.new_habit },
+    { route: '/journal', icon: 'book-open', color: '#9C27B0', label: t.new_journal },
+  ]
 
   const onAnalyze = async (override?: string) => {
     const input = (override ?? text).trim()
@@ -74,9 +86,14 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
     if (override) setText(override)
     setAnalyzing(true)
     try {
-      const parsed = await parseUniversalEntry(input)
-      if (!parsed) { Alert.alert(t.ai_error, t.parse_failed) }
-      else { setResult(parsed) }
+      const parsed = await parseUniversalCandidates(input)
+      if (parsed.length === 0) {
+        Alert.alert(t.ai_error, t.parse_failed)
+      } else {
+        setCandidates(parsed)
+        const defaults = parsed.filter((c) => c.selectedByDefault).map((c) => c.id)
+        setSelectedIds(defaults.length > 0 ? defaults : [parsed[0]!.id])
+      }
     } catch { Alert.alert(t.ai_error, t.parse_failed) }
     finally { setAnalyzing(false) }
   }
@@ -84,7 +101,8 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   useEffect(() => {
     if (!visible || !initialText.trim()) return
     setText(initialText)
-    setResult(null)
+    setCandidates([])
+    setSelectedIds([])
     if (autoAnalyzeToken > 0) {
       void onAnalyze(initialText)
     }
@@ -92,82 +110,87 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   }, [visible, initialText, autoAnalyzeToken])
 
   const onSave = async () => {
-    if (!result) return
+    const selected = candidates.filter((c) => selectedIds.includes(c.id)).map((c) => c.entry)
+    if (selected.length === 0) return
     setSaving(true)
 
-    if (result.module === 'finance') {
-      const cat = matchCategory(cats, result.category_hint, t)
+    const financeEntries = selected.filter((entry): entry is Extract<UniversalEntry, { module: 'finance' }> => entry.module === 'finance')
+    for (const entry of financeEntries) {
+      const cat = matchCategory(cats, entry.category_hint, t)
       if (!cat) {
         Alert.alert(t.pick_category, t.pick_category_msg)
         setSaving(false)
         return
       }
-      const res = await createTransaction({
-        amount_cents: result.direction === 'expense' ? -Math.abs(result.amount_cents) : Math.abs(result.amount_cents),
-        currency,
-        category_id: cat.id,
-        merchant: result.merchant || undefined,
-        note: result.note || undefined,
-        occurred_at: result.occurred_at,
-        source: 'voice',
-      })
-      setSaving(false)
-      if (!res.ok) { Alert.alert(t.could_not_save, res.error); return }
-      void hapticSaveSuccess()
-      handleClose()
-      return
     }
 
-    if (result.module === 'reminder') {
-      const res = await createReminder({
-        title: result.title,
-        note: result.note || undefined,
-        remind_at: result.remind_at,
-        advance_minutes: 0,
-        recurrence: result.recurrence,
-      })
-      setSaving(false)
-      if (!res.ok) { Alert.alert(t.could_not_save, res.error); return }
-      void hapticSaveSuccess()
-      handleClose()
-      return
+    for (const entry of selected) {
+      if (entry.module === 'finance') {
+        const cat = matchCategory(cats, entry.category_hint, t)
+        const res = await createTransaction({
+          amount_cents: entry.direction === 'expense' ? -Math.abs(entry.amount_cents) : Math.abs(entry.amount_cents),
+          currency,
+          category_id: cat!.id,
+          merchant: entry.merchant || undefined,
+          note: entry.note || undefined,
+          occurred_at: entry.occurred_at,
+          source: 'voice',
+        })
+        if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
+      } else if (entry.module === 'reminder') {
+        const res = await createReminder({
+          title: entry.title,
+          note: entry.note || undefined,
+          remind_at: entry.remind_at,
+          advance_minutes: 0,
+          recurrence: entry.recurrence,
+        })
+        if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
+      } else if (entry.module === 'habits') {
+        const cadence = entry.frequency === 'daily'
+          ? 'daily'
+          : entry.frequency === 'weekdays'
+          ? 'weekdays'
+          : 'weekly'
+        const res = await createHabit({
+          name: entry.title,
+          cadence,
+          target_per_period: 1,
+          icon: 'check',
+          color: '#4CAF50',
+        })
+        if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
+      } else if (entry.module === 'journal') {
+        const res = await createJournal({
+          content: entry.content,
+          occurred_at: new Date().toISOString(),
+        })
+        if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
+      }
     }
 
-    if (result.module === 'habits') {
-      const cadence = result.frequency === 'daily'
-        ? 'daily'
-        : result.frequency === 'weekdays'
-        ? 'weekdays'
-        : 'weekly'
-      const res = await createHabit({
-        name: result.title,
-        cadence,
-        target_per_period: 1,
-        icon: 'check',
-        color: '#4CAF50',
-      })
-      setSaving(false)
-      if (!res.ok) { Alert.alert(t.could_not_save, res.error); return }
-      void hapticSaveSuccess()
-      handleClose()
-      return
-    }
-
-    if (result.module === 'journal') {
-      const res = await createJournal({
-        content: result.content,
-        occurred_at: new Date().toISOString(),
-      })
-      setSaving(false)
-      if (!res.ok) { Alert.alert(t.could_not_save, res.error); return }
-      void hapticSaveSuccess()
-      handleClose()
-      return
-    }
+    setSaving(false)
+    void hapticSaveSuccess()
+    const s = useSettingsStore.getState()
+    const anySynced = selected.some((e) =>
+      (e.module === 'finance' && s.syncFinance) ||
+      (e.module === 'reminder' && s.syncReminders) ||
+      (e.module === 'habits' && s.syncHabits) ||
+      (e.module === 'journal' && s.syncJournals)
+    )
+    notifySaved(t, anySynced)
+    handleClose()
   }
 
-  const renderSummary = () => {
-    if (!result) return null
+  const toggleCandidate = (id: string) => {
+    setSelectedIds((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id]
+    )
+  }
+
+  const renderSummary = (candidate: UniversalCandidate) => {
+    const result = candidate.entry
     const meta = MODULE_META[result.module]!
     const locale = getDateFnsLocale(language)
 
@@ -201,19 +224,27 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
     }
 
     return (
-      <View style={[styles.resultCard, { backgroundColor: theme.bg.elevated, borderColor: meta.color + '44' }]}>
+      <Pressable
+        onPress={() => toggleCandidate(candidate.id)}
+        style={[styles.resultCard, { backgroundColor: theme.bg.elevated, borderColor: selectedIds.includes(candidate.id) ? meta.color : meta.color + '44' }]}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: selectedIds.includes(candidate.id) }}
+      >
         <View style={styles.resultHeader}>
           <View style={[styles.resultIconWrap, { backgroundColor: meta.color + '1F' }]}>
             <Feather name={meta.icon} size={20} color={meta.color} />
           </View>
           <Text style={[styles.resultModule, { color: meta.color }]}>{moduleLabel[result.module]}</Text>
+          <View style={[styles.resultCheck, { borderColor: meta.color, backgroundColor: selectedIds.includes(candidate.id) ? meta.color : 'transparent' }]}>
+            {selectedIds.includes(candidate.id) && <Feather name="check" size={12} color="#fff" />}
+          </View>
         </View>
         {lines.map((line, i) => (
           <Text key={i} style={[styles.resultLine, { color: i === 0 ? theme.text.primary : theme.text.muted }]}>
             {line}
           </Text>
         ))}
-      </View>
+      </Pressable>
     )
   }
 
@@ -226,7 +257,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
 
           <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.universal_add_title}</Text>
 
-          {!result ? (
+          {candidates.length === 0 ? (
             <>
               <TextInput
                 value={text}
@@ -256,21 +287,43 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
                     )}
                 </Pressable>
               </View>
+
+              <View style={styles.dividerRow}>
+                <View style={[styles.dividerLine, { backgroundColor: theme.border.subtle }]} />
+                <Text style={[styles.dividerText, { color: theme.text.muted }]}>{t.universal_add_or_create}</Text>
+                <View style={[styles.dividerLine, { backgroundColor: theme.border.subtle }]} />
+              </View>
+              <View style={styles.quickChips}>
+                {quickModules.map((m) => (
+                  <Pressable
+                    key={m.route}
+                    onPress={() => goToForm(m.route)}
+                    style={[styles.quickChip, { borderColor: m.color + '55', backgroundColor: m.color + '12' }]}
+                  >
+                    <Feather name={m.icon} size={16} color={m.color} />
+                    <Text style={[styles.quickChipText, { color: theme.text.primary }]} numberOfLines={1}>{m.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </>
           ) : (
             <>
               <Text style={[styles.youSaid, { color: theme.text.muted }]}>{t.ai_confirm_you_said} "{text}"</Text>
-              {renderSummary()}
+              <ScrollView style={styles.resultsBox} contentContainerStyle={styles.resultsContent}>
+                {candidates.map((candidate) => (
+                  <View key={candidate.id}>{renderSummary(candidate)}</View>
+                ))}
+              </ScrollView>
               <View style={styles.actionRow}>
                 <Pressable onPress={handleClose} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
                   <Text style={{ color: theme.text.secondary }}>{t.cancel}</Text>
                 </Pressable>
-                <Pressable onPress={() => setResult(null)} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
+                <Pressable onPress={() => { setCandidates([]); setSelectedIds([]) }} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
                   <Text style={{ color: theme.text.secondary }}>{t.ai_confirm_edit}</Text>
                 </Pressable>
                 <Pressable
                   onPress={onSave}
-                  disabled={saving}
+                  disabled={saving || selectedIds.length === 0}
                   style={[styles.actionBtn, styles.saveBtn, { backgroundColor: theme.brand.primary }]}
                 >
                   {saving
@@ -307,7 +360,23 @@ const styles = StyleSheet.create({
   analyzeBtn: { flex: 1, paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   analyzeBtnContent: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   analyzeBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: -spacing[1] },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  dividerText: { fontSize: 12, fontWeight: '600' },
+  quickChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  quickChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    borderWidth: 1,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  quickChipText: { fontSize: 13, fontWeight: '600' },
   youSaid: { fontSize: 13, fontStyle: 'italic' },
+  resultsBox: { maxHeight: 360 },
+  resultsContent: { gap: spacing[3] },
   resultCard: {
     borderWidth: 1.5, borderRadius: radius.lg,
     padding: spacing[4], gap: spacing[2],
@@ -321,6 +390,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   resultModule: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  resultCheck: {
+    marginLeft: 'auto',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   resultLine: { fontSize: 15 },
   actionRow: { flexDirection: 'row', gap: spacing[2] },
   actionBtn: {

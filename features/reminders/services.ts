@@ -5,7 +5,7 @@ import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/reminders/queries'
 import { enqueue } from '@db/sync/queue'
-import { scheduleReminderNotification, cancelNotification, cancelAllNotifications } from '@services/notifications'
+import { scheduleReminderNotification, cancelNotification, cancelReminderNotifications, cancelAllNotifications } from '@services/notifications'
 import { track } from '@services/analytics'
 import {
   CreateReminderInputSchema,
@@ -19,6 +19,36 @@ const MODULE = 'reminders.service'
 
 // notificationId cache: reminderId → notificationId
 const notifCache = new Map<string, string>()
+
+function addRecurrence(date: Date, recurrence: Reminder['recurrence']): Date {
+  const next = new Date(date)
+  if (recurrence === 'daily') next.setDate(next.getDate() + 1)
+  else if (recurrence === 'weekly') next.setDate(next.getDate() + 7)
+  else if (recurrence === 'monthly') next.setMonth(next.getMonth() + 1)
+  return next
+}
+
+function nextOccurrence(reminder: Reminder, after = new Date()): string | null {
+  if (reminder.recurrence === 'none') return null
+  const advance = reminder.advance_minutes ?? 0
+  let eventAt = new Date(new Date(reminder.remind_at).getTime() + advance * 60000)
+  eventAt = addRecurrence(eventAt, reminder.recurrence)
+  let guard = 0
+  while (eventAt <= after && guard < 370) {
+    eventAt = addRecurrence(eventAt, reminder.recurrence)
+    guard += 1
+  }
+  return new Date(eventAt.getTime() - advance * 60000).toISOString()
+}
+
+async function cancelCachedNotification(reminderId: string): Promise<void> {
+  const oldNotifId = notifCache.get(reminderId)
+  if (oldNotifId) {
+    await cancelNotification(oldNotifId)
+    notifCache.delete(reminderId)
+  }
+  await cancelReminderNotifications(reminderId)
+}
 
 export async function createReminder(
   input: CreateReminderInput
@@ -99,8 +129,7 @@ export async function updateReminder(
 
     // Re-schedule notification if time changed
     if (data.remind_at !== undefined || data.title !== undefined || data.priority !== undefined || data.is_inbox !== undefined || data.completed !== undefined) {
-      const oldNotifId = notifCache.get(data.id)
-      if (oldNotifId) await cancelNotification(oldNotifId)
+      await cancelCachedNotification(data.id)
       const fresh = await q.getReminder(data.id)
       if (fresh && !fresh.completed && !fresh.is_inbox) {
         const notifId = await scheduleReminderNotification(
@@ -121,13 +150,44 @@ export async function updateReminder(
   }
 }
 
+export async function skipReminder(id: string): Promise<Result<Reminder, AppError>> {
+  try {
+    const existing = await q.getReminder(id)
+    if (!existing) return appErr('NOT_FOUND', 'Reminder not found')
+
+    const nextRemindAt = nextOccurrence(existing)
+    const patch: Partial<Reminder> = {
+      updated_at: nowIso(),
+      completed: nextRemindAt ? 0 : 1,
+    }
+    if (nextRemindAt) patch.remind_at = nextRemindAt
+
+    await q.updateReminder(id, patch)
+    await cancelCachedNotification(id)
+
+    const fresh = await q.getReminder(id)
+    if (!fresh) return appErr('INTERNAL', 'Skipped reminder vanished')
+    if (!fresh.completed && !fresh.is_inbox) {
+      const notifId = await scheduleReminderNotification(
+        fresh.id, fresh.title, fresh.note ?? '', new Date(fresh.remind_at), fresh.priority
+      )
+      if (notifId) notifCache.set(fresh.id, notifId)
+    }
+
+    void enqueue('reminder', id, 'upsert')
+    return ok(fresh)
+  } catch (e) {
+    logger.error(MODULE, 'skipReminder failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to skip reminder', e)
+  }
+}
+
 export async function deleteReminder(id: string): Promise<Result<void, AppError>> {
   try {
     const existing = await q.getReminder(id)
     if (!existing) return appErr('NOT_FOUND', 'Reminder not found')
 
-    const notifId = notifCache.get(id)
-    if (notifId) { await cancelNotification(notifId); notifCache.delete(id) }
+    await cancelCachedNotification(id)
 
     await q.softDeleteReminder(id, nowIso())
     void enqueue('reminder', id, 'upsert')

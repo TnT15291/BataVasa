@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   View, Text, TextInput, Pressable, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Platform,
+  ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -12,6 +12,7 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
+import { notifySaved } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseJournalEntry } from '@services/ai/journalParser'
 import { VoiceButton } from '@components/VoiceButton'
@@ -135,6 +136,7 @@ export function JournalFormScreen() {
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
     void hapticSaveSuccess()
+    notifySaved(t, useSettingsStore.getState().syncJournals)
     router.back()
   }
 
@@ -180,10 +182,18 @@ export function JournalFormScreen() {
   }
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.bg.primary }}
+      // Content input sits at the bottom of the form; with edge-to-edge enabled
+      // (app.json) Android no longer auto-resizes for the keyboard, so an explicit
+      // behavior is required on both platforms or the input stays hidden.
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.bg.primary }}
       contentContainerStyle={styles.body}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
     >
       <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <View style={styles.cardHeader}>
@@ -323,6 +333,7 @@ export function JournalFormScreen() {
         </Pressable>
       )}
     </ScrollView>
+    </KeyboardAvoidingView>
   )
 }
 

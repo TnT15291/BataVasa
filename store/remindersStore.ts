@@ -12,6 +12,7 @@ type RemindersState = {
   loadReminders: () => Promise<void>
   createReminder: (input: CreateReminderInput) => Promise<{ ok: boolean; error?: string }>
   updateReminder: (input: UpdateReminderInput) => Promise<{ ok: boolean; error?: string }>
+  skipReminder: (id: string) => Promise<{ ok: boolean; error?: string }>
   deleteReminder: (id: string) => Promise<{ ok: boolean; error?: string }>
   wipeAll: () => Promise<{ ok: boolean; deleted?: number; error?: string }>
 }
@@ -43,6 +44,17 @@ export const useRemindersStore = create<RemindersState>((set, get) => ({
 
   async updateReminder(input) {
     const r = await svc.updateReminder(input)
+    if (r.ok) {
+      set((s) => ({
+        reminders: s.reminders.map((rem) => rem.id === r.value.id ? r.value : rem),
+      }))
+      return { ok: true }
+    }
+    return { ok: false, error: r.error.message }
+  },
+
+  async skipReminder(id) {
+    const r = await svc.skipReminder(id)
     if (r.ok) {
       set((s) => ({
         reminders: s.reminders.map((rem) => rem.id === r.value.id ? r.value : rem),
