@@ -1,7 +1,7 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import { useRouter } from 'expo-router'
-import { subDays, startOfMonth, endOfMonth, subMonths, parseISO } from 'date-fns'
+import { subDays, startOfMonth, subMonths, parseISO } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -13,6 +13,7 @@ import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
 import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJournals'
 import { formatAmount } from '@features/finance/services'
 import { translateCategoryName } from '@features/finance/i18n'
+import { convertMinorAmount, getRates } from '@services/fx'
 
 export function AnalysisScreen() {
   useFinanceBootstrap()
@@ -30,6 +31,19 @@ export function AnalysisScreen() {
   const categories = useCategories()
   const habits = useHabits()
   const journals = useJournals()
+
+  // Mirror ReportsScreen: show amounts in the user's display currency when FX
+  // rates are available, falling back to the storage currency otherwise.
+  const displayCurrency = useSettingsStore((s) => s.displayCurrency)
+  const [fxRates, setFxRates] = useState<Record<string, number> | null>(null)
+  useEffect(() => { getRates(displayCurrency).then(setFxRates) }, [displayCurrency])
+  const reportCurrency = fxRates ? displayCurrency : currency
+  const amountInReportCurrency = useCallback((amount: number, txCurrency: string) => {
+    if (txCurrency === reportCurrency) return amount
+    if (fxRates) return convertMinorAmount(amount, txCurrency, reportCurrency, fxRates)
+    if (txCurrency === currency) return amount
+    return null
+  }, [currency, reportCurrency, fxRates])
 
   const [result, setResult] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -76,11 +90,14 @@ export function AnalysisScreen() {
       return d >= from30 && d <= today
     })
     const expenseTxs = last30Txs.filter((tx) => tx.amount_cents < 0)
-    const totalExpense = expenseTxs.reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
-
+    let totalExpense = 0
     const catTotals = new Map<string, number>()
     for (const tx of expenseTxs) {
-      catTotals.set(tx.category_id, (catTotals.get(tx.category_id) ?? 0) + Math.abs(tx.amount_cents))
+      const amount = amountInReportCurrency(tx.amount_cents, tx.currency)
+      if (amount === null) continue
+      const abs = Math.abs(amount)
+      totalExpense += abs
+      catTotals.set(tx.category_id, (catTotals.get(tx.category_id) ?? 0) + abs)
     }
     let topCatId = ''
     let topCatAmt = 0
@@ -101,41 +118,42 @@ export function AnalysisScreen() {
       : null
 
     return { totalExpense, topCat, bestStreak, journalCount: last30Journals.length, avgMood }
-  }, [transactions, categories, habits, journals])
+  }, [transactions, categories, habits, journals, amountInReportCurrency])
 
   const comparison = useMemo(() => {
+    // Compare like-for-like: month-to-date vs the SAME elapsed window last month.
+    // `subMonths(today, 1)` keeps the same wall-clock moment one month earlier, so
+    // we never pit a partial month against a full one (which always read as a drop).
     const today = new Date()
     const thisStart = startOfMonth(today)
-    const lastStart = startOfMonth(subMonths(today, 1))
-    const lastEnd = endOfMonth(subMonths(today, 1))
+    const lastTo = subMonths(today, 1)
+    const lastStart = startOfMonth(lastTo)
 
-    const thisExp = transactions
-      .filter((tx) => {
+    const sumExpense = (from: Date, to: Date) => {
+      let total = 0
+      for (const tx of transactions) {
+        if (tx.amount_cents >= 0) continue
         const d = parseISO(tx.occurred_at)
-        return d >= thisStart && d <= today && tx.amount_cents < 0
+        if (d < from || d > to) continue
+        const amount = amountInReportCurrency(tx.amount_cents, tx.currency)
+        if (amount === null) continue
+        total += Math.abs(amount)
+      }
+      return total
+    }
+
+    const avgMoodIn = (from: Date, to: Date) => {
+      const moods = journals.filter((j) => {
+        const d = parseISO(j.occurred_at)
+        return d >= from && d <= to && j.mood !== null
       })
-      .reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+      return moods.length > 0 ? moods.reduce((s, j) => s + (j.mood ?? 0), 0) / moods.length : null
+    }
 
-    const lastExp = transactions
-      .filter((tx) => {
-        const d = parseISO(tx.occurred_at)
-        return d >= lastStart && d <= lastEnd && tx.amount_cents < 0
-      })
-      .reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
-
-    const thisMoods = journals.filter((j) => {
-      const d = parseISO(j.occurred_at)
-      return d >= thisStart && d <= today && j.mood !== null
-    })
-    const lastMoods = journals.filter((j) => {
-      const d = parseISO(j.occurred_at)
-      return d >= lastStart && d <= lastEnd && j.mood !== null
-    })
-
-    const thisAvgMood = thisMoods.length > 0
-      ? thisMoods.reduce((s, j) => s + (j.mood ?? 0), 0) / thisMoods.length : null
-    const lastAvgMood = lastMoods.length > 0
-      ? lastMoods.reduce((s, j) => s + (j.mood ?? 0), 0) / lastMoods.length : null
+    const thisExp = sumExpense(thisStart, today)
+    const lastExp = sumExpense(lastStart, lastTo)
+    const thisAvgMood = avgMoodIn(thisStart, today)
+    const lastAvgMood = avgMoodIn(lastStart, lastTo)
 
     const expDelta = lastExp > 0 ? Math.round(((thisExp - lastExp) / lastExp) * 100) : undefined
     const moodDelta = lastAvgMood && lastAvgMood > 0
@@ -147,7 +165,7 @@ export function AnalysisScreen() {
       hasFinance: thisExp > 0 || lastExp > 0,
       hasMood: thisAvgMood !== null || lastAvgMood !== null,
     }
-  }, [transactions, journals])
+  }, [transactions, journals, amountInReportCurrency])
 
   const hasData = moduleCount > 0
   const hasComparison = comparison.hasFinance || comparison.hasMood
@@ -172,7 +190,7 @@ export function AnalysisScreen() {
                   <HighlightItem
                     icon="💰"
                     label={t.expense}
-                    value={formatAmount(highlights.totalExpense, currency, language)}
+                    value={formatAmount(highlights.totalExpense, reportCurrency, language)}
                     theme={theme}
                   />
                   <HighlightItem
@@ -186,7 +204,7 @@ export function AnalysisScreen() {
               {habits.length > 0 && (
                 <HighlightItem
                   icon="🔥"
-                  label={t.report_best_streak}
+                  label={t.report_current_streak}
                   value={highlights.bestStreak > 0 ? `${highlights.bestStreak} ${t.report_days}` : '—'}
                   theme={theme}
                 />
@@ -214,7 +232,7 @@ export function AnalysisScreen() {
             {comparison.hasFinance && (
               <CompRow
                 label={t.expense}
-                value={formatAmount(comparison.thisExp, currency, language)}
+                value={formatAmount(comparison.thisExp, reportCurrency, language)}
                 delta={comparison.expDelta}
                 deltaPositive={false}
                 theme={theme}

@@ -109,7 +109,7 @@ export async function updateReminder(
   const data = parsed.data
 
   try {
-    const existing = await q.getReminder(data.id)
+    const existing = await q.getReminder(data.id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Reminder not found')
 
     const patch: Partial<Reminder> = { updated_at: nowIso() }
@@ -130,7 +130,7 @@ export async function updateReminder(
     // Re-schedule notification if time changed
     if (data.remind_at !== undefined || data.title !== undefined || data.priority !== undefined || data.is_inbox !== undefined || data.completed !== undefined) {
       await cancelCachedNotification(data.id)
-      const fresh = await q.getReminder(data.id)
+      const fresh = await q.getReminder(data.id, getCurrentUserId())
       if (fresh && !fresh.completed && !fresh.is_inbox) {
         const notifId = await scheduleReminderNotification(
           fresh.id, fresh.title, fresh.note ?? '', new Date(fresh.remind_at), fresh.priority
@@ -141,7 +141,7 @@ export async function updateReminder(
     }
 
     void enqueue('reminder', data.id, 'upsert')
-    const fresh = await q.getReminder(data.id)
+    const fresh = await q.getReminder(data.id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Updated reminder vanished')
     return ok(fresh)
   } catch (e) {
@@ -152,7 +152,7 @@ export async function updateReminder(
 
 export async function skipReminder(id: string): Promise<Result<Reminder, AppError>> {
   try {
-    const existing = await q.getReminder(id)
+    const existing = await q.getReminder(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Reminder not found')
 
     const nextRemindAt = nextOccurrence(existing)
@@ -165,7 +165,7 @@ export async function skipReminder(id: string): Promise<Result<Reminder, AppErro
     await q.updateReminder(id, patch)
     await cancelCachedNotification(id)
 
-    const fresh = await q.getReminder(id)
+    const fresh = await q.getReminder(id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Skipped reminder vanished')
     if (!fresh.completed && !fresh.is_inbox) {
       const notifId = await scheduleReminderNotification(
@@ -184,7 +184,7 @@ export async function skipReminder(id: string): Promise<Result<Reminder, AppErro
 
 export async function deleteReminder(id: string): Promise<Result<void, AppError>> {
   try {
-    const existing = await q.getReminder(id)
+    const existing = await q.getReminder(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Reminder not found')
 
     await cancelCachedNotification(id)
@@ -201,7 +201,7 @@ export async function deleteReminder(id: string): Promise<Result<void, AppError>
 
 export async function loadReminders(): Promise<Result<Reminder[], AppError>> {
   try {
-    const reminders = await q.listReminders()
+    const reminders = await q.listReminders(getCurrentUserId())
     return ok(reminders)
   } catch (e) {
     logger.error(MODULE, 'loadReminders failed', { error: String(e) })
@@ -213,7 +213,7 @@ export async function wipeAllReminders(): Promise<Result<{ deleted: number }, Ap
   try {
     await cancelAllNotifications()
     notifCache.clear()
-    const deleted = await q.wipeReminders()
+    const deleted = await q.wipeReminders(getCurrentUserId())
     void enqueue('reminder', 'ALL', 'wipe')
     logger.info(MODULE, 'wiped all reminders', { deleted })
     return ok({ deleted })
@@ -225,7 +225,7 @@ export async function wipeAllReminders(): Promise<Result<{ deleted: number }, Ap
 
 export async function exportAllReminders(): Promise<Result<string, AppError>> {
   try {
-    const reminders = await q.exportRemindersData()
+    const reminders = await q.exportRemindersData(getCurrentUserId())
     return ok(JSON.stringify({ exported_at: new Date().toISOString(), reminders }, null, 2))
   } catch (e) {
     logger.error(MODULE, 'exportAllReminders failed', { error: String(e) })

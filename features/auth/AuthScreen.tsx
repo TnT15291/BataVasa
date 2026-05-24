@@ -191,7 +191,7 @@ export function AuthScreen() {
         {confirmMsg && <Text style={[styles.confirm, { color: theme.semantic.success }]}>{t.auth_check_email}</Text>}
         {resetMsg && <Text style={[styles.confirm, { color: theme.semantic.success }]}>{t.auth_reset_email_sent}</Text>}
 
-        {mode === 'signin' && error ? (
+        {mode === 'signin' ? (
           <Pressable onPress={onResetPassword} disabled={!canReset} style={styles.forgot} hitSlop={8}>
             <Text style={[styles.forgotText, { color: canReset ? theme.brand.primary : theme.text.muted }]}>
               {t.auth_forgot_password}

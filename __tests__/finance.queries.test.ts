@@ -15,6 +15,7 @@ import {
   softDeleteTransaction,
   getTransaction,
   listTransactions,
+  listCategories,
   findDuplicateTransaction,
   wipeFinanceData,
   insertCategory,
@@ -94,21 +95,30 @@ describe('finance queries', () => {
     mockDb.getFirstAsync.mockResolvedValueOnce(baseTx).mockResolvedValueOnce(baseTx)
     mockDb.getAllAsync.mockResolvedValueOnce([baseTx])
 
-    await expect(getTransaction('tx-1')).resolves.toBe(baseTx)
-    await expect(listTransactions({ from: '2026-01-01', to: '2026-01-31', categoryId: 'cat-1', limit: 10, offset: 5 })).resolves.toEqual([baseTx])
+    await expect(getTransaction('tx-1', 'user-1')).resolves.toBe(baseTx)
+    await expect(listTransactions('user-1', { from: '2026-01-01', to: '2026-01-31', categoryId: 'cat-1', limit: 10, offset: 5 })).resolves.toEqual([baseTx])
     expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-      expect.stringContaining('category_id = ?'),
-      ['2026-01-01', '2026-01-31', 'cat-1', 10, 5]
+      expect.stringContaining('user_id = ?'),
+      ['user-1', '2026-01-01', '2026-01-31', 'cat-1', 10, 5]
     )
-    await expect(findDuplicateTransaction(-100, 'Cafe', 1000)).resolves.toBe(baseTx)
+    await expect(findDuplicateTransaction(-100, 'Cafe', 'user-1', 1000)).resolves.toBe(baseTx)
   })
 
-  it('wipes finance data with counts', async () => {
+  it('wipes finance data with counts (scoped to user)', async () => {
     mockDb.getFirstAsync.mockResolvedValueOnce({ n: 2 }).mockResolvedValueOnce({ n: 1 }).mockResolvedValueOnce({ n: 3 })
-    await expect(wipeFinanceData()).resolves.toEqual({ transactions: 2, categories: 1, rules: 3 })
-    expect(mockDb.execAsync).toHaveBeenCalledWith('DELETE FROM finance_transaction')
-    expect(mockDb.execAsync).toHaveBeenCalledWith('DELETE FROM finance_rule')
-    expect(mockDb.execAsync).toHaveBeenCalledWith('DELETE FROM finance_category WHERE user_id IS NOT NULL')
+    await expect(wipeFinanceData('user-1')).resolves.toEqual({ transactions: 2, categories: 1, rules: 3 })
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_transaction WHERE user_id = ?', ['user-1'])
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_rule WHERE user_id = ?', ['user-1'])
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_category WHERE user_id = ?', ['user-1'])
+  })
+
+  it('scopes category reads to system + owner (isolation)', async () => {
+    mockDb.getAllAsync.mockResolvedValueOnce([baseCategory])
+    await listCategories('user-1')
+    expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining('user_id IS NULL OR user_id = ?'),
+      ['user-1']
+    )
   })
 
   it('inserts, updates, deletes, and exports categories', async () => {
@@ -116,7 +126,7 @@ describe('finance queries', () => {
     await insertCategory(baseCategory)
     await updateCategory('cat-1', { name: 'Groceries', id: 'ignored' } as any)
     await softDeleteCategory('cat-1', '2026-01-02T00:00:00.000Z')
-    const exported = await exportFinanceData()
+    const exported = await exportFinanceData('user-1')
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO finance_category'),

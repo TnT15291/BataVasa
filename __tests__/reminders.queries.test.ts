@@ -68,12 +68,12 @@ describe('reminder queries', () => {
     mockDb.runAsync.mockResolvedValue({ changes: 3 })
 
     await softDeleteReminder('rem-1', '2026-01-03T00:00:00.000Z')
-    await expect(getReminder('rem-1')).resolves.toBe(baseReminder)
-    await expect(listReminders()).resolves.toEqual([baseReminder])
-    await expect(wipeReminders()).resolves.toBe(3)
-    await expect(exportRemindersData()).resolves.toEqual([baseReminder])
+    await expect(getReminder('rem-1', 'user-1')).resolves.toBe(baseReminder)
+    await expect(listReminders('user-1')).resolves.toEqual([baseReminder])
+    await expect(wipeReminders('user-1')).resolves.toBe(3)
+    await expect(exportRemindersData('user-1')).resolves.toEqual([baseReminder])
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(expect.stringContaining('deleted_at = ?'), ['2026-01-03T00:00:00.000Z', '2026-01-03T00:00:00.000Z', 'rem-1'])
-    expect(mockDb.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('ORDER BY remind_at ASC'))
+    expect(mockDb.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('user_id = ?'), ['user-1'])
   })
 })

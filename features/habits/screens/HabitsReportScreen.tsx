@@ -355,9 +355,9 @@ export function HabitsReportScreen() {
                 delta={prevStats ? calcDelta(stats.completionRate, prevStats.completionRate) : undefined}
                 theme={theme}
               />
-              <StatCard label={t.report_best_streak} value={`${stats.bestStreak} ${t.report_days}`} theme={theme} />
+              <StatCard label={t.report_current_streak} value={`${stats.bestStreak} ${t.report_days}`} theme={theme} />
               <StatCard
-                label="Skipped"
+                label={t.report_skipped}
                 value={String(stats.skipCount)}
                 delta={prevStats ? calcDelta(stats.skipCount, prevStats.skipCount) : undefined}
                 deltaPositive={false}
@@ -425,7 +425,7 @@ export function HabitsReportScreen() {
             {stats.recentSkipped.length > 0 && (
               <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
                 <View style={styles.cardTitleRow}>
-                  <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>Skip history</Text>
+                  <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.report_skip_history}</Text>
                   <Text style={[styles.cardTitle, { color: theme.text.muted }]}>{stats.skipCount}</Text>
                 </View>
                 {stats.recentSkipped.map((log) => {

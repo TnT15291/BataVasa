@@ -235,7 +235,7 @@ export function HabitListScreen() {
               </View>
               <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
                 <Text style={[styles.statValue, { color: theme.text.primary }]}>{bestStreak}</Text>
-                <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_best_streak}</Text>
+                <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_current_streak}</Text>
               </View>
             </View>
           </View>

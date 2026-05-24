@@ -12,6 +12,7 @@ export type AnalyticsEvent =
   | 'auth_signup'
   | 'auth_login'
   | 'auth_logout'
+  | 'auth_password_reset'
   | 'transaction_created'
   | 'data_exported'
   | 'data_deleted'
@@ -29,6 +30,7 @@ export type AnalyticsProps = {
   auth_signup: Record<string, never>
   auth_login: Record<string, never>
   auth_logout: Record<string, never>
+  auth_password_reset: Record<string, never>
   transaction_created: { category_kind?: string; source?: string }
   data_exported: { module?: string; item_count?: number }
   data_deleted: { module?: string; item_count?: number }
@@ -52,6 +54,7 @@ const ALLOWED_KEYS: { [E in AnalyticsEvent]: ReadonlyArray<keyof AnalyticsProps[
   auth_signup: [],
   auth_login: [],
   auth_logout: [],
+  auth_password_reset: [],
   transaction_created: ['category_kind', 'source'],
   data_exported: ['module', 'item_count'],
   data_deleted: ['module', 'item_count'],

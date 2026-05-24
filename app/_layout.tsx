@@ -14,6 +14,8 @@ import { track } from '@services/analytics'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAuthStore } from '@store/authStore'
 import { AuthScreen } from '@features/auth/AuthScreen'
+import { UpdatePasswordScreen } from '@features/auth/UpdatePasswordScreen'
+import { usePasswordRecoveryLink } from '@features/auth/usePasswordRecoveryLink'
 import { startSyncWorker, drainQueue } from '@services/sync'
 import { BiometricLockScreen } from '@/components/BiometricLockScreen'
 import { ToastHost } from '@/components/Toast'
@@ -49,7 +51,11 @@ export default function RootLayout() {
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const biometricLock = useSettingsStore((s) => s.biometricLock)
   const session = useAuthStore((s) => s.session)
+  const recoveryMode = useAuthStore((s) => s.recoveryMode)
   const { t } = useTranslation()
+
+  // Handle `batavasa://reset-password` deep links from recovery emails.
+  usePasswordRecoveryLink()
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [locked, setLocked] = useState(false)
@@ -114,7 +120,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ErrorBoundary>
         <>
-        {session ? (
+        {recoveryMode ? (
+          <UpdatePasswordScreen />
+        ) : session ? (
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: theme.bg.elevated },

@@ -305,7 +305,7 @@ export function JournalListScreen() {
               <Text style={[styles.statValue, { color: theme.text.primary }]}>
                 {journalStats.importantCount}
               </Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>Important</Text>
+              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_important}</Text>
             </View>
           </View>
         </View>

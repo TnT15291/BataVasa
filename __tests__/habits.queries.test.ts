@@ -83,17 +83,17 @@ describe('habit queries', () => {
     mockDb.runAsync.mockResolvedValue({ changes: 4 })
 
     await softDeleteHabit('habit-1', '2026-01-03T00:00:00.000Z')
-    await expect(getHabit('habit-1')).resolves.toBe(baseHabit)
-    await expect(listHabits()).resolves.toEqual([baseHabit])
-    await expect(wipeHabits()).resolves.toBe(4)
-    await expect(exportHabitsData()).resolves.toEqual({ habits: [baseHabit], logs: [baseLog] })
+    await expect(getHabit('habit-1', 'user-1')).resolves.toBe(baseHabit)
+    await expect(listHabits('user-1')).resolves.toEqual([baseHabit])
+    await expect(wipeHabits('user-1')).resolves.toBe(4)
+    await expect(exportHabitsData('user-1')).resolves.toEqual({ habits: [baseHabit], logs: [baseLog] })
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('deleted_at = ?'),
       ['2026-01-03T00:00:00.000Z', '2026-01-03T00:00:00.000Z', 'habit-1']
     )
-    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM habit_log')
-    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM habit')
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM habit_log WHERE user_id = ?', ['user-1'])
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM habit WHERE user_id = ?', ['user-1'])
   })
 
   it('inserts, soft-deletes, lists, and counts habit logs', async () => {

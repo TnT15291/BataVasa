@@ -16,6 +16,21 @@ Cross-cutting requirements (every cloud-touching feature):
 - All RLS policies in `docs/security.md#authorization` are required before that table syncs
 - Auth state changes (`onAuthStateChange`) must trigger re-load of all module stores
 
+### Password recovery
+
+Self-service "forgot password" flow, fully in-app (no hosted Supabase page):
+
+1. **Request** — `AuthScreen` → "Forgot password?" (shown whenever in sign-in mode) calls `authStore.resetPassword(email)` → `supabase.auth.resetPasswordForEmail(email, { redirectTo })`. The `redirectTo` is `Linking.createURL('reset-password')` (`batavasa://reset-password` in standalone; `exp://…/--/reset-password` in dev).
+2. **Email link** — user taps the recovery link; the OS opens the app via the deep link. The implicit flow carries `access_token` / `refresh_token` (+ `type=recovery`) in the URL **fragment**.
+3. **Capture** — `usePasswordRecoveryLink` (mounted in `app/_layout.tsx`) parses the fragment, calls `authStore.enterRecovery(tokens)` → `setSession()` → sets `recoveryMode = true`. Routing shows `UpdatePasswordScreen` **instead of** dropping the now-authenticated user into the app.
+4. **Set new password** — `UpdatePasswordScreen` validates (≥6 chars, both fields match) → `authStore.updatePassword()` → `supabase.auth.updateUser({ password })`. On success `recoveryMode` clears and the existing session lands the user in the app. Cancel → `exitRecovery()` signs out back to a clean login.
+
+> **⚠️ Required Supabase config** — the deep-link URLs MUST be added in **Authentication → URL Configuration → Redirect URLs** or Supabase rejects `redirectTo` and falls back to the Site URL (breaking the flow):
+> - Production: `batavasa://reset-password`
+> - Dev (Expo Go): the `exp://…/--/reset-password` URL printed by the dev server
+>
+> Recovery is implicit-flow only because the client uses the default `flowType` (no PKCE). Expired/used links arrive with `error_description` in the fragment → surfaced as the localized `auth_reset_link_invalid` message.
+
 ## Encryption
 
 - **At rest:** SQLite encrypted via SQLCipher (key from device keychain)

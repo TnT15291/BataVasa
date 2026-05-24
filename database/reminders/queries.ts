@@ -32,29 +32,29 @@ export async function softDeleteReminder(id: string, deletedAt: string): Promise
   )
 }
 
-export async function getReminder(id: string): Promise<Reminder | null> {
+export async function getReminder(id: string, userId: string | null): Promise<Reminder | null> {
   const db = await getDb()
   return db.getFirstAsync<Reminder>(
-    `SELECT * FROM reminder WHERE id = ? AND deleted_at IS NULL`, [id]
+    `SELECT * FROM reminder WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [id, userId]
   )
 }
 
-export async function listReminders(): Promise<Reminder[]> {
+export async function listReminders(userId: string | null): Promise<Reminder[]> {
   const db = await getDb()
   return db.getAllAsync<Reminder>(
-    `SELECT * FROM reminder WHERE deleted_at IS NULL ORDER BY remind_at ASC`
+    `SELECT * FROM reminder WHERE deleted_at IS NULL AND user_id = ? ORDER BY remind_at ASC`, [userId]
   )
 }
 
-export async function wipeReminders(): Promise<number> {
+export async function wipeReminders(userId: string | null): Promise<number> {
   const db = await getDb()
-  const r = await db.runAsync(`DELETE FROM reminder`)
+  const r = await db.runAsync(`DELETE FROM reminder WHERE user_id = ?`, [userId])
   return r.changes
 }
 
-export async function exportRemindersData(): Promise<Reminder[]> {
+export async function exportRemindersData(userId: string | null): Promise<Reminder[]> {
   const db = await getDb()
   return db.getAllAsync<Reminder>(
-    `SELECT * FROM reminder WHERE deleted_at IS NULL ORDER BY remind_at ASC`
+    `SELECT * FROM reminder WHERE deleted_at IS NULL AND user_id = ? ORDER BY remind_at ASC`, [userId]
   )
 }

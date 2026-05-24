@@ -62,7 +62,7 @@ export async function updateJournal(
   const data = parsed.data
 
   try {
-    const existing = await q.getJournal(data.id)
+    const existing = await q.getJournal(data.id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Journal entry not found')
 
     const patch: Partial<Journal> = { updated_at: nowIso() }
@@ -76,7 +76,7 @@ export async function updateJournal(
 
     await q.updateJournal(data.id, patch)
     void enqueue('journal', data.id, 'upsert')
-    const fresh = await q.getJournal(data.id)
+    const fresh = await q.getJournal(data.id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Updated journal entry vanished')
     logger.info(MODULE, 'journal updated', { id: data.id })
     return ok(fresh)
@@ -88,7 +88,7 @@ export async function updateJournal(
 
 export async function deleteJournal(id: string): Promise<Result<void, AppError>> {
   try {
-    const existing = await q.getJournal(id)
+    const existing = await q.getJournal(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Journal entry not found')
 
     await q.softDeleteJournal(id, nowIso())
@@ -103,7 +103,7 @@ export async function deleteJournal(id: string): Promise<Result<void, AppError>>
 
 export async function loadJournals(): Promise<Result<Journal[], AppError>> {
   try {
-    const journals = await q.listJournals()
+    const journals = await q.listJournals(getCurrentUserId())
     return ok(journals)
   } catch (e) {
     logger.error(MODULE, 'loadJournals failed', { error: String(e) })
@@ -113,7 +113,7 @@ export async function loadJournals(): Promise<Result<Journal[], AppError>> {
 
 export async function wipeAllJournals(): Promise<Result<{ deleted: number }, AppError>> {
   try {
-    const deleted = await q.wipeJournals()
+    const deleted = await q.wipeJournals(getCurrentUserId())
     void enqueue('journal', 'ALL', 'wipe')
     logger.info(MODULE, 'wiped all journals', { deleted })
     return ok({ deleted })
@@ -125,7 +125,7 @@ export async function wipeAllJournals(): Promise<Result<{ deleted: number }, App
 
 export async function exportAllJournals(): Promise<Result<string, AppError>> {
   try {
-    const journals = await q.exportJournalsData()
+    const journals = await q.exportJournalsData(getCurrentUserId())
     return ok(JSON.stringify({ exported_at: new Date().toISOString(), journals }, null, 2))
   } catch (e) {
     logger.error(MODULE, 'exportAllJournals failed', { error: String(e) })

@@ -189,7 +189,7 @@ describe('finance service categories and data management', () => {
     expect(mockQ.insertCategory).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Gym',
       sort_order: 1,
-      user_id: 'local',
+      user_id: 'user-1',
     }))
   })
 

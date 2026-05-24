@@ -34,31 +34,31 @@ export async function softDeleteHabit(id: string, deletedAt: string): Promise<vo
   )
 }
 
-export async function getHabit(id: string): Promise<Habit | null> {
+export async function getHabit(id: string, userId: string | null): Promise<Habit | null> {
   const db = await getDb()
   return db.getFirstAsync<Habit>(
-    `SELECT * FROM habit WHERE id = ? AND deleted_at IS NULL`, [id]
+    `SELECT * FROM habit WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [id, userId]
   )
 }
 
-export async function listHabits(): Promise<Habit[]> {
+export async function listHabits(userId: string | null): Promise<Habit[]> {
   const db = await getDb()
   return db.getAllAsync<Habit>(
-    `SELECT * FROM habit WHERE deleted_at IS NULL ORDER BY created_at ASC`
+    `SELECT * FROM habit WHERE deleted_at IS NULL AND user_id = ? ORDER BY created_at ASC`, [userId]
   )
 }
 
-export async function wipeHabits(): Promise<number> {
+export async function wipeHabits(userId: string | null): Promise<number> {
   const db = await getDb()
-  await db.runAsync(`DELETE FROM habit_log`)
-  const r = await db.runAsync(`DELETE FROM habit`)
+  await db.runAsync(`DELETE FROM habit_log WHERE user_id = ?`, [userId])
+  const r = await db.runAsync(`DELETE FROM habit WHERE user_id = ?`, [userId])
   return r.changes
 }
 
-export async function exportHabitsData(): Promise<{ habits: Habit[]; logs: HabitLog[] }> {
+export async function exportHabitsData(userId: string | null): Promise<{ habits: Habit[]; logs: HabitLog[] }> {
   const db = await getDb()
-  const habits = await db.getAllAsync<Habit>(`SELECT * FROM habit WHERE deleted_at IS NULL`)
-  const logs = await db.getAllAsync<HabitLog>(`SELECT * FROM habit_log WHERE deleted_at IS NULL ORDER BY occurred_at DESC`)
+  const habits = await db.getAllAsync<Habit>(`SELECT * FROM habit WHERE deleted_at IS NULL AND user_id = ?`, [userId])
+  const logs = await db.getAllAsync<HabitLog>(`SELECT * FROM habit_log WHERE deleted_at IS NULL AND user_id = ? ORDER BY occurred_at DESC`, [userId])
   return { habits, logs }
 }
 

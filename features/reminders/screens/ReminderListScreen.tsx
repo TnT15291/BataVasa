@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import { endOfDay, format, startOfDay } from 'date-fns'
+import { addDays, endOfDay, format, startOfDay } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -199,10 +199,12 @@ export function ReminderListScreen() {
     router.push({ pathname: '/reminder', params: p ? { prefill: JSON.stringify(p) } : {} } as any)
   }
 
-  const { overdue, today, upcoming, completed, inbox } = useMemo(() => {
+  const { overdue, today, next7Days, nextMonth, later, completed, inbox } = useMemo(() => {
     const now = new Date()
     const dayStart = startOfDay(now)
     const dayEnd = endOfDay(now)
+    const sevenDaysLater = endOfDay(addDays(now, 7))
+    const thirtyDaysLater = endOfDay(addDays(now, 30))
     const eventAt = (r: Reminder) => new Date(new Date(r.remind_at).getTime() + (r.advance_minutes ?? 0) * 60000)
     const scoped = reminders.filter((r) => {
       if (activeFilter === 'today') {
@@ -229,13 +231,25 @@ export function ReminderListScreen() {
         return (r.is_inbox ?? 0) !== 1 && d >= now && d >= dayStart && d <= dayEnd
       })
       .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
-    const upcoming = active
-      .filter((r) => (r.is_inbox ?? 0) !== 1 && eventAt(r) > dayEnd)
+    const next7Days = active
+      .filter((r) => {
+        const d = eventAt(r)
+        return (r.is_inbox ?? 0) !== 1 && d > dayEnd && d <= sevenDaysLater
+      })
       .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
-    return { overdue, today, upcoming, completed, inbox }
+    const nextMonth = active
+      .filter((r) => {
+        const d = eventAt(r)
+        return (r.is_inbox ?? 0) !== 1 && d > sevenDaysLater && d <= thirtyDaysLater
+      })
+      .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
+    const later = active
+      .filter((r) => (r.is_inbox ?? 0) !== 1 && eventAt(r) > thirtyDaysLater)
+      .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
+    return { overdue, today, next7Days, nextMonth, later, completed, inbox }
   }, [reminders, activeFilter])
 
-  const nextReminder = today[0] ?? upcoming[0] ?? overdue[0] ?? null
+  const nextReminder = today[0] ?? next7Days[0] ?? nextMonth[0] ?? later[0] ?? overdue[0] ?? null
   const completedCount = completed.length
   const activeCount = reminders.length - completedCount
 
@@ -302,7 +316,7 @@ export function ReminderListScreen() {
             </View>
             <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
               <Text style={[styles.statValue, { color: theme.text.primary }]}>{activeCount}</Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.reminder_upcoming}</Text>
+              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.all_period}</Text>
             </View>
             <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
               <Text style={[styles.statValue, { color: theme.semantic.success }]}>{completedCount}</Text>
@@ -350,7 +364,9 @@ export function ReminderListScreen() {
             {activeFilter === 'all' ? renderGroup(t.reminder_inbox, inbox) : null}
             {renderGroup(t.reminder_past, overdue)}
             {renderGroup(t.today, today)}
-            {renderGroup(t.reminder_upcoming, upcoming)}
+            {renderGroup(t.reminder_next7days, next7Days)}
+            {renderGroup(t.reminder_nextmonth, nextMonth)}
+            {renderGroup(t.reminder_later, later)}
             {activeFilter === 'all' ? renderGroup(t.reminder_completed, completed) : null}
           </>
         )}

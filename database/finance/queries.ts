@@ -55,11 +55,11 @@ export async function softDeleteTransaction(id: string, deletedAt: string): Prom
   )
 }
 
-export async function getTransaction(id: string): Promise<TransactionRow | null> {
+export async function getTransaction(id: string, userId: string | null): Promise<TransactionRow | null> {
   const db = await getDb()
   const row = await db.getFirstAsync<TransactionRow>(
-    'SELECT * FROM finance_transaction WHERE id = ? AND deleted_at IS NULL',
-    [id]
+    'SELECT * FROM finance_transaction WHERE id = ? AND user_id = ? AND deleted_at IS NULL',
+    [id, userId]
   )
   return row ?? null
 }
@@ -73,10 +73,10 @@ export type ListTransactionsParams = {
   offset?: number
 }
 
-export async function listTransactions(params: ListTransactionsParams = {}): Promise<TransactionRow[]> {
+export async function listTransactions(userId: string | null, params: ListTransactionsParams = {}): Promise<TransactionRow[]> {
   const db = await getDb()
-  const where: string[] = ['deleted_at IS NULL']
-  const args: (string | number)[] = []
+  const where: string[] = ['deleted_at IS NULL', 'user_id = ?']
+  const args: (string | number | null)[] = [userId]
   if (params.from) {
     where.push('occurred_at >= ?')
     args.push(params.from)
@@ -116,48 +116,53 @@ export async function upsertTransactionRule(row: TransactionRuleRow): Promise<vo
   )
 }
 
-export async function findRuleForMerchant(merchant: string | null): Promise<TransactionRuleRow | null> {
+export async function findRuleForMerchant(merchant: string | null, userId: string | null): Promise<TransactionRuleRow | null> {
   if (!merchant?.trim()) return null
   const db = await getDb()
   const normalized = merchant.trim().toLowerCase()
   const row = await db.getFirstAsync<TransactionRuleRow>(
     `SELECT * FROM finance_rule
      WHERE deleted_at IS NULL
+       AND user_id = ?
        AND (
          lower(?) = lower(merchant_pattern)
          OR lower(?) LIKE '%' || lower(merchant_pattern) || '%'
        )
      ORDER BY length(merchant_pattern) DESC, updated_at DESC
      LIMIT 1`,
-    [normalized, normalized]
+    [userId, normalized, normalized]
   )
   return row ?? null
 }
 
-export async function findRuleByPattern(pattern: string): Promise<TransactionRuleRow | null> {
+export async function findRuleByPattern(pattern: string, userId: string | null): Promise<TransactionRuleRow | null> {
   const db = await getDb()
   const row = await db.getFirstAsync<TransactionRuleRow>(
     `SELECT * FROM finance_rule
      WHERE lower(merchant_pattern) = lower(?)
+       AND user_id = ?
        AND deleted_at IS NULL
      LIMIT 1`,
-    [pattern.trim().toLowerCase()]
+    [pattern.trim().toLowerCase(), userId]
   )
   return row ?? null
 }
 
-export async function listTransactionRules(): Promise<TransactionRuleRow[]> {
+export async function listTransactionRules(userId: string | null): Promise<TransactionRuleRow[]> {
   const db = await getDb()
   return db.getAllAsync<TransactionRuleRow>(
     `SELECT * FROM finance_rule
      WHERE deleted_at IS NULL
-     ORDER BY updated_at DESC`
+       AND user_id = ?
+     ORDER BY updated_at DESC`,
+    [userId]
   )
 }
 
 export async function findDuplicateTransaction(
   amountCents: number,
   merchant: string | null,
+  userId: string | null,
   withinMs = 60_000
 ): Promise<TransactionRow | null> {
   const db = await getDb()
@@ -165,11 +170,12 @@ export async function findDuplicateTransaction(
   const row = await db.getFirstAsync<TransactionRow>(
     `SELECT * FROM finance_transaction
      WHERE amount_cents = ?
+       AND user_id = ?
        AND (merchant IS ? OR merchant = ?)
        AND created_at >= ?
        AND deleted_at IS NULL
      ORDER BY created_at DESC LIMIT 1`,
-    [amountCents, merchant, merchant ?? '', since]
+    [amountCents, userId, merchant, merchant ?? '', since]
   )
   return row ?? null
 }
@@ -178,20 +184,23 @@ export async function findDuplicateTransaction(
 // Wipes: all transactions + user-created categories. System categories stay
 // (they're seeded data, will re-show on next launch).
 // Returns count of deleted rows for confirmation toast.
-export async function wipeFinanceData(): Promise<{ transactions: number; categories: number; rules: number }> {
+export async function wipeFinanceData(userId: string | null): Promise<{ transactions: number; categories: number; rules: number }> {
   const db = await getDb()
   const txCount = await db.getFirstAsync<{ n: number }>(
-    'SELECT COUNT(*) AS n FROM finance_transaction'
+    'SELECT COUNT(*) AS n FROM finance_transaction WHERE user_id = ?',
+    [userId]
   )
   const catCount = await db.getFirstAsync<{ n: number }>(
-    'SELECT COUNT(*) AS n FROM finance_category WHERE user_id IS NOT NULL'
+    'SELECT COUNT(*) AS n FROM finance_category WHERE user_id = ?',
+    [userId]
   )
   const ruleCount = await db.getFirstAsync<{ n: number }>(
-    'SELECT COUNT(*) AS n FROM finance_rule'
+    'SELECT COUNT(*) AS n FROM finance_rule WHERE user_id = ?',
+    [userId]
   )
-  await db.execAsync('DELETE FROM finance_transaction')
-  await db.execAsync('DELETE FROM finance_rule')
-  await db.execAsync('DELETE FROM finance_category WHERE user_id IS NOT NULL')
+  await db.runAsync('DELETE FROM finance_transaction WHERE user_id = ?', [userId])
+  await db.runAsync('DELETE FROM finance_rule WHERE user_id = ?', [userId])
+  await db.runAsync('DELETE FROM finance_category WHERE user_id = ?', [userId])
   return {
     transactions: txCount?.n ?? 0,
     categories: catCount?.n ?? 0,
@@ -199,20 +208,24 @@ export async function wipeFinanceData(): Promise<{ transactions: number; categor
   }
 }
 
-export async function listCategories(): Promise<CategoryRow[]> {
+// System categories (user_id IS NULL) are shared seed data visible to everyone;
+// user-created categories are scoped to the owner.
+export async function listCategories(userId: string | null): Promise<CategoryRow[]> {
   const db = await getDb()
   return db.getAllAsync<CategoryRow>(
     `SELECT * FROM finance_category
      WHERE deleted_at IS NULL
-     ORDER BY kind, sort_order, name`
+       AND (user_id IS NULL OR user_id = ?)
+     ORDER BY kind, sort_order, name`,
+    [userId]
   )
 }
 
-export async function getCategory(id: string): Promise<CategoryRow | null> {
+export async function getCategory(id: string, userId: string | null): Promise<CategoryRow | null> {
   const db = await getDb()
   const row = await db.getFirstAsync<CategoryRow>(
-    'SELECT * FROM finance_category WHERE id = ? AND deleted_at IS NULL',
-    [id]
+    'SELECT * FROM finance_category WHERE id = ? AND deleted_at IS NULL AND (user_id IS NULL OR user_id = ?)',
+    [id, userId]
   )
   return row ?? null
 }
@@ -253,16 +266,19 @@ export async function softDeleteCategory(id: string, deletedAt: string): Promise
   )
 }
 
-export async function exportFinanceData(): Promise<{ transactions: TransactionRow[]; categories: CategoryRow[]; rules: TransactionRuleRow[] }> {
+export async function exportFinanceData(userId: string | null): Promise<{ transactions: TransactionRow[]; categories: CategoryRow[]; rules: TransactionRuleRow[] }> {
   const db = await getDb()
   const transactions = await db.getAllAsync<TransactionRow>(
-    'SELECT * FROM finance_transaction WHERE deleted_at IS NULL ORDER BY occurred_at DESC'
+    'SELECT * FROM finance_transaction WHERE deleted_at IS NULL AND user_id = ? ORDER BY occurred_at DESC',
+    [userId]
   )
   const categories = await db.getAllAsync<CategoryRow>(
-    'SELECT * FROM finance_category WHERE deleted_at IS NULL ORDER BY kind, sort_order'
+    'SELECT * FROM finance_category WHERE deleted_at IS NULL AND (user_id IS NULL OR user_id = ?) ORDER BY kind, sort_order',
+    [userId]
   )
   const rules = await db.getAllAsync<TransactionRuleRow>(
-    'SELECT * FROM finance_rule WHERE deleted_at IS NULL ORDER BY updated_at DESC'
+    'SELECT * FROM finance_rule WHERE deleted_at IS NULL AND user_id = ? ORDER BY updated_at DESC',
+    [userId]
   )
   return { transactions, categories, rules }
 }

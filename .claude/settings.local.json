@@ -81,7 +81,12 @@
       "Bash(npm test *)",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\); console.log\\('expo:', p.dependencies.expo, 'rn:', p.dependencies['react-native']\\)\")",
       "Bash(echo \"EXPORT_EXIT: $?\")",
-      "Bash(node -e \"console.log\\(require.resolve\\('@react-navigation/elements'\\)\\)\")"
+      "Bash(node -e \"console.log\\(require.resolve\\('@react-navigation/elements'\\)\\)\")",
+      "PowerShell(npx tsc --noEmit)",
+      "PowerShell(npx jest --silent 2>$null)",
+      "PowerShell(if \\($?\\) { \"TESTS PASSED\" } else { \"TESTS FAILED\" })",
+      "PowerShell(if \\($?\\) { \"TSC OK\" } else { \"TSC FAILED\" })",
+      "PowerShell(if \\($LASTEXITCODE -eq 0\\) { \"TSC OK\" })"
     ],
     "additionalDirectories": [
       "\\tmp"

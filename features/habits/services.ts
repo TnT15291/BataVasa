@@ -112,7 +112,7 @@ export async function updateHabit(
   }
   const data = parsed.data
   try {
-    const existing = await q.getHabit(data.id)
+    const existing = await q.getHabit(data.id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Habit not found')
 
     const patch: Partial<Habit> = { updated_at: nowIso() }
@@ -127,7 +127,7 @@ export async function updateHabit(
 
     await q.updateHabit(data.id, patch)
     void enqueue('habit', data.id, 'upsert')
-    const fresh = await q.getHabit(data.id)
+    const fresh = await q.getHabit(data.id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Updated habit vanished')
     return ok(fresh)
   } catch (e) {
@@ -138,7 +138,7 @@ export async function updateHabit(
 
 export async function deleteHabit(id: string): Promise<Result<void, AppError>> {
   try {
-    const existing = await q.getHabit(id)
+    const existing = await q.getHabit(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Habit not found')
     await q.softDeleteHabit(id, nowIso())
     void enqueue('habit', id, 'upsert')
@@ -152,7 +152,7 @@ export async function deleteHabit(id: string): Promise<Result<void, AppError>> {
 
 export async function loadHabits(): Promise<Result<Habit[], AppError>> {
   try {
-    const habits = await q.listHabits()
+    const habits = await q.listHabits(getCurrentUserId())
     return ok(habits)
   } catch (e) {
     logger.error(MODULE, 'loadHabits failed', { error: String(e) })
@@ -162,7 +162,7 @@ export async function loadHabits(): Promise<Result<Habit[], AppError>> {
 
 export async function wipeAllHabits(): Promise<Result<{ deleted: number }, AppError>> {
   try {
-    const deleted = await q.wipeHabits()
+    const deleted = await q.wipeHabits(getCurrentUserId())
     void enqueue('habit', 'ALL', 'wipe')
     void enqueue('habit_log', 'ALL', 'wipe')
     logger.info(MODULE, 'wiped all habits', { deleted })
@@ -175,7 +175,7 @@ export async function wipeAllHabits(): Promise<Result<{ deleted: number }, AppEr
 
 export async function exportAllHabits(): Promise<Result<string, AppError>> {
   try {
-    const data = await q.exportHabitsData()
+    const data = await q.exportHabitsData(getCurrentUserId())
     return ok(JSON.stringify({ exported_at: new Date().toISOString(), ...data }, null, 2))
   } catch (e) {
     logger.error(MODULE, 'exportAllHabits failed', { error: String(e) })
@@ -275,7 +275,7 @@ export async function getHabitStreak(habitId: string): Promise<number> {
     const fromDate = getLocalDateString(from)
 
     const logsByDate = await q.listLogCountsByDate(habitId, fromDate, toDate)
-    const habit = await q.getHabit(habitId)
+    const habit = await q.getHabit(habitId, getCurrentUserId())
     if (!habit) return 0
     const logMap = new Map(logsByDate.map((r) => [r.date, r.count]))
 

@@ -32,29 +32,29 @@ export async function softDeleteJournal(id: string, deletedAt: string): Promise<
   )
 }
 
-export async function getJournal(id: string): Promise<Journal | null> {
+export async function getJournal(id: string, userId: string | null): Promise<Journal | null> {
   const db = await getDb()
   return db.getFirstAsync<Journal>(
-    `SELECT * FROM journal WHERE id = ? AND deleted_at IS NULL`, [id]
+    `SELECT * FROM journal WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [id, userId]
   )
 }
 
-export async function listJournals(): Promise<Journal[]> {
+export async function listJournals(userId: string | null): Promise<Journal[]> {
   const db = await getDb()
   return db.getAllAsync<Journal>(
-    `SELECT * FROM journal WHERE deleted_at IS NULL ORDER BY occurred_at DESC`
+    `SELECT * FROM journal WHERE deleted_at IS NULL AND user_id = ? ORDER BY occurred_at DESC`, [userId]
   )
 }
 
-export async function wipeJournals(): Promise<number> {
+export async function wipeJournals(userId: string | null): Promise<number> {
   const db = await getDb()
-  const r = await db.runAsync(`DELETE FROM journal`)
+  const r = await db.runAsync(`DELETE FROM journal WHERE user_id = ?`, [userId])
   return r.changes
 }
 
-export async function exportJournalsData(): Promise<Journal[]> {
+export async function exportJournalsData(userId: string | null): Promise<Journal[]> {
   const db = await getDb()
   return db.getAllAsync<Journal>(
-    `SELECT * FROM journal WHERE deleted_at IS NULL ORDER BY occurred_at DESC`
+    `SELECT * FROM journal WHERE deleted_at IS NULL AND user_id = ? ORDER BY occurred_at DESC`, [userId]
   )
 }

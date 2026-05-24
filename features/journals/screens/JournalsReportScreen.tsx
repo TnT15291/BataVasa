@@ -280,7 +280,7 @@ export function JournalsReportScreen() {
                 theme={theme}
               />
               <StatCard
-                label="Important"
+                label={t.report_important}
                 value={String(stats.importantCount)}
                 delta={prevStats ? calcDelta(stats.importantCount, prevStats.importantCount) : undefined}
                 theme={theme}
@@ -308,7 +308,7 @@ export function JournalsReportScreen() {
             )}
             {stats.importantEntries.length > 0 && (
               <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-                <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>Important events</Text>
+                <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.report_important_events}</Text>
                 {stats.importantEntries.map((entry) => (
                   <View key={entry.id} style={[styles.importantRow, { borderColor: theme.border.subtle }]}>
                     <Text style={[styles.importantDate, { color: theme.brand.primary }]}>

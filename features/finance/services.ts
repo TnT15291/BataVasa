@@ -31,7 +31,7 @@ async function learnMerchantRule(merchant: string | null | undefined, categoryId
   const merchantPattern = normalizeMerchantPattern(merchant)
   if (!merchantPattern) return null
   const now = nowIso()
-  const existing = await q.findRuleByPattern(merchantPattern)
+  const existing = await q.findRuleByPattern(merchantPattern, getCurrentUserId())
   const rule: TransactionRule = {
     id: existing?.id ?? uuid(),
     user_id: getCurrentUserId(),
@@ -57,7 +57,7 @@ export async function createTransaction(
   const data = parsed.data
 
   try {
-    const dup = await q.findDuplicateTransaction(data.amount_cents, data.merchant ?? null)
+    const dup = await q.findDuplicateTransaction(data.amount_cents, data.merchant ?? null, getCurrentUserId())
     if (dup) {
       logger.warn(MODULE, 'duplicate suspected', { existing_id: dup.id })
       return appErr('DUPLICATE', 'A very similar transaction was created in the last minute')
@@ -66,7 +66,7 @@ export async function createTransaction(
     const now = nowIso()
     // Rule 6: if label is empty/missing, store NULL for all three columns
     const hasLocation = !!(data.location_label && data.location_label.trim().length > 0)
-    const merchantRule = data.source !== 'manual' ? await q.findRuleForMerchant(data.merchant ?? null) : null
+    const merchantRule = data.source !== 'manual' ? await q.findRuleForMerchant(data.merchant ?? null, getCurrentUserId()) : null
     const categoryId = merchantRule?.category_id ?? data.category_id
     const defaultNeedsReview = data.source === 'voice' || data.source === 'ocr' || data.source === 'import' ? 1 : 0
     const defaultReviewReason = data.source === 'voice' ? 'voice_entry' : data.source === 'ocr' ? 'ocr_entry' : data.source === 'import' ? 'imported_entry' : null
@@ -113,7 +113,7 @@ export async function listTransactions(
   params?: q.ListTransactionsParams
 ): Promise<Result<Transaction[], AppError>> {
   try {
-    const rows = await q.listTransactions(params)
+    const rows = await q.listTransactions(getCurrentUserId(), params)
     return ok(rows)
   } catch (e) {
     logger.error(MODULE, 'listTransactions failed', { error: String(e) })
@@ -123,7 +123,7 @@ export async function listTransactions(
 
 export async function getTransaction(id: string): Promise<Result<Transaction, AppError>> {
   try {
-    const row = await q.getTransaction(id)
+    const row = await q.getTransaction(id, getCurrentUserId())
     if (!row) return appErr('NOT_FOUND', 'Transaction not found')
     return ok(row)
   } catch (e) {
@@ -141,7 +141,7 @@ export async function updateTransaction(
   }
   const data = parsed.data
   try {
-    const existing = await q.getTransaction(data.id)
+    const existing = await q.getTransaction(data.id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Transaction not found')
 
     // Build patch — only fields user actually changed; respect Rule 6 location clearing
@@ -166,7 +166,7 @@ export async function updateTransaction(
     await q.updateTransaction(data.id, patch)
     void enqueue('finance_transaction', data.id, 'upsert')
     logger.info(MODULE, 'transaction updated', { id: data.id })
-    const fresh = await q.getTransaction(data.id)
+    const fresh = await q.getTransaction(data.id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Updated row vanished')
     if (fresh.needs_review === 0 && fresh.merchant) {
       try {
@@ -184,7 +184,7 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: string): Promise<Result<void, AppError>> {
   try {
-    const existing = await q.getTransaction(id)
+    const existing = await q.getTransaction(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Transaction not found')
     await q.softDeleteTransaction(id, nowIso())
     void enqueue('finance_transaction', id, 'upsert')
@@ -198,7 +198,7 @@ export async function deleteTransaction(id: string): Promise<Result<void, AppErr
 
 export async function listCategories(): Promise<Result<Category[], AppError>> {
   try {
-    const rows = await q.listCategories()
+    const rows = await q.listCategories(getCurrentUserId())
     return ok(rows)
   } catch (e) {
     logger.error(MODULE, 'listCategories failed', { error: String(e) })
@@ -208,7 +208,7 @@ export async function listCategories(): Promise<Result<Category[], AppError>> {
 
 export async function wipeAllData(): Promise<Result<{ deleted: number }, AppError>> {
   try {
-    const { transactions, categories, rules } = await q.wipeFinanceData()
+    const { transactions, categories, rules } = await q.wipeFinanceData(getCurrentUserId())
     const total = transactions + categories + rules
     void enqueue('finance_transaction', 'ALL', 'wipe')
     void enqueue('finance_rule', 'ALL', 'wipe')
@@ -231,10 +231,10 @@ export async function createCategory(
   const data = parsed.data
   try {
     const now = nowIso()
-    const existing = await q.listCategories()
+    const existing = await q.listCategories(getCurrentUserId())
     const cat: Category = {
       id: uuid(),
-      user_id: 'local',
+      user_id: getCurrentUserId(),
       name: data.name,
       icon: data.icon ?? 'tag',
       color: data.color,
@@ -266,7 +266,7 @@ export async function updateCategory(
   }
   const data = parsed.data
   try {
-    const existing = await q.getCategory(data.id)
+    const existing = await q.getCategory(data.id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Category not found')
     if (existing.user_id === null) return appErr('AUTH_FORBIDDEN', 'Cannot edit system categories')
     const patch: Partial<Category> = { updated_at: nowIso() }
@@ -277,7 +277,7 @@ export async function updateCategory(
     if ('monthly_budget_cents' in data) patch.monthly_budget_cents = data.monthly_budget_cents ?? null
     await q.updateCategory(data.id, patch)
     void enqueue('finance_category', data.id, 'upsert')
-    const fresh = await q.getCategory(data.id)
+    const fresh = await q.getCategory(data.id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Updated category vanished')
     return ok(fresh)
   } catch (e) {
@@ -288,7 +288,7 @@ export async function updateCategory(
 
 export async function deleteCategory(id: string): Promise<Result<void, AppError>> {
   try {
-    const existing = await q.getCategory(id)
+    const existing = await q.getCategory(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Category not found')
     if (existing.user_id === null) return appErr('AUTH_FORBIDDEN', 'Cannot delete system categories')
     await q.softDeleteCategory(id, nowIso())
@@ -303,7 +303,7 @@ export async function deleteCategory(id: string): Promise<Result<void, AppError>
 
 export async function exportAllData(): Promise<Result<string, AppError>> {
   try {
-    const { transactions, categories, rules } = await q.exportFinanceData()
+    const { transactions, categories, rules } = await q.exportFinanceData(getCurrentUserId())
     const payload = {
       exported_at: new Date().toISOString(),
       version: 1,

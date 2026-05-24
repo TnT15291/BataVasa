@@ -1,9 +1,12 @@
 import { create } from 'zustand'
 import { AppState } from 'react-native'
+import * as Linking from 'expo-linking'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '@services/supabase'
 import { logger } from '@services/logger'
 import { track } from '@services/analytics'
+import { getTranslations } from '@services/i18n'
+import { localizeAuthError } from '@services/authErrors'
 import { useFinanceStore } from './financeStore'
 import { useRemindersStore } from './remindersStore'
 import { useHabitsStore } from './habitsStore'
@@ -36,11 +39,16 @@ type AuthState = {
   initialized: boolean  // finished checking for an existing session
   busy: boolean         // a sign-in/up/out request is in flight
   error: string | null
+  recoveryMode: boolean // a password-recovery link is being completed (overrides routing)
 
   init: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ ok: boolean }>
   signUp: (email: string, password: string) => Promise<{ ok: boolean; needsConfirm?: boolean }>
   resetPassword: (email: string) => Promise<{ ok: boolean }>
+  // Recovery link → establish the temporary session, then force a new password.
+  enterRecovery: (accessToken: string, refreshToken: string) => Promise<{ ok: boolean }>
+  updatePassword: (newPassword: string) => Promise<{ ok: boolean }>
+  exitRecovery: () => Promise<void>
   signOut: () => Promise<void>
   clearError: () => void
 }
@@ -53,6 +61,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialized: false,
   busy: false,
   error: null,
+  recoveryMode: false,
 
   async init() {
     if (started) return
@@ -78,6 +87,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (session) reloadAllStores()
       } else if (event === 'SIGNED_OUT') {
         clearAllStores()
+      } else if (event === 'PASSWORD_RECOVERY') {
+        // Fired by Supabase when a recovery link auto-detects a session (web).
+        // On native we drive this via the deep-link handler + enterRecovery.
+        set({ recoveryMode: true })
       }
     })
 
@@ -99,7 +112,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       password,
     })
     if (error) {
-      set({ busy: false, error: error.message })
+      set({ busy: false, error: localizeAuthError(error, getTranslations()) })
       return { ok: false }
     }
     track('auth_login')
@@ -115,7 +128,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       password,
     })
     if (error) {
-      set({ busy: false, error: error.message })
+      set({ busy: false, error: localizeAuthError(error, getTranslations()) })
       return { ok: false }
     }
     track('auth_signup')
@@ -127,13 +140,58 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   async resetPassword(email) {
     if (!supabase) return { ok: false }
     set({ busy: true, error: null })
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim())
+    // The recovery email link must deep-link back into the app so the user can
+    // set a new password. This URL MUST be in Supabase → Auth → URL Configuration
+    // → Redirect URLs (see docs/security.md#password-recovery).
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: Linking.createURL('reset-password'),
+    })
     if (error) {
-      set({ busy: false, error: error.message })
+      set({ busy: false, error: localizeAuthError(error, getTranslations()) })
       return { ok: false }
     }
     set({ busy: false })
     return { ok: true }
+  },
+
+  // Establish the temporary session carried by a recovery link's tokens, then
+  // flag recoveryMode so routing shows the "set new password" screen instead of
+  // dropping the user straight into the app.
+  async enterRecovery(accessToken, refreshToken) {
+    if (!supabase) return { ok: false }
+    set({ busy: true, error: null })
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    })
+    if (error) {
+      logger.error(MODULE, 'enterRecovery setSession failed', { error: error.message })
+      set({ busy: false, error: localizeAuthError(error, getTranslations()) })
+      return { ok: false }
+    }
+    set({ busy: false, recoveryMode: true })
+    return { ok: true }
+  },
+
+  async updatePassword(newPassword) {
+    if (!supabase) return { ok: false }
+    set({ busy: true, error: null })
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) {
+      set({ busy: false, error: localizeAuthError(error, getTranslations()) })
+      return { ok: false }
+    }
+    track('auth_password_reset')
+    // Session is already valid → clearing recoveryMode drops the user into the app.
+    set({ busy: false, recoveryMode: false })
+    return { ok: true }
+  },
+
+  // User backed out of the recovery flow without setting a password. The link
+  // already authenticated them, so sign out to return to a clean login state.
+  async exitRecovery() {
+    set({ recoveryMode: false, error: null })
+    if (supabase) await supabase.auth.signOut()
   },
 
   async signOut() {

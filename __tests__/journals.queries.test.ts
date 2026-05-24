@@ -64,16 +64,16 @@ describe('journal queries', () => {
     mockDb.runAsync.mockResolvedValue({ changes: 2 })
 
     await softDeleteJournal('journal-1', '2026-01-03T00:00:00.000Z')
-    await expect(getJournal('journal-1')).resolves.toBe(baseJournal)
-    await expect(listJournals()).resolves.toEqual([baseJournal])
-    await expect(wipeJournals()).resolves.toBe(2)
-    await expect(exportJournalsData()).resolves.toEqual([baseJournal])
+    await expect(getJournal('journal-1', 'user-1')).resolves.toBe(baseJournal)
+    await expect(listJournals('user-1')).resolves.toEqual([baseJournal])
+    await expect(wipeJournals('user-1')).resolves.toBe(2)
+    await expect(exportJournalsData('user-1')).resolves.toEqual([baseJournal])
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('deleted_at = ?'),
       ['2026-01-03T00:00:00.000Z', '2026-01-03T00:00:00.000Z', 'journal-1']
     )
-    expect(mockDb.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('ORDER BY occurred_at DESC'))
-    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM journal')
+    expect(mockDb.getAllAsync).toHaveBeenCalledWith(expect.stringContaining('user_id = ?'), ['user-1'])
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM journal WHERE user_id = ?', ['user-1'])
   })
 })

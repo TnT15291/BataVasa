@@ -25,3 +25,12 @@ export function useTranslation() {
   const t = map[language] ?? vi
   return { t, language }
 }
+
+/**
+ * Non-hook access to the active translations, for code that runs outside React
+ * (deep-link handlers, services). Reads the current language from the store.
+ */
+export function getTranslations(): Translations {
+  const language = useSettingsStore.getState().language
+  return map[language] ?? vi
+}

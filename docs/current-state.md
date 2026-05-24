@@ -1,6 +1,6 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-05-23.
+> Single source of truth for project status. Last updated: 2026-05-24.
 
 ## Overall
 
@@ -177,7 +177,15 @@ Work in this order:
 6. **Later launch/business work**
    - **M21 Backup/restore**: user-facing recovery flow built on top of Auth and Sync.
    - **M19 Duplicate detection**: reduce false positives in finance.
-   - **L4 Monetization/API proxy decision**: BYO key vs subscription/proxy before public launch.
+   - **L4 Monetization/API key model** — **DECIDED: phased hybrid** (revisit before public launch, not a beta blocker).
+     - **Closed beta:** keep current **BYO key** (multi-provider, free path via Groq/Gemini). Don't build billing before validating retention.
+     - **Public launch:** **managed key as default** (frictionless for the mass-market target) **+ keep BYO as a power-user option** (zero cost for them, an escape hatch when quota is hit).
+     - **Sell as subscription, not per-call.** Free tier = limited AI/month or BYO-only; Pro = "comfortable" AI with a fair-use cap behind the scenes. Per-call credit packs are harder to grok for a daily-use app.
+     - **Managed mode prerequisites (all required):**
+       1. **Never embed the key in the client** — RN bundles are extractable. Route through a **Supabase Edge Function proxy** that authenticates the user, meters usage, and enforces a hard quota.
+       2. **Store IAP cut (15–30%)** — selling AI access in-app forces Apple/Google IAP (no in-app Stripe for digital goods); price above cost + cut.
+       3. **Abuse control + aggressive prompt caching** so one user can't blow the budget; default to a cheap model (gpt-4o-mini / Haiku / Llama-via-Groq), escalate only when needed.
+       4. **Privacy/GDPR** — managed mode routes user data through our server: update privacy policy, sign a DPA with the provider, and anonymize before sending (already required by CLAUDE.md). BYO mode keeps data device→provider direct.
 
 ## Noted Feature Ideas
 
