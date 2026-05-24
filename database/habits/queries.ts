@@ -102,6 +102,23 @@ export async function countLogsForDate(habitId: string, dateStr: string): Promis
   return row?.cnt ?? 0
 }
 
+export async function countLogsInRange(
+  habitId: string,
+  fromIso: string,
+  toIso: string
+): Promise<number> {
+  const db = await getDb()
+  const row = await db.getFirstAsync<{ cnt: number }>(
+    `SELECT COUNT(*) as cnt FROM habit_log
+     WHERE habit_id = ? AND deleted_at IS NULL
+       AND COALESCE(skipped, 0) = 0
+       AND occurred_at >= ?
+       AND occurred_at < ?`,
+    [habitId, fromIso, toIso]
+  )
+  return row?.cnt ?? 0
+}
+
 export async function getLogForDate(habitId: string, dateStr: string): Promise<HabitLog | null> {
   const db = await getDb()
   return db.getFirstAsync<HabitLog>(
@@ -110,6 +127,23 @@ export async function getLogForDate(habitId: string, dateStr: string): Promise<H
        AND substr(occurred_at, 1, 10) = ?
      LIMIT 1`,
     [habitId, dateStr]
+  )
+}
+
+export async function getLatestLogInRange(
+  habitId: string,
+  fromIso: string,
+  toIso: string
+): Promise<HabitLog | null> {
+  const db = await getDb()
+  return db.getFirstAsync<HabitLog>(
+    `SELECT * FROM habit_log
+     WHERE habit_id = ? AND deleted_at IS NULL
+       AND occurred_at >= ?
+       AND occurred_at < ?
+     ORDER BY occurred_at DESC
+     LIMIT 1`,
+    [habitId, fromIso, toIso]
   )
 }
 

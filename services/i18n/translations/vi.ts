@@ -358,6 +358,7 @@ export const vi = {
   cadence_daily: 'Hàng ngày',
   cadence_weekdays: 'Ngày thường',
   cadence_weekly: 'Hàng tuần',
+  cadence_monthly: 'Hàng tháng',
   habit_target: 'Mục tiêu lần/kỳ',
   habit_icon: 'Biểu tượng',
   habit_done_today: 'Hoàn thành hôm nay',
@@ -378,6 +379,10 @@ export const vi = {
   analysis_generate: 'Phân tích ngay',
   analysis_no_data: 'Chưa đủ dữ liệu',
   analysis_no_data_msg: 'Hãy dùng thêm các module để nhận phân tích tổng hợp.',
+  analysis_highlights: 'Điểm nổi bật',
+  analysis_vs_last_month: 'So tháng trước',
+  analysis_patterns: 'Xu hướng AI',
+  analysis_top_spending: 'Chi nhiều nhất',
 
   // Per-module NL input placeholders
   nl_placeholder_habits: 'Vd: chạy bộ 30 phút hôm nay…',
@@ -423,6 +428,7 @@ export const vi = {
   habit_insight_encouragement: 'Khích lệ',
   habit_insight_tip: 'Mẹo',
   habit_last_7_days: '7 ngày qua',
+  habit_last_4_weeks: '4 tuần gần đây',
   journal_empty_prompt: 'Hôm nay tôi nhận ra...',
 
   // Auth
@@ -438,6 +444,8 @@ export const vi = {
   auth_toggle_to_signup: 'Chưa có tài khoản? Đăng ký',
   auth_toggle_to_signin: 'Đã có tài khoản? Đăng nhập',
   auth_check_email: 'Đã tạo tài khoản. Kiểm tra email để xác nhận, rồi đăng nhập.',
+  auth_forgot_password: 'Quên mật khẩu?',
+  auth_reset_email_sent: 'Đã gửi email đặt lại mật khẩu. Vui lòng kiểm tra hộp thư.',
   auth_not_configured_title: 'Chưa cấu hình đăng nhập',
   auth_not_configured_body: 'Tính năng đăng nhập chưa sẵn sàng. Xem hướng dẫn thiết lập:',
   auth_signed_in_as: 'Đăng nhập bằng',
@@ -486,6 +494,13 @@ export const vi = {
   help_data_private_body: 'Các mục gắn với tài khoản của bạn. Chỉ mình bạn xem được.',
   help_permissions_title: 'Các quyền có thể được hỏi',
   help_footer: 'Bạn có thể đổi ngôn ngữ, giao diện, đồng bộ và quyền riêng tư bất cứ lúc nào trong Cài đặt.',
+  category_others: 'Khác',
+  report_category_breakdown: 'Theo danh mục',
+  priority_low: 'Thấp',
+  priority_medium: 'Trung bình',
+  priority_high: 'Cao',
+  report_overdue: 'Quá hạn',
+  report_by_priority: 'Theo mức độ',
 }
 
 export type Translations = typeof vi

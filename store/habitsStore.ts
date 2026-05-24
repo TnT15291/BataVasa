@@ -26,7 +26,7 @@ type HabitsState = {
 
 async function hydrateStats(habit: Habit): Promise<HabitWithStats> {
   const [todayCount, streak] = await Promise.all([
-    svc.getTodayLogCount(habit.id),
+    svc.getCurrentPeriodLogCount(habit),
     svc.getHabitStreak(habit.id),
   ])
   return { ...habit, todayCount, streak, dueToday: svc.isHabitDueOnDate(habit, new Date()) }
@@ -73,14 +73,17 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
   },
 
   async toggleTodayLog(habitId) {
-    const dateStr = new Date().toISOString().split('T')[0]!
     const habit = get().habits.find((h) => h.id === habitId)
     if (!habit) return { ok: false, error: 'Habit not found' }
+    const period = svc.getHabitPeriodRange(habit)
 
     let r: { ok: boolean; error?: string }
     if (habit.todayCount >= habit.target_per_period) {
       // Already done — unlog
-      const res = await svc.unlogHabit(habitId, dateStr)
+      const res = await svc.unlogHabit(habitId, {
+        fromIso: period.from.toISOString(),
+        toIso: period.to.toISOString(),
+      })
       r = res.ok ? { ok: true } : { ok: false, error: res.error.message }
     } else {
       // Log it
@@ -102,7 +105,7 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
   },
 
   async skipToday(habitId) {
-    const dateStr = new Date().toISOString().split('T')[0]!
+    const dateStr = svc.getLocalDateString()
     const res = await svc.skipHabit(habitId, dateStr)
     if (!res.ok) return { ok: false, error: res.error.message }
     const base = get().habits.find((h) => h.id === habitId)

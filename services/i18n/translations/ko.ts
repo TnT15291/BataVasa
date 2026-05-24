@@ -341,6 +341,7 @@ export const ko: Translations = {
   cadence_daily: '매일',
   cadence_weekdays: '평일',
   cadence_weekly: '매주',
+  cadence_monthly: '매월',
   habit_target: '기간당 목표 횟수',
   habit_icon: '아이콘',
   habit_done_today: '오늘 완료',
@@ -361,6 +362,10 @@ export const ko: Translations = {
   analysis_generate: '지금 분석',
   analysis_no_data: '데이터 부족',
   analysis_no_data_msg: '더 많은 모듈을 사용하여 크로스모듈 인사이트를 열어보세요.',
+  analysis_highlights: '하이라이트',
+  analysis_vs_last_month: '지난달 대비',
+  analysis_patterns: 'AI 패턴',
+  analysis_top_spending: '최다 지출',
 
   // Per-module NL input placeholders
   nl_placeholder_habits: '예: 오늘 30분 달렸어요…',
@@ -406,6 +411,7 @@ export const ko: Translations = {
   habit_insight_encouragement: '격려',
   habit_insight_tip: '팁',
   habit_last_7_days: '최근 7일',
+  habit_last_4_weeks: '최근 4주',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth
@@ -421,6 +427,8 @@ export const ko: Translations = {
   auth_toggle_to_signup: '계정이 없으신가요? 가입',
   auth_toggle_to_signin: '이미 계정이 있으신가요? 로그인',
   auth_check_email: '계정이 생성되었습니다. 이메일을 확인한 후 로그인하세요.',
+  auth_forgot_password: '비밀번호를 잊으셨나요?',
+  auth_reset_email_sent: '비밀번호 재설정 이메일을 보냈습니다. 받은 편지함을 확인하세요.',
   auth_not_configured_title: '로그인 불가',
   auth_not_configured_body: '로그인 기능을 아직 사용할 수 없습니다. 설정 가이드를 참조하세요:',
   auth_signed_in_as: '로그인 계정',
@@ -469,4 +477,11 @@ export const ko: Translations = {
   help_data_private_body: '항목은 계정에 연결되며 오직 나만 볼 수 있습니다.',
   help_permissions_title: '요청할 수 있는 권한',
   help_footer: '언어, 테마, 동기화, 개인정보 옵션은 설정에서 언제든 변경할 수 있습니다.',
+  category_others: '기타',
+  report_category_breakdown: '카테고리별',
+  priority_low: '낮음',
+  priority_medium: '보통',
+  priority_high: '높음',
+  report_overdue: '기한 초과',
+  report_by_priority: '우선순위별',
 }

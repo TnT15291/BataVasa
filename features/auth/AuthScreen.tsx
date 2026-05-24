@@ -80,12 +80,14 @@ export function AuthScreen() {
   const error = useAuthStore((s) => s.error)
   const signIn = useAuthStore((s) => s.signIn)
   const signUp = useAuthStore((s) => s.signUp)
+  const resetPassword = useAuthStore((s) => s.resetPassword)
   const clearError = useAuthStore((s) => s.clearError)
 
   const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmMsg, setConfirmMsg] = useState(false)
+  const [resetMsg, setResetMsg] = useState(false)
 
   // Backend not configured → friendly notice, never a white screen.
   if (!configured) {
@@ -107,10 +109,12 @@ export function AuthScreen() {
   }
 
   const canSubmit = email.trim().length > 3 && password.length >= 6 && !busy
+  const canReset = email.trim().length > 3 && !busy
 
   const onSubmit = async () => {
     if (!canSubmit) return
     setConfirmMsg(false)
+    setResetMsg(false)
     if (mode === 'signin') {
       const r = await signIn(email, password)
       if (r.ok) toast.success(t.auth_signin_success, email.trim())
@@ -123,7 +127,16 @@ export function AuthScreen() {
   const toggleMode = () => {
     clearError()
     setConfirmMsg(false)
+    setResetMsg(false)
     setMode((m) => (m === 'signin' ? 'signup' : 'signin'))
+  }
+
+  const onResetPassword = async () => {
+    if (!canReset) return
+    setConfirmMsg(false)
+    setResetMsg(false)
+    const r = await resetPassword(email)
+    if (r.ok) setResetMsg(true)
   }
 
   return (
@@ -176,6 +189,15 @@ export function AuthScreen() {
 
         {error && <Text style={[styles.error, { color: theme.semantic.danger }]}>{error}</Text>}
         {confirmMsg && <Text style={[styles.confirm, { color: theme.semantic.success }]}>{t.auth_check_email}</Text>}
+        {resetMsg && <Text style={[styles.confirm, { color: theme.semantic.success }]}>{t.auth_reset_email_sent}</Text>}
+
+        {mode === 'signin' && error ? (
+          <Pressable onPress={onResetPassword} disabled={!canReset} style={styles.forgot} hitSlop={8}>
+            <Text style={[styles.forgotText, { color: canReset ? theme.brand.primary : theme.text.muted }]}>
+              {t.auth_forgot_password}
+            </Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           onPress={onSubmit}
@@ -243,6 +265,8 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
   error: { fontSize: 13, marginTop: spacing[2] },
   confirm: { fontSize: 13, marginTop: spacing[2] },
+  forgot: { alignSelf: 'flex-start', paddingVertical: spacing[2] },
+  forgotText: { fontSize: 13, fontWeight: '600' },
   cta: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[5] },
   ctaText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   toggle: { alignItems: 'center', paddingVertical: spacing[4] },

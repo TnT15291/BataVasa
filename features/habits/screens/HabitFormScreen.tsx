@@ -17,7 +17,7 @@ import { useSettingsStore } from '@store/settingsStore'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
 import type { Cadence } from '../types'
 
-const CADENCES: Cadence[] = ['daily', 'weekdays', 'weekly', 'custom']
+const CADENCES: Cadence[] = ['daily', 'weekdays', 'weekly', 'monthly', 'custom']
 const WEEKDAYS = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -81,6 +81,7 @@ export function HabitFormScreen() {
       daily: t.cadence_daily,
       weekdays: t.cadence_weekdays,
       weekly: t.cadence_weekly,
+      monthly: t.cadence_monthly,
       custom: 'Selected days',
     }
     return map[c]

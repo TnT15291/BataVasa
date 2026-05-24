@@ -34,10 +34,20 @@ function NavRow({ label, onPrev, onNext }: { label: string; onPrev: () => void; 
   )
 }
 
-function StatCard({ label, value, theme }: { label: string; value: string; theme: any }) {
+function StatCard({
+  label, value, delta, deltaPositive = true, theme,
+}: { label: string; value: string; delta?: number; deltaPositive?: boolean; theme: any }) {
+  const showDelta = delta !== undefined && delta !== 0
+  const isGood = deltaPositive ? (delta ?? 0) >= 0 : (delta ?? 0) <= 0
+  const sign = (delta ?? 0) >= 0 ? '+' : ''
   return (
     <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
       <Text style={[styles.statValue, { color: theme.text.primary }]}>{value}</Text>
+      {showDelta ? (
+        <Text style={[styles.deltaBadge, { color: isGood ? theme.semantic.success : theme.semantic.danger }]}>
+          {sign}{delta}%
+        </Text>
+      ) : null}
       <Text style={[styles.statLabel, { color: theme.text.muted }]}>{label}</Text>
     </View>
   )
@@ -141,6 +151,31 @@ export function JournalsReportScreen() {
     return { entries: filtered.length, avgMood, moodCounts, trend, importantCount: importantEntries.length, importantEntries: importantEntries.slice(0, 5) }
   }, [getRange, journals])
 
+  const prevStats = useMemo(() => {
+    if (period === 'custom') return null
+    const prevAnchor =
+      period === 'weekly' ? subWeeks(anchorDate, 1)
+      : period === 'monthly' ? subMonths(anchorDate, 1)
+      : subYears(anchorDate, 1)
+    const prevFrom = period === 'weekly' ? startOfWeek(prevAnchor, { weekStartsOn: 1 }) : period === 'monthly' ? startOfMonth(prevAnchor) : startOfYear(prevAnchor)
+    const prevTo = period === 'weekly' ? endOfWeek(prevAnchor, { weekStartsOn: 1 }) : period === 'monthly' ? endOfMonth(prevAnchor) : endOfYear(prevAnchor)
+    const fromIso = prevFrom.toISOString()
+    const toIso = prevTo.toISOString()
+    const prevJournals = journals.filter((j) => j.occurred_at >= fromIso && j.occurred_at <= toIso)
+    const withMood = prevJournals.filter((j) => j.mood != null)
+    const avgMood = withMood.length > 0
+      ? withMood.reduce((s, j) => s + (j.mood ?? 0), 0) / withMood.length
+      : null
+    return {
+      entries: prevJournals.length,
+      avgMood,
+      importantCount: prevJournals.filter((j) => (j.is_important ?? 0) === 1).length,
+    }
+  }, [period, anchorDate, journals])
+
+  const calcDelta = (cur: number, prev: number): number | undefined =>
+    prev === 0 ? undefined : Math.round(((cur - prev) / Math.abs(prev)) * 100)
+
   const range = getRange()
   const exportSummary = async () => {
     if (!stats || !range) return
@@ -225,14 +260,31 @@ export function JournalsReportScreen() {
         ) : (
           <>
             <View style={styles.statsGrid}>
-              <StatCard label={t.report_entries} value={String(stats.entries)} theme={theme} />
-              <StatCard label={t.report_avg_mood}
+              <StatCard
+                label={t.report_entries}
+                value={String(stats.entries)}
+                delta={prevStats ? calcDelta(stats.entries, prevStats.entries) : undefined}
+                theme={theme}
+              />
+              <StatCard
+                label={t.report_avg_mood}
                 value={stats.avgMood != null ? `${MOOD_EMOJI[Math.round(stats.avgMood)]} ${stats.avgMood.toFixed(1)}` : '—'}
-                theme={theme} />
-              <StatCard label={t.report_mood_trend}
+                delta={stats.avgMood != null && prevStats?.avgMood != null
+                  ? calcDelta(Math.round(stats.avgMood * 10), Math.round(prevStats.avgMood * 10))
+                  : undefined}
+                theme={theme}
+              />
+              <StatCard
+                label={t.report_mood_trend}
                 value={stats.trend === 'up' ? '↑' : stats.trend === 'down' ? '↓' : stats.trend === 'stable' ? '→' : '—'}
-                theme={theme} />
-              <StatCard label="Important" value={String(stats.importantCount)} theme={theme} />
+                theme={theme}
+              />
+              <StatCard
+                label="Important"
+                value={String(stats.importantCount)}
+                delta={prevStats ? calcDelta(stats.importantCount, prevStats.importantCount) : undefined}
+                theme={theme}
+              />
             </View>
 
             {stats.moodCounts.size > 0 && (
@@ -305,6 +357,7 @@ const styles = StyleSheet.create({
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
   statCard: { width: '47%', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
   statValue: { fontSize: 22, fontWeight: '700' },
+  deltaBadge: { fontSize: 11, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
   cardTitle: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },

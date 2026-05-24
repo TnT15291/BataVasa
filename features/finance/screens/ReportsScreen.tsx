@@ -10,6 +10,7 @@ import {
   Share,
   Platform,
 } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useRouter } from 'expo-router'
 import {
@@ -29,6 +30,8 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
+import { translateCategoryName } from '../i18n'
+import type { Category } from '../types'
 import { generateReport, type ReportType } from '@services/ai/reports'
 import { getDateFnsLocale } from '@services/locale'
 import { useSettingsStore } from '@store/settingsStore'
@@ -39,6 +42,90 @@ import { formatAmount } from '../services'
 
 type Period = ReportType
 type ChartBucket = { key: string; label: string; from: Date; to: Date; income: number; expense: number }
+
+type CatBreakdownItem = { cat: Category | undefined; amount: number }
+
+function getCategoryIconName(icon: string | undefined): string {
+  if (!icon) return 'circle'
+  if (icon === 'utensils') return 'coffee'
+  return icon
+}
+
+function CategoryBreakdownCard({
+  breakdown, totalExpense, currency, language, theme, t,
+}: {
+  breakdown: CatBreakdownItem[]
+  totalExpense: number
+  currency: string
+  language: string
+  theme: any
+  t: any
+}) {
+  if (breakdown.length === 0 || totalExpense === 0) return null
+  return (
+    <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      <View style={styles.snapshotHeader}>
+        <Text style={[styles.snapshotTitle, { color: theme.text.primary }]}>{t.report_category_breakdown}</Text>
+        <Text style={[styles.snapshotMeta, { color: theme.text.muted }]}>{t.expense}</Text>
+      </View>
+      <View style={[styles.stackedBar, { backgroundColor: theme.bg.secondary }]}>
+        {breakdown.map((item) => (
+          <View
+            key={item.cat?.id ?? 'others'}
+            style={{ flex: item.amount / totalExpense, height: '100%', backgroundColor: item.cat?.color ?? theme.text.muted }}
+          />
+        ))}
+      </View>
+      {breakdown.map((item) => {
+        const pct = Math.round((item.amount / totalExpense) * 100)
+        const color = item.cat?.color ?? theme.text.muted
+        const name = item.cat ? translateCategoryName(item.cat, t) : t.category_others
+        return (
+          <View key={item.cat?.id ?? 'others'} style={styles.catRow}>
+            <View style={[styles.catIconWrap, { backgroundColor: color + '20' }]}>
+              <Feather name={getCategoryIconName(item.cat?.icon) as any} size={16} color={color} />
+            </View>
+            <View style={styles.catBody}>
+              <View style={styles.catNameRow}>
+                <Text style={[styles.catName, { color: theme.text.primary }]} numberOfLines={1}>{name}</Text>
+                <Text style={[styles.catAmount, { color: theme.text.secondary }]}>
+                  {formatAmount(item.amount, currency, language)}
+                </Text>
+              </View>
+              <View style={[styles.catBarTrack, { backgroundColor: theme.bg.secondary }]}>
+                <View style={[styles.catBarFill, { width: `${pct}%` as any, backgroundColor: color }]} />
+              </View>
+            </View>
+            <Text style={[styles.catPct, { color: theme.text.muted }]}>{pct}%</Text>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+function StatCard({
+  label, value, delta, deltaPositive = true, theme,
+}: {
+  label: string; value: string; delta?: number; deltaPositive?: boolean; theme: any
+}) {
+  const showDelta = delta !== undefined && delta !== 0
+  const isGood = deltaPositive ? (delta ?? 0) >= 0 : (delta ?? 0) <= 0
+  const sign = (delta ?? 0) >= 0 ? '+' : ''
+  return (
+    <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      <Text style={[styles.statValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      {showDelta ? (
+        <Text style={[styles.deltaBadge, { color: isGood ? theme.semantic.success : theme.semantic.danger }]}>
+          {sign}{delta}%
+        </Text>
+      ) : null}
+      <Text style={[styles.statLabel, { color: theme.text.muted }]}>{label}</Text>
+    </View>
+  )
+}
 
 function NavRow({
   label,
@@ -195,6 +282,60 @@ export function ReportsScreen() {
     }
     return { count: rangeTxs.length, income, expense }
   }, [rangeTxs, amountInReportCurrency])
+
+  const prevSummary = useMemo(() => {
+    if (period === 'custom') return null
+    const prevAnchor =
+      period === 'weekly' ? subWeeks(anchorDate, 1)
+      : period === 'monthly' ? subMonths(anchorDate, 1)
+      : period === 'quarterly' ? subQuarters(anchorDate, 1)
+      : subYears(anchorDate, 1)
+    let prevFrom: Date, prevTo: Date
+    if (period === 'weekly') {
+      prevFrom = startOfWeek(prevAnchor, { weekStartsOn: 1 })
+      prevTo = endOfWeek(prevAnchor, { weekStartsOn: 1 })
+    } else if (period === 'monthly') {
+      prevFrom = startOfMonth(prevAnchor)
+      prevTo = endOfMonth(prevAnchor)
+    } else if (period === 'quarterly') {
+      prevFrom = startOfQuarter(prevAnchor)
+      prevTo = endOfQuarter(prevAnchor)
+    } else {
+      prevFrom = startOfYear(prevAnchor)
+      prevTo = endOfYear(prevAnchor)
+    }
+    const fromIso = prevFrom.toISOString()
+    const toIso = prevTo.toISOString()
+    const prevTxs = allTxs.filter((tx) => tx.occurred_at >= fromIso && tx.occurred_at <= toIso)
+    let income = 0, expense = 0
+    for (const tx of prevTxs) {
+      const amount = amountInReportCurrency(tx.amount_cents, tx.currency)
+      if (amount === null) continue
+      if (amount > 0) income += amount
+      else expense += Math.abs(amount)
+    }
+    return { count: prevTxs.length, income, expense }
+  }, [period, anchorDate, allTxs, amountInReportCurrency])
+
+  const calcDelta = (cur: number, prev: number): number | undefined =>
+    prev === 0 ? undefined : Math.round(((cur - prev) / Math.abs(prev)) * 100)
+
+  const categoryBreakdown = useMemo<CatBreakdownItem[]>(() => {
+    const catMap = new Map<string, CatBreakdownItem>()
+    for (const tx of rangeTxs) {
+      if (tx.amount_cents >= 0) continue
+      const amount = Math.abs(amountInReportCurrency(tx.amount_cents, tx.currency) ?? 0)
+      if (amount === 0) continue
+      const existing = catMap.get(tx.category_id)
+      if (existing) existing.amount += amount
+      else catMap.set(tx.category_id, { amount, cat: cats.find((c) => c.id === tx.category_id) })
+    }
+    const sorted = Array.from(catMap.values()).sort((a, b) => b.amount - a.amount)
+    const top = sorted.slice(0, 5)
+    const othersAmount = sorted.slice(5).reduce((s, x) => s + x.amount, 0)
+    if (othersAmount > 0) top.push({ amount: othersAmount, cat: undefined })
+    return top
+  }, [rangeTxs, cats, amountInReportCurrency])
 
   const chartBuckets = useMemo<ChartBucket[]>(() => {
     if (!range) return []
@@ -358,22 +499,25 @@ export function ReportsScreen() {
       {/* Report content */}
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.statValue, { color: theme.text.primary }]}>{summary.count}</Text>
-            <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_entries}</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.statValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
-              {formatAmount(summary.income, reportCurrency, language)}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.income}</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.statValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
-              {formatAmount(summary.expense, reportCurrency, language)}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.expense}</Text>
-          </View>
+          <StatCard
+            label={t.report_entries}
+            value={String(summary.count)}
+            delta={prevSummary ? calcDelta(summary.count, prevSummary.count) : undefined}
+            theme={theme}
+          />
+          <StatCard
+            label={t.income}
+            value={formatAmount(summary.income, reportCurrency, language)}
+            delta={prevSummary ? calcDelta(summary.income, prevSummary.income) : undefined}
+            theme={theme}
+          />
+          <StatCard
+            label={t.expense}
+            value={formatAmount(summary.expense, reportCurrency, language)}
+            delta={prevSummary ? calcDelta(summary.expense, prevSummary.expense) : undefined}
+            deltaPositive={false}
+            theme={theme}
+          />
         </View>
         <View style={[styles.snapshotCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <View style={styles.snapshotHeader}>
@@ -437,6 +581,16 @@ export function ReportsScreen() {
             </Pressable>
           ))}
         </View>
+        {kindFilter !== 'income' && (
+          <CategoryBreakdownCard
+            breakdown={categoryBreakdown}
+            totalExpense={summary.expense}
+            currency={reportCurrency}
+            language={language}
+            theme={theme}
+            t={t}
+          />
+        )}
         {report ? (
           <>
             <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
@@ -547,6 +701,7 @@ const styles = StyleSheet.create({
     gap: spacing[1],
   },
   statValue: { fontSize: 20, fontWeight: '700' },
+  deltaBadge: { fontSize: 11, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
   snapshotCard: {
     borderRadius: radius.lg,
@@ -592,6 +747,22 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[4],
   },
+  stackedBar: { flexDirection: 'row', height: 12, borderRadius: radius.full, overflow: 'hidden' },
+  catRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  catIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catBody: { flex: 1, gap: 2 },
+  catNameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[2] },
+  catName: { fontSize: 13, fontWeight: '500', flex: 1 },
+  catAmount: { fontSize: 12 },
+  catBarTrack: { height: 4, borderRadius: radius.full, overflow: 'hidden' },
+  catBarFill: { height: '100%', borderRadius: radius.full },
+  catPct: { fontSize: 11, fontWeight: '700', width: 32, textAlign: 'right' },
   reportText: { fontSize: 14, lineHeight: 22 },
   shareBtn: {
     paddingVertical: spacing[3],

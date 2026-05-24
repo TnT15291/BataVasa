@@ -341,6 +341,7 @@ export const en: Translations = {
   cadence_daily: 'Daily',
   cadence_weekdays: 'Weekdays',
   cadence_weekly: 'Weekly',
+  cadence_monthly: 'Monthly',
   habit_target: 'Target per period',
   habit_icon: 'Icon',
   habit_done_today: 'Done today',
@@ -361,6 +362,10 @@ export const en: Translations = {
   analysis_generate: 'Analyze Now',
   analysis_no_data: 'Not enough data',
   analysis_no_data_msg: 'Use more modules to unlock cross-module insights.',
+  analysis_highlights: 'Highlights',
+  analysis_vs_last_month: 'vs Last Month',
+  analysis_patterns: 'AI Patterns',
+  analysis_top_spending: 'Top spending',
 
   // Per-module NL input placeholders
   nl_placeholder_habits: 'e.g. ran 30 minutes today…',
@@ -406,6 +411,7 @@ export const en: Translations = {
   habit_insight_encouragement: 'Encouragement',
   habit_insight_tip: 'Tip',
   habit_last_7_days: 'Last 7 Days',
+  habit_last_4_weeks: 'Last 4 weeks',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth
@@ -421,6 +427,8 @@ export const en: Translations = {
   auth_toggle_to_signup: "Don't have an account? Sign up",
   auth_toggle_to_signin: 'Already have an account? Sign in',
   auth_check_email: 'Account created. Check your email to confirm, then sign in.',
+  auth_forgot_password: 'Forgot password?',
+  auth_reset_email_sent: 'Password reset email sent. Check your inbox.',
   auth_not_configured_title: 'Sign-in unavailable',
   auth_not_configured_body: "Sign-in isn't available yet. See the setup guide:",
   auth_signed_in_as: 'Signed in as',
@@ -469,4 +477,11 @@ export const en: Translations = {
   help_data_private_body: 'Your entries are tied to your account. Only you can see them.',
   help_permissions_title: 'Permissions we may ask for',
   help_footer: 'You can change language, theme, sync, and privacy options anytime in Settings.',
+  category_others: 'Others',
+  report_category_breakdown: 'By Category',
+  priority_low: 'Low',
+  priority_medium: 'Medium',
+  priority_high: 'High',
+  report_overdue: 'Overdue',
+  report_by_priority: 'By Priority',
 }

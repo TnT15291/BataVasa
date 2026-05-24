@@ -19,6 +19,40 @@ import {
 
 const MODULE = 'habits.service'
 
+export function getLocalDateString(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function getHabitPeriodRange(
+  habit: Pick<Habit, 'cadence'>,
+  date = new Date()
+): { from: Date; to: Date } {
+  const from = new Date(date)
+  from.setHours(0, 0, 0, 0)
+
+  if (habit.cadence === 'weekly') {
+    const daysSinceMonday = (from.getDay() + 6) % 7
+    from.setDate(from.getDate() - daysSinceMonday)
+    const to = new Date(from)
+    to.setDate(to.getDate() + 7)
+    return { from, to }
+  }
+
+  if (habit.cadence === 'monthly') {
+    from.setDate(1)
+    const to = new Date(from)
+    to.setMonth(to.getMonth() + 1)
+    return { from, to }
+  }
+
+  const to = new Date(from)
+  to.setDate(to.getDate() + 1)
+  return { from, to }
+}
+
 export function isHabitDueOnDate(habit: Pick<Habit, 'cadence' | 'schedule_days'>, date: Date): boolean {
   const day = date.getDay()
   if (habit.cadence === 'weekdays') return day >= 1 && day <= 5
@@ -214,14 +248,16 @@ export async function skipHabit(
 
 export async function unlogHabit(
   habitId: string,
-  dateStr: string
+  dateStrOrRange: string | { fromIso: string; toIso: string }
 ): Promise<Result<void, AppError>> {
   try {
-    const log = await q.getLogForDate(habitId, dateStr)
+    const log = typeof dateStrOrRange === 'string'
+      ? await q.getLogForDate(habitId, dateStrOrRange)
+      : await q.getLatestLogInRange(habitId, dateStrOrRange.fromIso, dateStrOrRange.toIso)
     if (!log) return ok(undefined)
     await q.softDeleteHabitLog(log.id, nowIso())
     void enqueue('habit_log', log.id, 'upsert')
-    logger.info(MODULE, 'habit unlogged', { habit_id: habitId, date: dateStr })
+    logger.info(MODULE, 'habit unlogged', { habit_id: habitId })
     return ok(undefined)
   } catch (e) {
     logger.error(MODULE, 'unlogHabit failed', { error: String(e) })
@@ -232,11 +268,11 @@ export async function unlogHabit(
 export async function getHabitStreak(habitId: string): Promise<number> {
   try {
     const today = new Date()
-    const toDate = today.toISOString().split('T')[0]!
+    const toDate = getLocalDateString(today)
     // Look back up to 365 days
     const from = new Date(today)
     from.setDate(from.getDate() - 365)
-    const fromDate = from.toISOString().split('T')[0]!
+    const fromDate = getLocalDateString(from)
 
     const logsByDate = await q.listLogCountsByDate(habitId, fromDate, toDate)
     const habit = await q.getHabit(habitId)
@@ -246,7 +282,7 @@ export async function getHabitStreak(habitId: string): Promise<number> {
     let streak = 0
     const cur = new Date(today)
     while (true) {
-      const dateStr = cur.toISOString().split('T')[0]!
+      const dateStr = getLocalDateString(cur)
       if (!isHabitDueOnDate(habit, cur)) {
         cur.setDate(cur.getDate() - 1)
       } else if ((logMap.get(dateStr) ?? 0) >= 1) {
@@ -264,8 +300,17 @@ export async function getHabitStreak(habitId: string): Promise<number> {
 
 export async function getTodayLogCount(habitId: string): Promise<number> {
   try {
-    const dateStr = new Date().toISOString().split('T')[0]!
+    const dateStr = getLocalDateString()
     return q.countLogsForDate(habitId, dateStr)
+  } catch {
+    return 0
+  }
+}
+
+export async function getCurrentPeriodLogCount(habit: Pick<Habit, 'id' | 'cadence'>): Promise<number> {
+  try {
+    const range = getHabitPeriodRange(habit)
+    return q.countLogsInRange(habit.id, range.from.toISOString(), range.to.toISOString())
   } catch {
     return 0
   }

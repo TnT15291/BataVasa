@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import { useRouter } from 'expo-router'
+import { subDays, startOfMonth, endOfMonth, subMonths, parseISO } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -10,6 +11,8 @@ import { generateCrossModuleInsights } from '@services/ai/crossModuleInsight'
 import { useFinanceBootstrap, useTransactions, useCategories } from '@features/finance/hooks/useFinance'
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
 import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJournals'
+import { formatAmount } from '@features/finance/services'
+import { translateCategoryName } from '@features/finance/i18n'
 
 export function AnalysisScreen() {
   useFinanceBootstrap()
@@ -20,6 +23,8 @@ export function AnalysisScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
+  const language = useSettingsStore((s) => s.language)
+  const currency = useSettingsStore((s) => s.currency)
 
   const transactions = useTransactions()
   const categories = useCategories()
@@ -61,6 +66,92 @@ export function AnalysisScreen() {
     journals.length > 0,
   ].filter(Boolean).length
 
+  const highlights = useMemo(() => {
+    const today = new Date()
+    const from30 = subDays(today, 29)
+    const catMap = new Map(categories.map((c) => [c.id, c]))
+
+    const last30Txs = transactions.filter((tx) => {
+      const d = parseISO(tx.occurred_at)
+      return d >= from30 && d <= today
+    })
+    const expenseTxs = last30Txs.filter((tx) => tx.amount_cents < 0)
+    const totalExpense = expenseTxs.reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+
+    const catTotals = new Map<string, number>()
+    for (const tx of expenseTxs) {
+      catTotals.set(tx.category_id, (catTotals.get(tx.category_id) ?? 0) + Math.abs(tx.amount_cents))
+    }
+    let topCatId = ''
+    let topCatAmt = 0
+    for (const [id, amt] of catTotals) {
+      if (amt > topCatAmt) { topCatAmt = amt; topCatId = id }
+    }
+    const topCat = topCatId ? catMap.get(topCatId) : null
+
+    const bestStreak = habits.length > 0 ? Math.max(...habits.map((h) => h.streak)) : 0
+
+    const last30Journals = journals.filter((j) => {
+      const d = parseISO(j.occurred_at)
+      return d >= from30 && d <= today
+    })
+    const moodEntries = last30Journals.filter((j) => j.mood !== null)
+    const avgMood = moodEntries.length > 0
+      ? moodEntries.reduce((s, j) => s + (j.mood ?? 0), 0) / moodEntries.length
+      : null
+
+    return { totalExpense, topCat, bestStreak, journalCount: last30Journals.length, avgMood }
+  }, [transactions, categories, habits, journals])
+
+  const comparison = useMemo(() => {
+    const today = new Date()
+    const thisStart = startOfMonth(today)
+    const lastStart = startOfMonth(subMonths(today, 1))
+    const lastEnd = endOfMonth(subMonths(today, 1))
+
+    const thisExp = transactions
+      .filter((tx) => {
+        const d = parseISO(tx.occurred_at)
+        return d >= thisStart && d <= today && tx.amount_cents < 0
+      })
+      .reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+
+    const lastExp = transactions
+      .filter((tx) => {
+        const d = parseISO(tx.occurred_at)
+        return d >= lastStart && d <= lastEnd && tx.amount_cents < 0
+      })
+      .reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+
+    const thisMoods = journals.filter((j) => {
+      const d = parseISO(j.occurred_at)
+      return d >= thisStart && d <= today && j.mood !== null
+    })
+    const lastMoods = journals.filter((j) => {
+      const d = parseISO(j.occurred_at)
+      return d >= lastStart && d <= lastEnd && j.mood !== null
+    })
+
+    const thisAvgMood = thisMoods.length > 0
+      ? thisMoods.reduce((s, j) => s + (j.mood ?? 0), 0) / thisMoods.length : null
+    const lastAvgMood = lastMoods.length > 0
+      ? lastMoods.reduce((s, j) => s + (j.mood ?? 0), 0) / lastMoods.length : null
+
+    const expDelta = lastExp > 0 ? Math.round(((thisExp - lastExp) / lastExp) * 100) : undefined
+    const moodDelta = lastAvgMood && lastAvgMood > 0
+      ? Math.round(((thisAvgMood ?? 0) - lastAvgMood) / lastAvgMood * 100) : undefined
+
+    return {
+      thisExp, lastExp, expDelta,
+      thisAvgMood, lastAvgMood, moodDelta,
+      hasFinance: thisExp > 0 || lastExp > 0,
+      hasMood: thisAvgMood !== null || lastAvgMood !== null,
+    }
+  }, [transactions, journals])
+
+  const hasData = moduleCount > 0
+  const hasComparison = comparison.hasFinance || comparison.hasMood
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -71,20 +162,97 @@ export function AnalysisScreen() {
           <Chip label={`📔 ${t.nav_journal}`} active={journals.length > 0} theme={theme} />
         </View>
 
+        {/* Highlights — last 30 days summary */}
+        {hasData && (
+          <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.analysis_highlights}</Text>
+            <View style={styles.highlightGrid}>
+              {transactions.length > 0 && (
+                <>
+                  <HighlightItem
+                    icon="💰"
+                    label={t.expense}
+                    value={formatAmount(highlights.totalExpense, currency, language)}
+                    theme={theme}
+                  />
+                  <HighlightItem
+                    icon="📁"
+                    label={t.analysis_top_spending}
+                    value={highlights.topCat ? translateCategoryName(highlights.topCat, t) : '—'}
+                    theme={theme}
+                  />
+                </>
+              )}
+              {habits.length > 0 && (
+                <HighlightItem
+                  icon="🔥"
+                  label={t.report_best_streak}
+                  value={highlights.bestStreak > 0 ? `${highlights.bestStreak} ${t.report_days}` : '—'}
+                  theme={theme}
+                />
+              )}
+              {journals.length > 0 && (
+                <HighlightItem
+                  icon="📔"
+                  label={t.nav_journal}
+                  value={
+                    highlights.journalCount > 0
+                      ? `${highlights.journalCount} ${t.report_entries}${highlights.avgMood ? `  ·  ${highlights.avgMood.toFixed(1)} ★` : ''}`
+                      : '—'
+                  }
+                  theme={theme}
+                />
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Comparison — this month vs last month */}
+        {hasComparison && (
+          <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.analysis_vs_last_month}</Text>
+            {comparison.hasFinance && (
+              <CompRow
+                label={t.expense}
+                value={formatAmount(comparison.thisExp, currency, language)}
+                delta={comparison.expDelta}
+                deltaPositive={false}
+                theme={theme}
+              />
+            )}
+            {comparison.hasMood && (
+              <CompRow
+                label={t.report_avg_mood}
+                value={comparison.thisAvgMood ? `${comparison.thisAvgMood.toFixed(1)} ★` : '—'}
+                delta={comparison.moodDelta}
+                deltaPositive={true}
+                theme={theme}
+              />
+            )}
+          </View>
+        )}
+
+        {/* AI Patterns */}
         {result ? (
           <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardHeaderIcon}>✨</Text>
+              <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.analysis_patterns}</Text>
+            </View>
             <Text style={[styles.resultText, { color: theme.text.primary }]}>{result}</Text>
           </View>
         ) : !loading ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🔮</Text>
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.analysis_title}</Text>
+          <View style={[styles.empty, !hasData && { flex: 1 }]}>
+            {!hasData && <Text style={styles.emptyIcon}>🔮</Text>}
+            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>
+              {hasData ? t.analysis_subtitle : t.analysis_title}
+            </Text>
             <Text style={[styles.emptyBody, { color: theme.text.muted }]}>
               {moduleCount < 2 ? t.analysis_no_data_msg : t.analysis_subtitle}
             </Text>
           </View>
         ) : (
-          <View style={styles.empty}>
+          <View style={styles.spinner}>
             <ActivityIndicator size="large" color={theme.brand.primary} />
             <Text style={[styles.emptyBody, { color: theme.text.muted, marginTop: spacing[3] }]}>{t.generating}</Text>
           </View>
@@ -125,6 +293,41 @@ function Chip({ label, active, theme }: { label: string; active: boolean; theme:
   )
 }
 
+function HighlightItem({ icon, label, value, theme }: { icon: string; label: string; value: string; theme: any }) {
+  return (
+    <View style={styles.highlightItem}>
+      <Text style={styles.highlightIcon}>{icon}</Text>
+      <Text style={[styles.highlightLabel, { color: theme.text.muted }]} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.highlightValue, { color: theme.text.primary }]} numberOfLines={1}>{value}</Text>
+    </View>
+  )
+}
+
+function CompRow({
+  label, value, delta, deltaPositive, theme,
+}: {
+  label: string; value: string; delta?: number; deltaPositive: boolean; theme: any
+}) {
+  const improved = deltaPositive ? (delta ?? 0) > 0 : (delta ?? 0) < 0
+  const deltaColor = delta === undefined || delta === 0
+    ? theme.text.muted
+    : improved ? theme.semantic.success : theme.semantic.danger
+
+  return (
+    <View style={styles.compRow}>
+      <Text style={[styles.compLabel, { color: theme.text.secondary }]}>{label}</Text>
+      <Text style={[styles.compValue, { color: theme.text.primary }]}>{value}</Text>
+      {delta !== undefined && delta !== 0 && (
+        <View style={[styles.deltaBadge, { backgroundColor: deltaColor + '22' }]}>
+          <Text style={[styles.deltaText, { color: deltaColor }]}>
+            {delta > 0 ? `+${delta}%` : `${delta}%`}
+          </Text>
+        </View>
+      )}
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   chips: { flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' },
@@ -139,12 +342,27 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[4],
+    gap: spacing[3],
   },
+  sectionLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
+  highlightGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
+  highlightItem: { flex: 1, minWidth: '40%', gap: 2 },
+  highlightIcon: { fontSize: 18 },
+  highlightLabel: { fontSize: 11, marginTop: 2 },
+  highlightValue: { fontSize: 14, fontWeight: '600' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  cardHeaderIcon: { fontSize: 14 },
+  compRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  compLabel: { flex: 1, fontSize: 13 },
+  compValue: { fontSize: 13, fontWeight: '600' },
+  deltaBadge: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
+  deltaText: { fontSize: 11, fontWeight: '600' },
   resultText: { fontSize: 15, lineHeight: 24 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: spacing[6] },
   emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
-  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[6] },
+  emptyTitle: { fontSize: 16, fontWeight: '600', marginBottom: spacing[2], textAlign: 'center' },
+  emptyBody: { fontSize: 13, textAlign: 'center', paddingHorizontal: spacing[4] },
+  spinner: { alignItems: 'center', paddingTop: spacing[6] },
   footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth },
   btn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },

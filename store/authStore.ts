@@ -40,6 +40,7 @@ type AuthState = {
   init: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ ok: boolean }>
   signUp: (email: string, password: string) => Promise<{ ok: boolean; needsConfirm?: boolean }>
+  resetPassword: (email: string) => Promise<{ ok: boolean }>
   signOut: () => Promise<void>
   clearError: () => void
 }
@@ -121,6 +122,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ busy: false })
     // No session means email confirmation is required before sign-in.
     return { ok: true, needsConfirm: !data.session }
+  },
+
+  async resetPassword(email) {
+    if (!supabase) return { ok: false }
+    set({ busy: true, error: null })
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim())
+    if (error) {
+      set({ busy: false, error: error.message })
+      return { ok: false }
+    }
+    set({ busy: false })
+    return { ok: true }
   },
 
   async signOut() {

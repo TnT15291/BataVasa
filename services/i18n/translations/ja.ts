@@ -341,6 +341,7 @@ export const ja: Translations = {
   cadence_daily: '毎日',
   cadence_weekdays: '平日',
   cadence_weekly: '毎週',
+  cadence_monthly: '毎月',
   habit_target: '1期間あたりの目標回数',
   habit_icon: 'アイコン',
   habit_done_today: '今日完了',
@@ -361,6 +362,10 @@ export const ja: Translations = {
   analysis_generate: '今すぐ分析',
   analysis_no_data: 'データ不足',
   analysis_no_data_msg: 'より多くのモジュールを使ってクロスモジュール分析を解放しましょう。',
+  analysis_highlights: 'ハイライト',
+  analysis_vs_last_month: '先月比',
+  analysis_patterns: 'AIパターン',
+  analysis_top_spending: '最多支出',
 
   // Per-module NL input placeholders
   nl_placeholder_habits: '例：今日 30 分走った…',
@@ -406,6 +411,7 @@ export const ja: Translations = {
   habit_insight_encouragement: '励まし',
   habit_insight_tip: 'ヒント',
   habit_last_7_days: '過去7日間',
+  habit_last_4_weeks: '直近4週間',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth
@@ -421,6 +427,8 @@ export const ja: Translations = {
   auth_toggle_to_signup: 'アカウントがない方は登録',
   auth_toggle_to_signin: 'アカウントをお持ちの方はサインイン',
   auth_check_email: 'アカウントを作成しました。メールで確認後にサインインしてください。',
+  auth_forgot_password: 'パスワードをお忘れですか？',
+  auth_reset_email_sent: 'パスワード再設定メールを送信しました。受信箱を確認してください。',
   auth_not_configured_title: 'サインインできません',
   auth_not_configured_body: 'ログイン機能はまだ利用できません。セットアップガイドを参照：',
   auth_signed_in_as: 'サインイン中',
@@ -469,4 +477,11 @@ export const ja: Translations = {
   help_data_private_body: '項目はアカウントに紐づき、見られるのはあなただけです。',
   help_permissions_title: 'お願いすることがある権限',
   help_footer: '言語・テーマ・同期・プライバシーの設定はいつでも設定画面で変更できます。',
+  category_others: 'その他',
+  report_category_breakdown: 'カテゴリ別',
+  priority_low: '低',
+  priority_medium: '中',
+  priority_high: '高',
+  report_overdue: '期限切れ',
+  report_by_priority: '優先度別',
 }

@@ -341,6 +341,7 @@ export const fr: Translations = {
   cadence_daily: 'Quotidien',
   cadence_weekdays: 'Jours ouvrés',
   cadence_weekly: 'Hebdomadaire',
+  cadence_monthly: 'Mensuel',
   habit_target: 'Objectif par période',
   habit_icon: 'Icône',
   habit_done_today: 'Fait aujourd\'hui',
@@ -361,6 +362,10 @@ export const fr: Translations = {
   analysis_generate: 'Analyser maintenant',
   analysis_no_data: 'Données insuffisantes',
   analysis_no_data_msg: 'Utilisez plus de modules pour débloquer l\'analyse multi-modules.',
+  analysis_highlights: 'Points clés',
+  analysis_vs_last_month: 'vs mois dernier',
+  analysis_patterns: 'IA Tendances',
+  analysis_top_spending: 'Plus dépensé',
 
   // Per-module NL input placeholders
   nl_placeholder_habits: 'ex : couru 30 minutes aujourd\'hui…',
@@ -406,6 +411,7 @@ export const fr: Translations = {
   habit_insight_encouragement: 'Encouragement',
   habit_insight_tip: 'Conseil',
   habit_last_7_days: '7 Derniers Jours',
+  habit_last_4_weeks: '4 dernières semaines',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth
@@ -421,6 +427,8 @@ export const fr: Translations = {
   auth_toggle_to_signup: "Pas de compte ? S'inscrire",
   auth_toggle_to_signin: 'Déjà un compte ? Se connecter',
   auth_check_email: 'Compte créé. Vérifiez votre e-mail pour confirmer, puis connectez-vous.',
+  auth_forgot_password: 'Mot de passe oublié ?',
+  auth_reset_email_sent: 'E-mail de réinitialisation envoyé. Vérifiez votre boîte de réception.',
   auth_not_configured_title: 'Connexion indisponible',
   auth_not_configured_body: "La connexion n'est pas encore disponible. Voir le guide de configuration :",
   auth_signed_in_as: 'Connecté en tant que',
@@ -469,4 +477,11 @@ export const fr: Translations = {
   help_data_private_body: 'Vos entrées sont liées à votre compte. Vous seul pouvez les voir.',
   help_permissions_title: 'Autorisations que nous pouvons demander',
   help_footer: 'Vous pouvez changer la langue, le thème, la synchronisation et la confidentialité à tout moment dans les Réglages.',
+  category_others: 'Autres',
+  report_category_breakdown: 'Par catégorie',
+  priority_low: 'Faible',
+  priority_medium: 'Moyen',
+  priority_high: 'Élevé',
+  report_overdue: 'En retard',
+  report_by_priority: 'Par priorité',
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const CadenceSchema = z.enum(['daily', 'weekdays', 'weekly', 'custom'])
+export const CadenceSchema = z.enum(['daily', 'weekdays', 'weekly', 'monthly', 'custom'])
 export type Cadence = z.infer<typeof CadenceSchema>
 
 export type Habit = {

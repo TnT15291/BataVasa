@@ -12,6 +12,8 @@ jest.mock('../database/habits/queries', () => ({
   getLogForDate: jest.fn(),
   softDeleteHabitLog: jest.fn(),
   countLogsForDate: jest.fn(),
+  countLogsInRange: jest.fn(),
+  getLatestLogInRange: jest.fn(),
   listLogCountsByDate: jest.fn(),
 }))
 
@@ -27,7 +29,15 @@ jest.mock('../services/logger', () => ({
 }))
 
 import * as q from '../database/habits/queries'
-import { createHabit, loadHabits, deleteHabit, wipeAllHabits, logHabit } from '../features/habits/services'
+import {
+  createHabit,
+  getHabitPeriodRange,
+  getLocalDateString,
+  loadHabits,
+  deleteHabit,
+  wipeAllHabits,
+  logHabit,
+} from '../features/habits/services'
 import type { Habit } from '../features/habits/types'
 
 const mockQ = q as jest.Mocked<typeof q>
@@ -144,5 +154,29 @@ describe('logHabit', () => {
     const result = await logHabit({ habit_id: '', occurred_at: '2026-01-01T08:00:00.000Z' })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED')
+  })
+})
+
+describe('habit period helpers', () => {
+  it('formats dates using the local calendar day', () => {
+    expect(getLocalDateString(new Date(2026, 0, 5, 6, 0, 0))).toBe('2026-01-05')
+  })
+
+  it('resets daily habits at local midnight', () => {
+    const range = getHabitPeriodRange({ cadence: 'daily' }, new Date(2026, 0, 5, 6, 0, 0))
+    expect(range.from).toEqual(new Date(2026, 0, 5, 0, 0, 0, 0))
+    expect(range.to).toEqual(new Date(2026, 0, 6, 0, 0, 0, 0))
+  })
+
+  it('resets weekly habits on Monday', () => {
+    const range = getHabitPeriodRange({ cadence: 'weekly' }, new Date(2026, 0, 7, 6, 0, 0))
+    expect(range.from).toEqual(new Date(2026, 0, 5, 0, 0, 0, 0))
+    expect(range.to).toEqual(new Date(2026, 0, 12, 0, 0, 0, 0))
+  })
+
+  it('resets monthly habits on the first day of the month', () => {
+    const range = getHabitPeriodRange({ cadence: 'monthly' }, new Date(2026, 0, 20, 6, 0, 0))
+    expect(range.from).toEqual(new Date(2026, 0, 1, 0, 0, 0, 0))
+    expect(range.to).toEqual(new Date(2026, 1, 1, 0, 0, 0, 0))
   })
 })

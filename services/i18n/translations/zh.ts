@@ -341,6 +341,7 @@ export const zh: Translations = {
   cadence_daily: '每天',
   cadence_weekdays: '工作日',
   cadence_weekly: '每周',
+  cadence_monthly: '每月',
   habit_target: '每周期目标次数',
   habit_icon: '图标',
   habit_done_today: '今天已完成',
@@ -361,6 +362,10 @@ export const zh: Translations = {
   analysis_generate: '立即分析',
   analysis_no_data: '数据不足',
   analysis_no_data_msg: '使用更多模块以解锁跨模块洞察。',
+  analysis_highlights: '亮点',
+  analysis_vs_last_month: '对比上月',
+  analysis_patterns: 'AI模式',
+  analysis_top_spending: '最多支出',
 
   // Per-module NL input placeholders
   nl_placeholder_habits: '例：今天跑步 30 分钟…',
@@ -406,6 +411,7 @@ export const zh: Translations = {
   habit_insight_encouragement: '鼓励',
   habit_insight_tip: '建议',
   habit_last_7_days: '最近7天',
+  habit_last_4_weeks: '近4周',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth
@@ -421,6 +427,8 @@ export const zh: Translations = {
   auth_toggle_to_signup: '还没有账户？注册',
   auth_toggle_to_signin: '已有账户？登录',
   auth_check_email: '账户已创建。请查收邮件确认后再登录。',
+  auth_forgot_password: '忘记密码？',
+  auth_reset_email_sent: '密码重置邮件已发送。请检查收件箱。',
   auth_not_configured_title: '无法登录',
   auth_not_configured_body: '登录功能尚未可用。请参阅设置指南：',
   auth_signed_in_as: '登录身份',
@@ -469,4 +477,11 @@ export const zh: Translations = {
   help_data_private_body: '你的条目与账户绑定，只有你能看到。',
   help_permissions_title: '我们可能请求的权限',
   help_footer: '你可以随时在设置中更改语言、主题、同步和隐私选项。',
+  category_others: '其他',
+  report_category_breakdown: '按类别',
+  priority_low: '低',
+  priority_medium: '中',
+  priority_high: '高',
+  report_overdue: '已逾期',
+  report_by_priority: '按优先级',
 }

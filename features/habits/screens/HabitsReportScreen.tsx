@@ -9,7 +9,7 @@ import {
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   startOfYear, endOfYear,
   addWeeks, subWeeks, addMonths, subMonths, addYears, subYears,
-  format, parseISO, isValid, differenceInDays, subDays,
+  format, parseISO, isValid, differenceInDays, subDays, addDays, eachDayOfInterval,
 } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -40,10 +40,20 @@ function NavRow({ label, onPrev, onNext }: { label: string; onPrev: () => void; 
   )
 }
 
-function StatCard({ label, value, theme }: { label: string; value: string; theme: any }) {
+function StatCard({
+  label, value, delta, deltaPositive = true, theme,
+}: { label: string; value: string; delta?: number; deltaPositive?: boolean; theme: any }) {
+  const showDelta = delta !== undefined && delta !== 0
+  const isGood = deltaPositive ? (delta ?? 0) >= 0 : (delta ?? 0) <= 0
+  const sign = (delta ?? 0) >= 0 ? '+' : ''
   return (
     <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
       <Text style={[styles.statValue, { color: theme.text.primary }]}>{value}</Text>
+      {showDelta ? (
+        <Text style={[styles.deltaBadge, { color: isGood ? theme.semantic.success : theme.semantic.danger }]}>
+          {sign}{delta}%
+        </Text>
+      ) : null}
       <Text style={[styles.statLabel, { color: theme.text.muted }]}>{label}</Text>
     </View>
   )
@@ -149,15 +159,52 @@ export function HabitsReportScreen() {
     }
   }, [getRange, allLogs, habits])
 
+  const prevStats = useMemo(() => {
+    if (period === 'custom') return null
+    const prevAnchor =
+      period === 'weekly' ? subWeeks(anchorDate, 1)
+      : period === 'monthly' ? subMonths(anchorDate, 1)
+      : subYears(anchorDate, 1)
+    const prevFrom = period === 'weekly' ? startOfWeek(prevAnchor, { weekStartsOn: 1 }) : period === 'monthly' ? startOfMonth(prevAnchor) : startOfYear(prevAnchor)
+    const prevTo = period === 'weekly' ? endOfWeek(prevAnchor, { weekStartsOn: 1 }) : period === 'monthly' ? endOfMonth(prevAnchor) : endOfYear(prevAnchor)
+    const fromIso = prevFrom.toISOString()
+    const toIso = prevTo.toISOString()
+    const prevLogs = allLogs.filter((l) => l.occurred_at >= fromIso && l.occurred_at <= toIso)
+    const completed = prevLogs.filter((l) => (l.skipped ?? 0) !== 1)
+    const skipped = prevLogs.filter((l) => (l.skipped ?? 0) === 1)
+    const days = differenceInDays(prevTo, prevFrom) + 1
+    const maxPossible = habits.length * days
+    return {
+      totalCompletions: completed.length,
+      skipCount: skipped.length,
+      completionRate: maxPossible > 0 ? Math.round((completed.length / maxPossible) * 100) : 0,
+    }
+  }, [period, anchorDate, allLogs, habits])
+
+  const calcDelta = (cur: number, prev: number): number | undefined =>
+    prev === 0 ? undefined : Math.round(((cur - prev) / Math.abs(prev)) * 100)
+
   const range = getRange()
 
-  const last7Days = useMemo(() => {
+  const CELL = 12
+  const CELL_GAP = 2
+
+  const heatmapGrid = useMemo(() => {
     const today = new Date()
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = subDays(today, 6 - i)
-      return d.toISOString().split('T')[0]!
-    })
+    const todayStr = format(today, 'yyyy-MM-dd')
+    const thisMonday = startOfWeek(today, { weekStartsOn: 1 })
+    const gridStart = subWeeks(thisMonday, 4)
+    const gridEnd = endOfWeek(today, { weekStartsOn: 1 })
+    const allDays = eachDayOfInterval({ start: gridStart, end: gridEnd }).map((d) => format(d, 'yyyy-MM-dd'))
+    const weeks: string[][] = []
+    for (let i = 0; i < allDays.length; i += 7) weeks.push(allDays.slice(i, i + 7))
+    return { weeks, todayStr }
   }, [])
+
+  const weekdayLabels = useMemo(() => {
+    const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
+    return Array.from({ length: 7 }, (_, i) => format(addDays(monday, i), 'EEEEE', { locale: dfLocale }))
+  }, [dfLocale])
 
   const logDatesByHabit = useMemo(() => {
     const map = new Map<string, Set<string>>()
@@ -296,41 +343,80 @@ export function HabitsReportScreen() {
         ) : (
           <>
             <View style={styles.statsGrid}>
-              <StatCard label={t.report_habits_completed} value={String(stats.totalCompletions)} theme={theme} />
-              <StatCard label={t.report_completion_rate} value={`${stats.completionRate}%`} theme={theme} />
+              <StatCard
+                label={t.report_habits_completed}
+                value={String(stats.totalCompletions)}
+                delta={prevStats ? calcDelta(stats.totalCompletions, prevStats.totalCompletions) : undefined}
+                theme={theme}
+              />
+              <StatCard
+                label={t.report_completion_rate}
+                value={`${stats.completionRate}%`}
+                delta={prevStats ? calcDelta(stats.completionRate, prevStats.completionRate) : undefined}
+                theme={theme}
+              />
               <StatCard label={t.report_best_streak} value={`${stats.bestStreak} ${t.report_days}`} theme={theme} />
-              <StatCard label="Skipped" value={String(stats.skipCount)} theme={theme} />
+              <StatCard
+                label="Skipped"
+                value={String(stats.skipCount)}
+                delta={prevStats ? calcDelta(stats.skipCount, prevStats.skipCount) : undefined}
+                deltaPositive={false}
+                theme={theme}
+              />
             </View>
 
-            {/* Per-habit heatmap */}
+            {/* Per-habit heatmap — 4-week calendar grid */}
             <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
               <View style={styles.cardTitleRow}>
                 <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.habits}</Text>
-                <Text style={[styles.cardTitle, { color: theme.text.muted }]}>{t.habit_last_7_days}</Text>
+                <Text style={[styles.cardTitle, { color: theme.text.muted }]}>{t.habit_last_4_weeks}</Text>
+              </View>
+              {/* Weekday header — shown once */}
+              <View style={[styles.heatWeekRow, { gap: CELL_GAP }]}>
+                {weekdayLabels.map((lbl, i) => (
+                  <View key={i} style={{ width: CELL, alignItems: 'center' }}>
+                    <Text style={[styles.heatWeekLabel, { color: theme.text.muted }]}>{lbl}</Text>
+                  </View>
+                ))}
               </View>
               {habits.map((h) => (
                 <View key={h.id} style={styles.habitRow}>
                   <Text style={styles.habitIcon}>{h.icon}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.habitName, { color: theme.text.primary }]}>{h.name}</Text>
-                    <View style={styles.heatmapRow}>
-                      {last7Days.map((day) => {
-                        const done = logDatesByHabit.get(h.id)?.has(day) ?? false
-                        const skipped = skipDatesByHabit.get(h.id)?.has(day) ?? false
-                        return (
-                          <View
-                            key={day}
-                            style={[styles.heatDot, {
-                              backgroundColor: done ? h.color : skipped ? theme.bg.secondary : theme.border.subtle,
-                              borderColor: skipped ? theme.text.muted : 'transparent',
-                            }]}
-                          />
-                        )
-                      })}
-                      <Text style={[styles.habitMeta, { color: theme.text.muted, marginLeft: 4 }]}>
+                  <View style={{ flex: 1, gap: CELL_GAP }}>
+                    <View style={styles.habitNameRow}>
+                      <Text style={[styles.habitName, { color: theme.text.primary }]}>{h.name}</Text>
+                      <Text style={[styles.habitMeta, { color: theme.text.muted }]}>
                         {h.streak}{t.report_days[0]}
                       </Text>
                     </View>
+                    {heatmapGrid.weeks.map((week, wi) => (
+                      <View key={wi} style={[styles.heatWeekRow, { gap: CELL_GAP }]}>
+                        {week.map((day) => {
+                          const done = logDatesByHabit.get(h.id)?.has(day) ?? false
+                          const skipped = skipDatesByHabit.get(h.id)?.has(day) ?? false
+                          const future = day > heatmapGrid.todayStr
+                          return (
+                            <View
+                              key={day}
+                              style={[
+                                styles.heatCell,
+                                {
+                                  width: CELL,
+                                  height: CELL,
+                                  backgroundColor: future
+                                    ? 'transparent'
+                                    : done ? h.color
+                                    : skipped ? theme.bg.secondary
+                                    : theme.border.subtle,
+                                  borderWidth: skipped && !future ? 1 : 0,
+                                  borderColor: theme.text.muted,
+                                },
+                              ]}
+                            />
+                          )
+                        })}
+                      </View>
+                    ))}
                   </View>
                 </View>
               ))}
@@ -445,16 +531,19 @@ const styles = StyleSheet.create({
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
   statCard: { width: '47%', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
   statValue: { fontSize: 22, fontWeight: '700' },
+  deltaBadge: { fontSize: 11, fontWeight: '700' },
   statLabel: { fontSize: 11, textAlign: 'center' },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
   cardTitle: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  habitRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  habitIcon: { fontSize: 24 },
-  habitName: { fontSize: 15, fontWeight: '500' },
+  habitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  habitIcon: { fontSize: 24, marginTop: 2 },
+  habitNameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  habitName: { fontSize: 15, fontWeight: '500', flex: 1 },
   habitMeta: { fontSize: 12 },
-  heatmapRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  heatDot: { width: 12, height: 12, borderRadius: 3, borderWidth: 1 },
+  heatWeekRow: { flexDirection: 'row', alignItems: 'center' },
+  heatWeekLabel: { fontSize: 9, fontWeight: '600' },
+  heatCell: { borderRadius: 3 },
   skipRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2] },
   insightBody: { gap: spacing[2] },
   insightRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2], gap: 2 },

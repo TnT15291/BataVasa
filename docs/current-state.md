@@ -244,6 +244,34 @@ These make each module stronger and prepare cross-module insight work.
    - Preset tags like work, family, health, money, sleep, exercise, stress.
    - Avoid complex free-form tagging until the UX is proven.
 
+### Report Visual Improvements
+
+Ordered priority list — make all module reports and the analysis screen both complete and polished.
+
+1. **R1 — Stat delta badges — DONE**
+   - All 4 report screens show vs-previous-period % change beside each key metric.
+   - Green if improvement, red if decline. Hidden for custom date ranges and when previous period has no data.
+   - Best streak (Habits) is excluded — streaks are continuous, not period-bound.
+
+2. **R2 — Finance category donut**
+   - Donut/pie chart of top 5 spending categories + "others" below the column chart.
+   - Most common first question after seeing a total expense number.
+
+3. **R3 — Habits 30-day calendar heatmap — DONE**
+   - Replaced the 7-dot row per habit with a 5-week (35-day) calendar grid (7 cols × 5 rows).
+   - Cell colors: habit color (done), muted border (skipped), subtle bg (empty), transparent (future).
+   - Weekday labels (locale-aware narrow format) shown once above all habit grids.
+
+4. **R4 — Reminders visual upgrade — DONE**
+   - Replaced 3 plain stat cards with: DonutChart (completion rate, color-coded green/amber/red) + vs-previous delta badge.
+   - Priority breakdown card (High/Medium/Low): colored bar + completed/total count + %.
+   - Overdue list: up to 5 items with priority color dot, title, and date. Hidden when none.
+
+5. **R5 — AnalysisScreen redesign — DONE**
+   - Highlights card: last 30-day rule-based metrics — Finance expense, top spending category, best habit streak, Journal count + avg mood.
+   - Comparison card: this month vs last month delta badges for Finance expense and Journal mood.
+   - AI Patterns card: existing AI text wrapped in a labeled card with header icon instead of raw text dump.
+
 ### P2 - Differentiators After Stability
 
 These are the features that make BataVasa meaningfully different from single-purpose apps.
