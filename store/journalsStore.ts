@@ -10,8 +10,8 @@ type JournalsState = {
   lastError: string | null
 
   loadJournals: () => Promise<void>
-  createJournal: (input: CreateJournalInput) => Promise<{ ok: boolean; error?: string }>
-  updateJournal: (input: UpdateJournalInput) => Promise<{ ok: boolean; error?: string }>
+  createJournal: (input: CreateJournalInput) => Promise<{ ok: boolean; journal?: Journal; error?: string }>
+  updateJournal: (input: UpdateJournalInput) => Promise<{ ok: boolean; journal?: Journal; error?: string }>
   deleteJournal: (id: string) => Promise<{ ok: boolean; error?: string }>
   wipeAll: () => Promise<{ ok: boolean; deleted?: number; error?: string }>
 }
@@ -36,7 +36,7 @@ export const useJournalsStore = create<JournalsState>((set, get) => ({
     const r = await svc.createJournal(input)
     if (r.ok) {
       set((s) => ({ journals: [r.value, ...s.journals] }))
-      return { ok: true }
+      return { ok: true, journal: r.value }
     }
     return { ok: false, error: r.error.message }
   },
@@ -47,7 +47,7 @@ export const useJournalsStore = create<JournalsState>((set, get) => ({
       set((s) => ({
         journals: s.journals.map((j) => j.id === r.value.id ? r.value : j),
       }))
-      return { ok: true }
+      return { ok: true, journal: r.value }
     }
     return { ok: false, error: r.error.message }
   },

@@ -68,6 +68,11 @@ export async function markFailed(id: string, error: string): Promise<void> {
   )
 }
 
+export async function purgeFailed(): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(`DELETE FROM sync_queue WHERE retry_count >= ?`, [MAX_RETRIES])
+}
+
 export async function clearAll(): Promise<void> {
   const db = await getDb()
   await db.runAsync(`DELETE FROM sync_queue`)

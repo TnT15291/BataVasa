@@ -56,7 +56,7 @@ function HabitRow({
             <Text style={styles.flameIcon}>🔥</Text>
           ) : null}
           <Text style={[styles.rowMeta, { color: theme.text.muted }]}>
-            {!dueToday ? 'Not scheduled today' : done
+            {!dueToday ? t.habit_not_scheduled : done
               ? `${t.habit_done_today} · ${habit.streak}d`
               : `${habit.todayCount}/${habit.target_per_period} · ${habit.streak}d`}
           </Text>
@@ -70,7 +70,7 @@ function HabitRow({
       </View>
       {dueToday && !done ? (
         <Pressable onPress={onSkip} hitSlop={8} style={[styles.skipBtn, { borderColor: theme.border.subtle }]}>
-          <Text style={[styles.skipText, { color: theme.text.muted }]}>Skip</Text>
+          <Text style={[styles.skipText, { color: theme.text.muted }]}>{t.reminder_skip}</Text>
         </Pressable>
       ) : null}
     </Pressable>
@@ -133,9 +133,9 @@ export function HabitListScreen() {
   const handleEditManually = () => {
     setParsed(null)
     if (parsed?.matched_habit_id) {
-      router.push({ pathname: '/habit', params: { id: parsed.matched_habit_id } } as any)
+      router.push({ pathname: '/habit', params: { id: parsed.matched_habit_id } })
     } else {
-      router.push('/habit' as any)
+      router.push('/habit')
     }
     setNlText('')
   }
@@ -166,7 +166,7 @@ export function HabitListScreen() {
               habit={habit}
               onToggle={() => handleToggleWithMilestone(habit.id)}
               onSkip={() => skipToday(habit.id)}
-              onEdit={() => router.push({ pathname: '/habit', params: { id: habit.id } } as any)}
+              onEdit={() => router.push({ pathname: '/habit', params: { id: habit.id } })}
             />
           ))}
         </View>
@@ -194,7 +194,7 @@ export function HabitListScreen() {
             ))}
           </View>
           <Pressable
-            onPress={() => router.push('/habit' as any)}
+            onPress={() => router.push('/habit')}
             style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
           >
             <Text style={styles.emptyBtnText}>{t.new_habit}</Text>
@@ -241,14 +241,14 @@ export function HabitListScreen() {
           </View>
 
           {renderGroup(t.reminder_upcoming, pendingHabits)}
-          {renderGroup('Not scheduled today', laterHabits)}
+          {renderGroup(t.habit_not_scheduled, laterHabits)}
           {renderGroup(t.habit_done_today, doneHabits)}
         </ScrollView>
       )}
 
       {habits.length > 0 ? (
         <Pressable
-          onPress={() => router.push('/habits-report' as any)}
+          onPress={() => router.push('/habits-report')}
           accessibilityRole="button"
           accessibilityLabel={t.habits_report_title}
           style={[styles.reportFab, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
@@ -258,7 +258,7 @@ export function HabitListScreen() {
       ) : null}
 
       <Pressable
-        onPress={() => router.push('/habit' as any)}
+        onPress={() => router.push('/habit')}
         accessibilityRole="button"
         accessibilityLabel={t.new_habit}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}

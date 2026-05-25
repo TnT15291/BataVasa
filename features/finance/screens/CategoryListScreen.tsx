@@ -78,7 +78,7 @@ export function CategoryListScreen() {
                   return (
                     <Pressable
                       key={cat.id}
-                      onPress={() => isSystem ? undefined : router.push({ pathname: '/category', params: { id: cat.id } } as any)}
+                      onPress={() => isSystem ? undefined : router.push({ pathname: '/category', params: { id: cat.id } })}
                       disabled={isSystem}
                       style={({ pressed }) => [
                         styles.row,
@@ -120,7 +120,7 @@ export function CategoryListScreen() {
       </ScrollView>
 
       <Pressable
-        onPress={() => router.push('/category' as any)}
+        onPress={() => router.push('/category')}
         accessibilityRole="button"
         accessibilityLabel={t.new_category}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}

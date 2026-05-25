@@ -214,7 +214,7 @@ export function TransactionListScreen() {
         return {
           key: `${latest.merchant}-${latest.category_id}-${latest.currency}-${Math.abs(latest.amount_cents)}`,
           title: latest.merchant ?? category?.name ?? 'Recurring bill',
-          categoryName: category?.name ?? 'Uncategorized',
+          categoryName: category?.name ?? t.category_others,
           amount: Math.abs(latest.amount_cents),
           currency: latest.currency,
           count: list.length,
@@ -231,7 +231,7 @@ export function TransactionListScreen() {
       pathname: '/reminder',
       params: {
         prefill: JSON.stringify({
-          title: `Pay ${candidate.title}`,
+          title: t.pay_bill.replace('{{name}}', candidate.title),
           note: `${candidate.categoryName} · ${formatAmount(candidate.amount, candidate.currency, language)}`,
           remind_at: candidate.nextDate.toISOString(),
           advance_minutes: 1440,
@@ -239,7 +239,7 @@ export function TransactionListScreen() {
           priority: 'high',
         }),
       },
-    } as any)
+    })
   }
 
   const activityItems = useMemo<ActivityItem[]>(() => {
@@ -335,7 +335,7 @@ export function TransactionListScreen() {
 
               <Text style={[styles.insightLine, { color: theme.text.muted }]} numberOfLines={1}>
                 {reviewCount > 0
-                  ? `${reviewCount} transaction${reviewCount > 1 ? 's' : ''} need review`
+                  ? t.review_queue_count.replace('{{count}}', String(reviewCount))
                   : topCategory?.category
                     ? `${topCategory.category.name} / ${formatAmount(topCategory.amount, topCategory.currency, language)}`
                     : t.no_transactions}
@@ -372,7 +372,7 @@ export function TransactionListScreen() {
             >
               <Feather name="alert-circle" size={16} color={reviewOnly ? theme.brand.primary : theme.text.muted} />
               <Text style={[styles.reviewFilterText, { color: reviewOnly ? theme.brand.primary : theme.text.secondary }]}>
-                Review queue
+                {t.review_queue}
               </Text>
               <Text style={[styles.reviewFilterCount, { color: theme.text.muted }]}>{periodReviewCount}</Text>
             </Pressable>
@@ -382,7 +382,7 @@ export function TransactionListScreen() {
                 <View style={styles.recurringHeader}>
                   <View style={styles.recurringTitleRow}>
                     <Feather name="repeat" size={16} color={theme.brand.primary} />
-                    <Text style={[styles.recurringTitle, { color: theme.text.primary }]}>Recurring bills</Text>
+                    <Text style={[styles.recurringTitle, { color: theme.text.primary }]}>{t.recurring_bills}</Text>
                   </View>
                   <Text style={[styles.recurringMeta, { color: theme.text.muted }]}>{recurringCandidates.length}</Text>
                 </View>
@@ -391,7 +391,7 @@ export function TransactionListScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.recurringName, { color: theme.text.primary }]} numberOfLines={1}>{candidate.title}</Text>
                       <Text style={[styles.recurringMeta, { color: theme.text.muted }]} numberOfLines={1}>
-                        {candidate.count} times · next {format(candidate.nextDate, 'dd/MM', { locale })}
+                        {t.recurring_times_next.replace('{{count}}', String(candidate.count)).replace('{{date}}', format(candidate.nextDate, 'dd/MM', { locale }))}
                       </Text>
                     </View>
                     <AmountText cents={candidate.amount} currency={candidate.currency} showSign={false} color={theme.finance.expense} style={styles.recurringAmount} />
@@ -443,7 +443,7 @@ export function TransactionListScreen() {
             <TransactionRow
               tx={item.tx}
               category={catById.get(item.tx.category_id)}
-              onPress={() => router.push({ pathname: '/new', params: { id: item.tx.id } } as any)}
+              onPress={() => router.push({ pathname: '/new', params: { id: item.tx.id } })}
               onLongPress={() => remove(item.tx.id)}
             />
           )
@@ -457,7 +457,7 @@ export function TransactionListScreen() {
                 <ActivityIndicator size="small" color={theme.brand.primary} />
               ) : (
                 <Pressable onPress={loadMore} style={[styles.loadMoreBtn, { borderColor: theme.border.subtle }]}>
-                  <Text style={{ color: theme.text.secondary, fontSize: 13 }}>Load more</Text>
+                  <Text style={{ color: theme.text.secondary, fontSize: 13 }}>{t.load_more}</Text>
                 </Pressable>
               )}
             </View>
@@ -468,6 +468,13 @@ export function TransactionListScreen() {
             <View style={styles.empty}>
               <ActivityIndicator size="large" color={theme.brand.primary} />
             </View>
+          ) : reviewOnly ? (
+            <View style={styles.empty}>
+              <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
+                <Feather name="check-circle" size={34} color={theme.brand.primary} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_review_items}</Text>
+            </View>
           ) : (
             <View style={styles.empty}>
               <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
@@ -476,7 +483,7 @@ export function TransactionListScreen() {
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_transactions}</Text>
               <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.tap_to_add}</Text>
               <Pressable
-                onPress={() => router.push('/new' as any)}
+                onPress={() => router.push('/new')}
                 style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
               >
                 <Text style={styles.emptyBtnText}>{t.nav_new_transaction}</Text>

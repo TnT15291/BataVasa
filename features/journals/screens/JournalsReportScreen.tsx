@@ -9,7 +9,7 @@ import {
   addWeeks, subWeeks, addMonths, subMonths, addYears, subYears,
   format, parseISO, isValid,
 } from 'date-fns'
-import { useTheme } from '@design/useTheme'
+import { useTheme, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
@@ -36,7 +36,7 @@ function NavRow({ label, onPrev, onNext }: { label: string; onPrev: () => void; 
 
 function StatCard({
   label, value, delta, deltaPositive = true, theme,
-}: { label: string; value: string; delta?: number; deltaPositive?: boolean; theme: any }) {
+}: { label: string; value: string; delta?: number; deltaPositive?: boolean; theme: Theme }) {
   const showDelta = delta !== undefined && delta !== 0
   const isGood = deltaPositive ? (delta ?? 0) >= 0 : (delta ?? 0) <= 0
   const sign = (delta ?? 0) >= 0 ? '+' : ''

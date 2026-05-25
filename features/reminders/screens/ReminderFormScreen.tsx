@@ -120,7 +120,7 @@ export function ReminderFormScreen() {
   const onSave = async () => {
     const trimmed = title.trim()
     if (!trimmed) {
-      Alert.alert(t.invalid_amount, t.reminder_title_placeholder)
+      Alert.alert(t.could_not_save, t.reminder_title_required)
       return
     }
     setSubmitting(true)

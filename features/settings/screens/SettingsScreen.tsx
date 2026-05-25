@@ -165,7 +165,7 @@ export function SettingsScreen() {
 
       <SectionHeader label={t.help_title} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <SettingRow label={t.help_quickstart_title} onPress={() => router.push('/help' as any)} last />
+        <SettingRow label={t.help_quickstart_title} onPress={() => router.push('/help')} last />
       </View>
 
       <SectionHeader label={t.appearance} />
@@ -184,10 +184,10 @@ export function SettingsScreen() {
           <Switch value={syncFinance} onValueChange={setSyncFinance} />
         </View>
         <SettingRow label={t.currency} value={currency} onPress={() => router.push('/currency')} />
-        <SettingRow label={t.display_currency} value={displayCurrency} onPress={() => router.push('/display-currency' as any)} />
-        <SettingRow label={t.categories} onPress={() => router.push('/categories' as any)} />
+        <SettingRow label={t.display_currency} value={displayCurrency} onPress={() => router.push('/display-currency')} />
+        <SettingRow label={t.categories} onPress={() => router.push('/categories')} />
         <Pressable
-          onPress={() => router.push('/data-management?module=finance' as any)}
+          onPress={() => router.push('/data-management?module=finance')}
           style={({ pressed }) => [
             styles.row,
             { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
@@ -199,7 +199,7 @@ export function SettingsScreen() {
           </View>
         </Pressable>
         <Pressable
-          onPress={() => router.push('/data-management?module=finance' as any)}
+          onPress={() => router.push('/data-management?module=finance')}
           style={({ pressed }) => [
             styles.row,
             styles.rowLast,
@@ -222,9 +222,9 @@ export function SettingsScreen() {
           </View>
           <Switch value={syncReminders} onValueChange={setSyncReminders} />
         </View>
-        <SettingRow label={t.reminders} onPress={() => router.push('/reminders' as any)} />
+        <SettingRow label={t.reminders} onPress={() => router.push('/reminders')} />
         <Pressable
-          onPress={() => router.push('/data-management?module=reminders' as any)}
+          onPress={() => router.push('/data-management?module=reminders')}
           style={({ pressed }) => [
             styles.row,
             { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
@@ -236,7 +236,7 @@ export function SettingsScreen() {
           </View>
         </Pressable>
         <Pressable
-          onPress={() => router.push('/data-management?module=reminders' as any)}
+          onPress={() => router.push('/data-management?module=reminders')}
           style={({ pressed }) => [
             styles.row,
             styles.rowLast,
@@ -259,9 +259,9 @@ export function SettingsScreen() {
           </View>
           <Switch value={syncHabits} onValueChange={setSyncHabits} />
         </View>
-        <SettingRow label={t.habits} onPress={() => router.push('/habits' as any)} />
+        <SettingRow label={t.habits} onPress={() => router.push('/habits')} />
         <Pressable
-          onPress={() => router.push('/data-management?module=habits' as any)}
+          onPress={() => router.push('/data-management?module=habits')}
           style={({ pressed }) => [styles.row, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
         >
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
@@ -270,7 +270,7 @@ export function SettingsScreen() {
           </View>
         </Pressable>
         <Pressable
-          onPress={() => router.push('/data-management?module=habits' as any)}
+          onPress={() => router.push('/data-management?module=habits')}
           style={({ pressed }) => [styles.row, styles.rowLast, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
         >
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
@@ -289,9 +289,9 @@ export function SettingsScreen() {
           </View>
           <Switch value={syncJournals} onValueChange={setSyncJournals} />
         </View>
-        <SettingRow label={t.journals} onPress={() => router.push('/journals' as any)} />
+        <SettingRow label={t.journals} onPress={() => router.push('/journals')} />
         <Pressable
-          onPress={() => router.push('/data-management?module=journals' as any)}
+          onPress={() => router.push('/data-management?module=journals')}
           style={({ pressed }) => [
             styles.row,
             { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
@@ -303,7 +303,7 @@ export function SettingsScreen() {
           </View>
         </Pressable>
         <Pressable
-          onPress={() => router.push('/data-management?module=journals' as any)}
+          onPress={() => router.push('/data-management?module=journals')}
           style={({ pressed }) => [
             styles.row,
             styles.rowLast,

@@ -190,7 +190,7 @@ export function JournalListScreen() {
     const p = parsedJournal
     setParsedJournal(null)
     setNlText('')
-    router.push({ pathname: '/journal', params: p ? { prefill: JSON.stringify(p) } : {} } as any)
+    router.push({ pathname: '/journal', params: p ? { prefill: JSON.stringify(p) } : {} })
   }
 
   const groups = useMemo<DateGroup[]>(() => {
@@ -263,7 +263,7 @@ export function JournalListScreen() {
           {t.journal_empty_prompt}
         </Text>
         <Pressable
-          onPress={() => router.push('/journal' as any)}
+          onPress={() => router.push('/journal')}
           style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
         >
           <Text style={styles.emptyBtnText}>{t.new_journal}</Text>
@@ -317,7 +317,7 @@ export function JournalListScreen() {
               <JournalRow
                 key={j.id}
                 journal={j}
-                onPress={() => router.push({ pathname: '/journal', params: { id: j.id } } as any)}
+                onPress={() => router.push({ pathname: '/journal', params: { id: j.id } })}
               />
             ))}
           </View>
@@ -342,7 +342,7 @@ export function JournalListScreen() {
       </Pressable>
 
       <Pressable
-        onPress={() => router.push('/journals-report' as any)}
+        onPress={() => router.push('/journals-report')}
         accessibilityRole="button"
         accessibilityLabel={t.journals_report_title}
         style={[styles.reportBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
@@ -351,7 +351,7 @@ export function JournalListScreen() {
       </Pressable>
 
       <Pressable
-        onPress={() => router.push('/journal' as any)}
+        onPress={() => router.push('/journal')}
         accessibilityRole="button"
         accessibilityLabel={t.new_journal}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}

@@ -9,7 +9,7 @@ import {
   addWeeks, subWeeks, addMonths, subMonths, addYears, subYears,
   format, parseISO, isValid,
 } from 'date-fns'
-import { useTheme } from '@design/useTheme'
+import { useTheme, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
@@ -39,7 +39,7 @@ const DONUT = 88
 const DONUT_STROKE = 16
 const DONUT_INNER = DONUT - DONUT_STROKE * 2
 
-function DonutChart({ pct, color, theme }: { pct: number; color: string; theme: any }) {
+function DonutChart({ pct, color, theme }: { pct: number; color: string; theme: Theme }) {
   const clamped = Math.max(0, Math.min(100, pct))
   const rightDeg = clamped <= 50 ? clamped * 3.6 - 180 : 0
   const leftDeg = clamped <= 50 ? 180 : 180 - (clamped - 50) * 3.6
@@ -64,7 +64,7 @@ function DonutChart({ pct, color, theme }: { pct: number; color: string; theme: 
 
 function StatCard({
   label, value, delta, deltaPositive = true, theme,
-}: { label: string; value: string; delta?: number; deltaPositive?: boolean; theme: any }) {
+}: { label: string; value: string; delta?: number; deltaPositive?: boolean; theme: Theme }) {
   const showDelta = delta !== undefined && delta !== 0
   const isGood = deltaPositive ? (delta ?? 0) >= 0 : (delta ?? 0) <= 0
   const sign = (delta ?? 0) >= 0 ? '+' : ''

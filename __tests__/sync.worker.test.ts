@@ -11,6 +11,7 @@ const mockAppStateAddEventListener = jest.fn()
 const mockGetPending = jest.fn()
 const mockMarkSynced = jest.fn()
 const mockMarkFailed = jest.fn()
+const mockPurgeFailed = jest.fn()
 const mockAuthGetState = jest.fn()
 const mockSettingsGetState = jest.fn()
 const mockLogger = {
@@ -52,11 +53,13 @@ function loadSync() {
     getPending: mockGetPending,
     markSynced: mockMarkSynced,
     markFailed: mockMarkFailed,
+    purgeFailed: mockPurgeFailed,
   }))
   jest.doMock('../database/sync/queue', () => ({
     getPending: mockGetPending,
     markSynced: mockMarkSynced,
     markFailed: mockMarkFailed,
+    purgeFailed: mockPurgeFailed,
   }))
   jest.doMock('@store/authStore', () => ({
     useAuthStore: {
@@ -91,6 +94,7 @@ beforeEach(() => {
     syncReminders: true,
   })
   mockGetPending.mockResolvedValue([])
+  mockPurgeFailed.mockResolvedValue(undefined)
   mockDb.getFirstAsync.mockResolvedValue({ id: 'rem-1', title: 'Call mom' })
   mockDb.runAsync.mockResolvedValue(undefined)
   mockUpsert.mockResolvedValue({ error: null })

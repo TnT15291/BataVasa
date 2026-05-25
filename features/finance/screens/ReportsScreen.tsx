@@ -26,9 +26,9 @@ import {
   format, parseISO, isValid,
   eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval,
 } from 'date-fns'
-import { useTheme } from '@design/useTheme'
+import { useTheme, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
-import { useTranslation } from '@services/i18n'
+import { useTranslation, type Translations } from '@services/i18n'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
 import { translateCategoryName } from '../i18n'
 import type { Category } from '../types'
@@ -58,8 +58,8 @@ function CategoryBreakdownCard({
   totalExpense: number
   currency: string
   language: string
-  theme: any
-  t: any
+  theme: Theme
+  t: Translations
 }) {
   if (breakdown.length === 0 || totalExpense === 0) return null
   return (
@@ -107,7 +107,7 @@ function CategoryBreakdownCard({
 function StatCard({
   label, value, delta, deltaPositive = true, theme,
 }: {
-  label: string; value: string; delta?: number; deltaPositive?: boolean; theme: any
+  label: string; value: string; delta?: number; deltaPositive?: boolean; theme: Theme
 }) {
   const showDelta = delta !== undefined && delta !== 0
   const isGood = deltaPositive ? (delta ?? 0) >= 0 : (delta ?? 0) <= 0

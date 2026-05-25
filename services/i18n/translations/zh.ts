@@ -510,4 +510,45 @@ export const zh: Translations = {
   priority_high: '高',
   report_overdue: '已逾期',
   report_by_priority: '按优先级',
+
+  // Finance list — review queue + recurring bills
+  review_queue: '待审核',
+  recurring_bills: '定期账单',
+  recurring_times_next: '{{count}}次 · 下次 {{date}}',
+  review_queue_count: '{{count}}项需审核',
+  pay_bill: '支付 {{name}}',
+  load_more: '加载更多',
+  no_review_items: '没有需要审核的交易',
+
+  // Habits — schedule
+  cadence_custom: '自选日期',
+  schedule_days_label: '计划日期',
+  habit_not_scheduled: '今天无计划',
+  day_mon: '周一',
+  day_tue: '周二',
+  day_wed: '周三',
+  day_thu: '周四',
+  day_fri: '周五',
+  day_sat: '周六',
+  day_sun: '周日',
+
+  // Journal — templates + important flag + validation
+  journal_templates_label: '模板',
+  journal_template_checkin: '每日签到',
+  journal_template_gratitude: '感恩',
+  journal_template_stress: '压力记录',
+  journal_template_money: '金钱反思',
+  journal_template_habit: '习惯反思',
+  journal_important_event: '重要事件',
+  journal_content_required: '请在保存前写点什么',
+
+  // Reminder — validation
+  reminder_title_required: '请输入提醒标题',
+
+  // Finance mood labels
+  mood_great: '很好',
+  mood_good: '好',
+  mood_neutral: '一般',
+  mood_low: '差',
+  mood_bad: '很差',
 }

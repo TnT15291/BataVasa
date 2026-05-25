@@ -510,4 +510,45 @@ export const ja: Translations = {
   priority_high: '高',
   report_overdue: '期限切れ',
   report_by_priority: '優先度別',
+
+  // Finance list — review queue + recurring bills
+  review_queue: 'レビュー待ち',
+  recurring_bills: '定期支払い',
+  recurring_times_next: '{{count}}回 · 次回 {{date}}',
+  review_queue_count: '{{count}}件 要確認',
+  pay_bill: '{{name}} を支払う',
+  load_more: 'もっと見る',
+  no_review_items: '確認が必要な取引はありません',
+
+  // Habits — schedule
+  cadence_custom: '曜日を選択',
+  schedule_days_label: 'スケジュール日',
+  habit_not_scheduled: '今日は予定なし',
+  day_mon: '月',
+  day_tue: '火',
+  day_wed: '水',
+  day_thu: '木',
+  day_fri: '金',
+  day_sat: '土',
+  day_sun: '日',
+
+  // Journal — templates + important flag + validation
+  journal_templates_label: 'テンプレート',
+  journal_template_checkin: 'デイリーチェックイン',
+  journal_template_gratitude: '感謝',
+  journal_template_stress: 'ストレス記録',
+  journal_template_money: 'お金の振り返り',
+  journal_template_habit: '習慣の振り返り',
+  journal_important_event: '重要なイベント',
+  journal_content_required: '保存前に内容を入力してください',
+
+  // Reminder — validation
+  reminder_title_required: 'リマインダーのタイトルを入力してください',
+
+  // Finance mood labels
+  mood_great: '最高',
+  mood_good: '良い',
+  mood_neutral: '普通',
+  mood_low: '悪い',
+  mood_bad: '最悪',
 }

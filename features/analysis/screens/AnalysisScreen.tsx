@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import { useRouter } from 'expo-router'
 import { subDays, startOfMonth, subMonths, parseISO } from 'date-fns'
-import { useTheme } from '@design/useTheme'
+import { useTheme, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
@@ -52,7 +52,7 @@ export function AnalysisScreen() {
     const key = await getProviderKey(aiProvider)
     if (!key) {
       Alert.alert(t.no_api_key, t.no_api_key_msg, [
-        { text: t.go_to_settings, onPress: () => router.push('/ai-settings' as any) },
+        { text: t.go_to_settings, onPress: () => router.push('/ai-settings') },
         { text: t.cancel, style: 'cancel' },
       ])
       return
@@ -297,7 +297,7 @@ export function AnalysisScreen() {
   )
 }
 
-function Chip({ label, active, theme }: { label: string; active: boolean; theme: any }) {
+function Chip({ label, active, theme }: { label: string; active: boolean; theme: Theme }) {
   return (
     <View style={[
       styles.chip,
@@ -311,7 +311,7 @@ function Chip({ label, active, theme }: { label: string; active: boolean; theme:
   )
 }
 
-function HighlightItem({ icon, label, value, theme }: { icon: string; label: string; value: string; theme: any }) {
+function HighlightItem({ icon, label, value, theme }: { icon: string; label: string; value: string; theme: Theme }) {
   return (
     <View style={styles.highlightItem}>
       <Text style={styles.highlightIcon}>{icon}</Text>
@@ -324,7 +324,7 @@ function HighlightItem({ icon, label, value, theme }: { icon: string; label: str
 function CompRow({
   label, value, delta, deltaPositive, theme,
 }: {
-  label: string; value: string; delta?: number; deltaPositive: boolean; theme: any
+  label: string; value: string; delta?: number; deltaPositive: boolean; theme: Theme
 }) {
   const improved = deltaPositive ? (delta ?? 0) > 0 : (delta ?? 0) < 0
   const deltaColor = delta === undefined || delta === 0

@@ -510,4 +510,45 @@ export const fr: Translations = {
   priority_high: 'Élevé',
   report_overdue: 'En retard',
   report_by_priority: 'Par priorité',
+
+  // Finance list — review queue + recurring bills
+  review_queue: 'File de révision',
+  recurring_bills: 'Factures récurrentes',
+  recurring_times_next: '{{count}} fois · prochain {{date}}',
+  review_queue_count: '{{count}} à réviser',
+  pay_bill: 'Payer {{name}}',
+  load_more: 'Voir plus',
+  no_review_items: 'Aucune transaction à réviser',
+
+  // Habits — schedule
+  cadence_custom: 'Jours choisis',
+  schedule_days_label: 'Jours planifiés',
+  habit_not_scheduled: "Pas prévu aujourd'hui",
+  day_mon: 'Lun',
+  day_tue: 'Mar',
+  day_wed: 'Mer',
+  day_thu: 'Jeu',
+  day_fri: 'Ven',
+  day_sat: 'Sam',
+  day_sun: 'Dim',
+
+  // Journal — templates + important flag + validation
+  journal_templates_label: 'Modèles',
+  journal_template_checkin: 'Check-in quotidien',
+  journal_template_gratitude: 'Gratitude',
+  journal_template_stress: 'Journal de stress',
+  journal_template_money: 'Réflexion financière',
+  journal_template_habit: 'Réflexion habitudes',
+  journal_important_event: 'Événement important',
+  journal_content_required: 'Écrivez quelque chose avant de sauvegarder',
+
+  // Reminder — validation
+  reminder_title_required: 'Veuillez saisir un titre pour ce rappel',
+
+  // Finance mood labels
+  mood_great: 'Super',
+  mood_good: 'Bien',
+  mood_neutral: 'Neutre',
+  mood_low: 'Bas',
+  mood_bad: 'Mal',
 }

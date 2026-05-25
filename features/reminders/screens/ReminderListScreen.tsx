@@ -196,7 +196,7 @@ export function ReminderListScreen() {
     const p = parsedReminder
     setParsedReminder(null)
     setNlText('')
-    router.push({ pathname: '/reminder', params: p ? { prefill: JSON.stringify(p) } : {} } as any)
+    router.push({ pathname: '/reminder', params: p ? { prefill: JSON.stringify(p) } : {} })
   }
 
   const { overdue, today, next7Days, nextMonth, later, completed, inbox } = useMemo(() => {
@@ -275,7 +275,7 @@ export function ReminderListScreen() {
             <ReminderRow
               key={r.id}
               reminder={r}
-              onPress={() => router.push({ pathname: '/reminder', params: { id: r.id } } as any)}
+              onPress={() => router.push({ pathname: '/reminder', params: { id: r.id } })}
               onToggle={() => toggleDone(r)}
               onSkip={() => skip(r)}
             />
@@ -353,7 +353,7 @@ export function ReminderListScreen() {
             <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_reminders}</Text>
             <Text style={[styles.emptyMsg, { color: theme.text.muted }]}>{t.no_reminders_msg}</Text>
             <Pressable
-              onPress={() => router.push('/reminder' as any)}
+              onPress={() => router.push('/reminder')}
               style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
             >
               <Text style={styles.emptyBtnText}>{t.new_reminder}</Text>
@@ -373,7 +373,7 @@ export function ReminderListScreen() {
       </ScrollView>
 
       <Pressable
-        onPress={() => router.push('/reminders-report' as any)}
+        onPress={() => router.push('/reminders-report')}
         accessibilityRole="button"
         accessibilityLabel={t.reminders_report_title}
         style={[styles.reportBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
@@ -382,7 +382,7 @@ export function ReminderListScreen() {
       </Pressable>
 
       <Pressable
-        onPress={() => router.push('/reminder' as any)}
+        onPress={() => router.push('/reminder')}
         accessibilityRole="button"
         accessibilityLabel={t.new_reminder}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}

@@ -19,8 +19,8 @@ export const AI_PROVIDERS: Record<AIProvider, ProviderConfig> = {
     baseUrl: 'https://api.openai.com/v1',
     defaultModel: 'gpt-4o-mini',
     models: [
-      { id: 'gpt-4o-mini', label: 'GPT-4o Mini (rẻ + nhanh)' },
-      { id: 'gpt-4o', label: 'GPT-4o (mạnh nhất)' },
+      { id: 'gpt-4o-mini', label: 'GPT-4o Mini (fast & cheap)' },
+      { id: 'gpt-4o', label: 'GPT-4o (most capable)' },
     ],
     keyStore: 'openai_api_key',
     keyPrefix: 'sk-',
@@ -47,8 +47,8 @@ export const AI_PROVIDERS: Record<AIProvider, ProviderConfig> = {
     baseUrl: 'https://api.groq.com/openai/v1',
     defaultModel: 'llama-3.3-70b-versatile',
     models: [
-      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (free + nhanh)' },
-      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (cực nhanh)' },
+      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (free + fast)' },
+      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (ultra-fast)' },
       { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
     ],
     keyStore: 'groq_api_key',
@@ -62,8 +62,8 @@ export const AI_PROVIDERS: Record<AIProvider, ProviderConfig> = {
     baseUrl: 'https://api.deepseek.com/v1',
     defaultModel: 'deepseek-chat',
     models: [
-      { id: 'deepseek-chat', label: 'DeepSeek V3 (rẻ + giỏi)' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek R1 (lý luận)' },
+      { id: 'deepseek-chat', label: 'DeepSeek V3 (cheap & capable)' },
+      { id: 'deepseek-reasoner', label: 'DeepSeek R1 (reasoning)' },
     ],
     keyStore: 'deepseek_api_key',
     keyPrefix: 'sk-',

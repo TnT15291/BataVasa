@@ -55,6 +55,7 @@ export async function drainQueue(): Promise<void> {
 
     const userId = session.user.id
     const settings = useSettingsStore.getState() as SyncToggles & Record<string, unknown>
+    await syncQueue.purgeFailed()
     const pending = await syncQueue.getPending(50)
 
     for (const item of pending) {

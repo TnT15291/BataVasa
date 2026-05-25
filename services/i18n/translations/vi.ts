@@ -527,6 +527,47 @@ export const vi = {
   priority_high: 'Cao',
   report_overdue: 'Quá hạn',
   report_by_priority: 'Theo mức độ',
+
+  // Finance list — review queue + recurring bills
+  review_queue: 'Hàng chờ xem xét',
+  recurring_bills: 'Hóa đơn định kỳ',
+  recurring_times_next: '{{count}} lần · tiếp theo {{date}}',
+  review_queue_count: '{{count}} cần xem xét',
+  pay_bill: 'Thanh toán {{name}}',
+  load_more: 'Xem thêm',
+  no_review_items: 'Không có giao dịch cần xem xét',
+
+  // Habits — schedule
+  cadence_custom: 'Ngày tuỳ chọn',
+  schedule_days_label: 'Ngày trong tuần',
+  habit_not_scheduled: 'Không có hôm nay',
+  day_mon: 'T2',
+  day_tue: 'T3',
+  day_wed: 'T4',
+  day_thu: 'T5',
+  day_fri: 'T6',
+  day_sat: 'T7',
+  day_sun: 'CN',
+
+  // Journal — templates + important flag + validation
+  journal_templates_label: 'Mẫu nhật ký',
+  journal_template_checkin: 'Check-in ngày',
+  journal_template_gratitude: 'Biết ơn',
+  journal_template_stress: 'Ghi stress',
+  journal_template_money: 'Suy ngẫm chi tiêu',
+  journal_template_habit: 'Suy ngẫm thói quen',
+  journal_important_event: 'Sự kiện quan trọng',
+  journal_content_required: 'Nhật ký không được để trống',
+
+  // Reminder — validation
+  reminder_title_required: 'Vui lòng nhập tiêu đề nhắc nhở',
+
+  // Finance mood labels
+  mood_great: 'Tuyệt',
+  mood_good: 'Vui',
+  mood_neutral: 'Bình thường',
+  mood_low: 'Buồn',
+  mood_bad: 'Tệ',
 }
 
 export type Translations = typeof vi

@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router'
 import { format, startOfDay, endOfDay } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
-import { useTranslation } from '@services/i18n'
+import { useTranslation, type Translations } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { shouldWarnAboutWebSQLitePersistence } from '@services/webPersistence'
@@ -24,7 +24,7 @@ import { OnboardingModal } from '../components/OnboardingModal'
 
 type IconName = keyof typeof Feather.glyphMap
 
-function greeting(t: any): string {
+function greeting(t: Translations): string {
   const h = new Date().getHours()
   if (h < 12) return t.greeting_morning
   if (h < 18) return t.greeting_afternoon
@@ -265,7 +265,7 @@ export function DailyDigestScreen() {
           <View style={[styles.todayPanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
             <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>{t.today}</Text>
             {nextReminder ? (
-              <Pressable onPress={() => router.push('/reminders' as any)} style={styles.actionItem}>
+              <Pressable onPress={() => router.push('/reminders')} style={styles.actionItem}>
                 <Feather name="bell" size={18} color="#2196F3" />
                 <View style={styles.actionText}>
                   <Text style={[styles.actionTitle, { color: theme.text.primary }]} numberOfLines={1}>{nextReminder.title}</Text>
@@ -277,7 +277,7 @@ export function DailyDigestScreen() {
               </Pressable>
             ) : null}
             {nextHabit ? (
-              <Pressable onPress={() => router.push('/habits' as any)} style={styles.actionItem}>
+              <Pressable onPress={() => router.push('/habits')} style={styles.actionItem}>
                 <Feather name="check-circle" size={18} color="#FF9800" />
                 <View style={styles.actionText}>
                   <Text style={[styles.actionTitle, { color: theme.text.primary }]} numberOfLines={1}>{nextHabit.name}</Text>
@@ -298,7 +298,7 @@ export function DailyDigestScreen() {
             subtitle={financeSubtitle}
             hint={todayExpense === 0 ? t.finance_add_hint : undefined}
             accentColor={theme.finance.expense}
-            onPress={() => router.push('/finance' as any)}
+            onPress={() => router.push('/finance')}
           />
 
           <ModuleCard
@@ -307,7 +307,7 @@ export function DailyDigestScreen() {
             subtitle={reminderSubtitle}
             hint={reminderHint}
             accentColor="#2196F3"
-            onPress={() => router.push('/reminders' as any)}
+            onPress={() => router.push('/reminders')}
           />
 
           <ModuleCard
@@ -315,7 +315,7 @@ export function DailyDigestScreen() {
             title={t.nav_journal}
             subtitle={journalSubtitle}
             accentColor="#9C27B0"
-            onPress={() => router.push('/journals' as any)}
+            onPress={() => router.push('/journals')}
           />
 
           <ModuleCard
@@ -323,12 +323,12 @@ export function DailyDigestScreen() {
             title={t.habits}
             subtitle={habitsSubtitle}
             accentColor="#FF9800"
-            onPress={() => router.push('/habits' as any)}
+            onPress={() => router.push('/habits')}
           />
         </View>
 
         <Pressable
-          onPress={() => router.push('/analysis' as any)}
+          onPress={() => router.push('/analysis')}
           accessibilityRole="button"
           accessibilityLabel={t.analysis_title}
           style={({ pressed }) => [

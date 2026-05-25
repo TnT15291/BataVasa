@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { format } from 'date-fns'
+import { addYears, format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -18,6 +18,7 @@ import { parseJournalEntry } from '@services/ai/journalParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { Feather } from '@expo/vector-icons'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
+import { useReminderActions } from '@features/reminders/hooks/useReminders'
 
 const MOODS = [
   { value: 1, emoji: '😢' },
@@ -28,36 +29,11 @@ const MOODS = [
 ] as const
 
 const JOURNAL_TEMPLATES = [
-  {
-    key: 'checkin',
-    label: 'Daily check-in',
-    mood: 3,
-    content: 'Today I noticed...\n\nI felt...\n\nOne thing I want to remember is...',
-  },
-  {
-    key: 'gratitude',
-    label: 'Gratitude',
-    mood: 4,
-    content: 'Three things I am grateful for:\n1. \n2. \n3. \n\nWhy this mattered today...',
-  },
-  {
-    key: 'stress',
-    label: 'Stress log',
-    mood: 2,
-    content: 'What stressed me today...\n\nWhat triggered it...\n\nWhat helped, or could help next time...',
-  },
-  {
-    key: 'money',
-    label: 'Money reflection',
-    mood: 3,
-    content: 'A spending or money moment I noticed today...\n\nHow I felt about it...\n\nOne adjustment I want to try...',
-  },
-  {
-    key: 'habit',
-    label: 'Habit reflection',
-    mood: 3,
-    content: 'A habit I kept or missed today...\n\nWhat made it easier or harder...\n\nOne small next step...',
-  },
+  { key: 'checkin',  mood: 3, content: 'Today I noticed...\n\nI felt...\n\nOne thing I want to remember is...' },
+  { key: 'gratitude', mood: 4, content: 'Three things I am grateful for:\n1. \n2. \n3. \n\nWhy this mattered today...' },
+  { key: 'stress',   mood: 2, content: 'What stressed me today...\n\nWhat triggered it...\n\nWhat helped, or could help next time...' },
+  { key: 'money',    mood: 3, content: 'A spending or money moment I noticed today...\n\nHow I felt about it...\n\nOne adjustment I want to try...' },
+  { key: 'habit',    mood: 3, content: 'A habit I kept or missed today...\n\nWhat made it easier or harder...\n\nOne small next step...' },
 ] as const
 
 export function JournalFormScreen() {
@@ -68,6 +44,7 @@ export function JournalFormScreen() {
   const language = useSettingsStore((s) => s.language)
   const journals = useJournals()
   const { createJournal, updateJournal, deleteJournal } = useJournalActions()
+  const { createReminder } = useReminderActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
 
   const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
@@ -81,6 +58,7 @@ export function JournalFormScreen() {
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<number | null>(null)
   const [isImportant, setIsImportant] = useState(false)
+  const [remindAfterYear, setRemindAfterYear] = useState(!isEditing)
   const [occurredAt, setOccurredAt] = useState(new Date())
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -93,6 +71,7 @@ export function JournalFormScreen() {
     setContent(editingJournal.content)
     setMood(editingJournal.mood ?? null)
     setIsImportant((editingJournal.is_important ?? 0) === 1)
+    setRemindAfterYear(false)
     setOccurredAt(new Date(editingJournal.occurred_at))
     setPrefilled(true)
   }, [editingJournal, prefilled])
@@ -104,6 +83,7 @@ export function JournalFormScreen() {
       if (p.content) setContent(p.content)
       if (p.mood != null) setMood(Number(p.mood))
       if (p.is_important != null) setIsImportant(Number(p.is_important) === 1)
+      if (p.is_important != null) setRemindAfterYear(Number(p.is_important) === 1)
       if (p.occurred_at) setOccurredAt(new Date(p.occurred_at))
       setPrefilled(true)
     } catch { /* ignore malformed prefill */ }
@@ -115,7 +95,7 @@ export function JournalFormScreen() {
   const onSave = async () => {
     const trimmed = content.trim()
     if (!trimmed) {
-      Alert.alert(t.invalid_amount, t.journal_content_placeholder)
+      Alert.alert(t.could_not_save, t.journal_content_required)
       return
     }
     setSubmitting(true)
@@ -135,6 +115,21 @@ export function JournalFormScreen() {
         })
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
+    if (isImportant && remindAfterYear && res.journal) {
+      const anniversary = addYears(new Date(res.journal.occurred_at), 1)
+      anniversary.setHours(9, 0, 0, 0)
+      const reminder = await createReminder({
+        title: `Remember: ${trimmed.slice(0, 80)}`,
+        note: `One year since this journal entry.${trimmed.length > 120 ? ` ${trimmed.slice(0, 120)}...` : ` ${trimmed}`}`,
+        remind_at: anniversary.toISOString(),
+        advance_minutes: 0,
+        recurrence: 'none',
+        priority: 'high',
+      })
+      if (!reminder.ok) {
+        Alert.alert(t.could_not_save, reminder.error ?? '')
+      }
+    }
     void hapticSaveSuccess()
     notifySaved(t, useSettingsStore.getState().syncJournals)
     router.back()
@@ -174,6 +169,14 @@ export function JournalFormScreen() {
     } finally {
       setParsing(false)
     }
+  }
+
+  const templateLabels: Record<string, string> = {
+    checkin: t.journal_template_checkin,
+    gratitude: t.journal_template_gratitude,
+    stress: t.journal_template_stress,
+    money: t.journal_template_money,
+    habit: t.journal_template_habit,
   }
 
   const applyTemplate = (template: typeof JOURNAL_TEMPLATES[number]) => {
@@ -271,7 +274,7 @@ export function JournalFormScreen() {
         })}
       </View>
 
-      <Text style={[styles.label, { color: theme.text.muted }]}>TEMPLATES</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_templates_label.toUpperCase()}</Text>
       <View style={styles.templateGrid}>
         {JOURNAL_TEMPLATES.map((template) => (
           <Pressable
@@ -279,7 +282,7 @@ export function JournalFormScreen() {
             onPress={() => applyTemplate(template)}
             style={[styles.templateChip, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
           >
-            <Text style={[styles.templateText, { color: theme.text.secondary }]}>{template.label}</Text>
+            <Text style={[styles.templateText, { color: theme.text.secondary }]}>{templateLabels[template.key]}</Text>
           </Pressable>
         ))}
       </View>
@@ -295,9 +298,31 @@ export function JournalFormScreen() {
       >
         <Feather name="star" size={18} color={isImportant ? theme.brand.primary : theme.text.muted} />
         <Text style={[styles.importantText, { color: isImportant ? theme.brand.primary : theme.text.secondary }]}>
-          Important event
+          {t.journal_important_event}
         </Text>
       </Pressable>
+
+      {isImportant ? (
+        <Pressable
+          onPress={() => setRemindAfterYear((v) => !v)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: remindAfterYear }}
+          style={[styles.anniversaryToggle, {
+            backgroundColor: remindAfterYear ? theme.brand.primary + '18' : theme.bg.elevated,
+            borderColor: remindAfterYear ? theme.brand.primary : theme.border.subtle,
+          }]}
+        >
+          <Feather name="calendar" size={18} color={remindAfterYear ? theme.brand.primary : theme.text.muted} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.importantText, { color: remindAfterYear ? theme.brand.primary : theme.text.secondary }]}>
+              Remind me in 1 year
+            </Text>
+            <Text style={[styles.anniversaryHint, { color: theme.text.muted }]}>
+              Creates a high-priority reminder for this important event.
+            </Text>
+          </View>
+        </Pressable>
+      ) : null}
 
       {/* Content */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_journal.toUpperCase()}</Text>
@@ -398,6 +423,17 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   importantText: { fontSize: 14, fontWeight: '700' },
+  anniversaryToggle: {
+    minHeight: 58,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  anniversaryHint: { fontSize: 12, marginTop: 2 },
   contentInput: {
     borderWidth: 1, borderRadius: radius.md,
     padding: spacing[3], fontSize: 15, lineHeight: 22,

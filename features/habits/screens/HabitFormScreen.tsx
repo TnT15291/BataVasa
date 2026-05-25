@@ -18,15 +18,7 @@ import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabi
 import type { Cadence } from '../types'
 
 const CADENCES: Cadence[] = ['daily', 'weekdays', 'weekly', 'monthly', 'custom']
-const WEEKDAYS = [
-  { value: 1, label: 'Mon' },
-  { value: 2, label: 'Tue' },
-  { value: 3, label: 'Wed' },
-  { value: 4, label: 'Thu' },
-  { value: 5, label: 'Fri' },
-  { value: 6, label: 'Sat' },
-  { value: 0, label: 'Sun' },
-]
+const WEEKDAY_VALUES = [1, 2, 3, 4, 5, 6, 0] as const
 
 const PRESET_ICONS = ['✅', '💪', '🏃', '📚', '🧘', '💧', '🥗', '😴', '🎯', '🧹', '💊', '🎸', '✍️', '🌿', '🚴']
 const PRESET_COLORS = [
@@ -76,13 +68,23 @@ export function HabitFormScreen() {
     setPrefilled(true)
   }, [editingHabit, prefilled])
 
+  const WEEKDAYS = [
+    { value: 1, label: t.day_mon },
+    { value: 2, label: t.day_tue },
+    { value: 3, label: t.day_wed },
+    { value: 4, label: t.day_thu },
+    { value: 5, label: t.day_fri },
+    { value: 6, label: t.day_sat },
+    { value: 0, label: t.day_sun },
+  ]
+
   const cadenceLabel = (c: Cadence): string => {
     const map: Record<Cadence, string> = {
       daily: t.cadence_daily,
       weekdays: t.cadence_weekdays,
       weekly: t.cadence_weekly,
       monthly: t.cadence_monthly,
-      custom: 'Selected days',
+      custom: t.cadence_custom,
     }
     return map[c]
   }
@@ -106,7 +108,7 @@ export function HabitFormScreen() {
     }
     setSubmitting(true)
     const schedule_days = cadence === 'custom'
-      ? (scheduleDays.length > 0 ? scheduleDays.join(',') : WEEKDAYS.map((d) => d.value).join(','))
+      ? (scheduleDays.length > 0 ? scheduleDays.join(',') : WEEKDAY_VALUES.join(','))
       : null
     const res = isEditing
       ? await updateHabit({ id: editingId!, name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days })
@@ -258,7 +260,7 @@ export function HabitFormScreen() {
 
       {cadence === 'custom' ? (
         <>
-          <Text style={[styles.label, { color: theme.text.muted }]}>SCHEDULE DAYS</Text>
+          <Text style={[styles.label, { color: theme.text.muted }]}>{t.schedule_days_label.toUpperCase()}</Text>
           <View style={styles.weekdayRow}>
             {WEEKDAYS.map((day) => {
               const active = scheduleDays.includes(day.value)

@@ -71,6 +71,7 @@
 - Reports use calendar date selection.
 - Smart add form with text/voice parse.
 - Important entries are counted and listed in journal reports. Smart journal parsing can infer important events.
+- Important entries can create a high-priority reminder one year after the event date.
 - Journal templates: daily check-in, gratitude, stress log, money reflection, and habit reflection.
 
 ### Home And Cross-Module
@@ -166,6 +167,7 @@ Work in this order:
    - **DONE:** Reminder priority/inbox: DB fields, form selector, list badge, Today/Important/Inbox filters, unscheduled inbox items, and priority-aware notifications.
    - **DONE:** Habit skip/rest day: DB field, skip action, non-streak-breaking skip logs, report count/history, and heatmap display.
    - **DONE:** Finance review queue: DB fields, review markers, dedicated filter, and merchant/category rule engine.
+   - **DONE:** Journal important anniversary reminders: important entries can create a one-year follow-up reminder.
    - **DONE:** Journal templates.
    - **DONE MVP:** Habit custom schedule with selected weekdays.
    - **DONE MVP:** Finance recurring bills/subscriptions detection with reminder prefill.
@@ -344,6 +346,7 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 - Implemented P0 minimum viable slice: journal important flag, reminder priority, habit skip/rest day, and finance review markers.
 - Completed the remaining P0 product layer: journal important report/parser hint, finance review filter/rule engine, and richer habit skip report/history.
 - Added pre-closed-beta product polish: reminder inbox/filters/priority notifications, journal templates, habit selected-day schedules, and recurring finance reminder suggestions.
+- Added one-year high-priority reminders for important journal entries.
 - Added Universal Add multi-candidate confirmation so ambiguous or multi-intent text is not silently forced into one module.
 - Added reminder skip/reschedule behavior and stale notification cancellation by reminder id.
 - Added "Do not show again" persistence for the pre-microphone privacy prompt.

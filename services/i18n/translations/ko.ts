@@ -508,4 +508,45 @@ export const ko: Translations = {
   priority_high: '높음',
   report_overdue: '기한 초과',
   report_by_priority: '우선순위별',
+
+  // Finance list — review queue + recurring bills
+  review_queue: '검토 대기',
+  recurring_bills: '정기 결제',
+  recurring_times_next: '{{count}}회 · 다음 {{date}}',
+  review_queue_count: '{{count}}건 검토 필요',
+  pay_bill: '{{name}} 결제',
+  load_more: '더 보기',
+  no_review_items: '검토가 필요한 거래가 없습니다',
+
+  // Habits — schedule
+  cadence_custom: '요일 선택',
+  schedule_days_label: '요일 설정',
+  habit_not_scheduled: '오늘 예정 없음',
+  day_mon: '월',
+  day_tue: '화',
+  day_wed: '수',
+  day_thu: '목',
+  day_fri: '금',
+  day_sat: '토',
+  day_sun: '일',
+
+  // Journal — templates + important flag + validation
+  journal_templates_label: '템플릿',
+  journal_template_checkin: '일일 체크인',
+  journal_template_gratitude: '감사',
+  journal_template_stress: '스트레스 기록',
+  journal_template_money: '돈 돌아보기',
+  journal_template_habit: '습관 돌아보기',
+  journal_important_event: '중요한 사건',
+  journal_content_required: '저장하기 전에 내용을 입력해 주세요',
+
+  // Reminder — validation
+  reminder_title_required: '알림 제목을 입력해 주세요',
+
+  // Finance mood labels
+  mood_great: '최고',
+  mood_good: '좋음',
+  mood_neutral: '보통',
+  mood_low: '나쁨',
+  mood_bad: '최악',
 }
