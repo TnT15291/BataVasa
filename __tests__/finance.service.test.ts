@@ -38,12 +38,14 @@ import {
   updateTransaction,
   deleteTransaction,
   listTransactions,
+  getTransaction,
   createCategory,
   updateCategory,
   deleteCategory,
   wipeAllData,
   exportAllData,
   isExpense,
+  formatAmount,
 } from '../features/finance/services'
 import type { Category, Transaction } from '../features/finance/types'
 
@@ -221,5 +223,186 @@ describe('finance service categories and data management', () => {
   it('identifies expenses by negative amount', () => {
     expect(isExpense({ amount_cents: -1 })).toBe(true)
     expect(isExpense({ amount_cents: 1 })).toBe(false)
+  })
+})
+
+describe('finance service error paths', () => {
+  it('createTransaction returns DB_ERROR on insert failure', async () => {
+    mockQ.findDuplicateTransaction.mockResolvedValue(null)
+    mockQ.insertTransaction.mockRejectedValue(new Error('disk full'))
+    const result = await createTransaction({ amount_cents: -5000, currency: 'USD', category_id: categoryId, occurred_at: '2026-01-01T10:00:00.000Z', source: 'manual' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('createTransaction learns merchant rule for manual source', async () => {
+    mockQ.findDuplicateTransaction.mockResolvedValue(null)
+    mockQ.insertTransaction.mockResolvedValue(undefined)
+    mockQ.findRuleForMerchant.mockResolvedValue(null)
+    mockQ.findRuleByPattern.mockResolvedValue(null)
+    mockQ.upsertTransactionRule.mockResolvedValue(undefined)
+    const result = await createTransaction({ amount_cents: -5000, currency: 'USD', category_id: categoryId, merchant: 'Starbucks', occurred_at: '2026-01-01T10:00:00.000Z', source: 'manual' })
+    expect(result.ok).toBe(true)
+  })
+
+  it('createTransaction silently continues when learnMerchantRule throws', async () => {
+    mockQ.findDuplicateTransaction.mockResolvedValue(null)
+    mockQ.insertTransaction.mockResolvedValue(undefined)
+    mockQ.findRuleForMerchant.mockRejectedValue(new Error('rule db error'))
+    const result = await createTransaction({ amount_cents: -5000, currency: 'USD', category_id: categoryId, merchant: 'Cafe', occurred_at: '2026-01-01T10:00:00.000Z', source: 'manual' })
+    expect(result.ok).toBe(true)
+  })
+
+  it('getTransaction returns NOT_FOUND', async () => {
+    mockQ.getTransaction.mockResolvedValue(null)
+    const result = await getTransaction('nope')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('NOT_FOUND')
+  })
+
+  it('getTransaction returns DB_ERROR on throw', async () => {
+    mockQ.getTransaction.mockRejectedValue(new Error('db error'))
+    const result = await getTransaction('tx-id')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('getTransaction returns row when found', async () => {
+    mockQ.getTransaction.mockResolvedValue(baseTx)
+    const result = await getTransaction(transactionId)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.id).toBe(transactionId)
+  })
+
+  it('updateTransaction returns VALIDATION_FAILED for empty id', async () => {
+    const result = await updateTransaction({ id: '' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED')
+  })
+
+  it('updateTransaction learns rule when needs_review cleared', async () => {
+    const reviewed = { ...baseTx, needs_review: 0, merchant: 'Cafe' }
+    mockQ.getTransaction.mockResolvedValueOnce(baseTx).mockResolvedValueOnce(reviewed)
+    mockQ.updateTransaction.mockResolvedValue(undefined)
+    mockQ.findRuleForMerchant.mockResolvedValue(null)
+    mockQ.findRuleByPattern.mockResolvedValue(null)
+    mockQ.upsertTransactionRule.mockResolvedValue(undefined)
+    const result = await updateTransaction({ id: transactionId, needs_review: 0 })
+    expect(result.ok).toBe(true)
+  })
+
+  it('updateTransaction returns DB_ERROR on throw', async () => {
+    mockQ.getTransaction.mockResolvedValue(baseTx)
+    mockQ.updateTransaction.mockRejectedValue(new Error('fail'))
+    const result = await updateTransaction({ id: transactionId, amount_cents: -1000 })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('deleteTransaction returns DB_ERROR on throw', async () => {
+    mockQ.getTransaction.mockResolvedValue(baseTx)
+    mockQ.softDeleteTransaction.mockRejectedValue(new Error('fail'))
+    const result = await deleteTransaction(transactionId)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('listTransactions returns DB_ERROR on throw', async () => {
+    mockQ.listTransactions.mockRejectedValue(new Error('fail'))
+    const result = await listTransactions()
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('createCategory returns VALIDATION_FAILED for empty name', async () => {
+    const result = await createCategory({ name: '', icon: 'tag', color: '#22C55E', kind: 'essential' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED')
+  })
+
+  it('createCategory returns DB_ERROR on throw', async () => {
+    mockQ.listCategories.mockResolvedValue([])
+    mockQ.insertCategory.mockRejectedValue(new Error('fail'))
+    const result = await createCategory({ name: 'Food', icon: 'tag', color: '#22C55E', kind: 'essential' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('updateCategory returns VALIDATION_FAILED for empty id', async () => {
+    const result = await updateCategory({ id: '' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED')
+  })
+
+  it('updateCategory returns AUTH_FORBIDDEN for system category', async () => {
+    mockQ.getCategory.mockResolvedValue({ ...baseCategory, user_id: null })
+    const result = await updateCategory({ id: categoryId, name: 'New name' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('AUTH_FORBIDDEN')
+  })
+
+  it('updateCategory returns DB_ERROR on throw', async () => {
+    mockQ.getCategory.mockResolvedValue(baseCategory)
+    mockQ.updateCategory.mockRejectedValue(new Error('fail'))
+    const result = await updateCategory({ id: categoryId, name: 'X' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('deleteCategory returns AUTH_FORBIDDEN for system category', async () => {
+    mockQ.getCategory.mockResolvedValue({ ...baseCategory, user_id: null })
+    const result = await deleteCategory(categoryId)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('AUTH_FORBIDDEN')
+  })
+
+  it('deleteCategory returns DB_ERROR on throw', async () => {
+    mockQ.getCategory.mockResolvedValue(baseCategory)
+    mockQ.softDeleteCategory.mockRejectedValue(new Error('fail'))
+    const result = await deleteCategory(categoryId)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('wipeAllData returns DB_ERROR on throw', async () => {
+    mockQ.wipeFinanceData.mockRejectedValue(new Error('fail'))
+    const result = await wipeAllData()
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('exportAllData returns DB_ERROR on throw', async () => {
+    mockQ.exportFinanceData.mockRejectedValue(new Error('fail'))
+    const result = await exportAllData()
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+})
+
+describe('formatAmount', () => {
+  it('formats VND as integer with ₫ symbol', () => {
+    const result = formatAmount(50000, 'VND', 'vi')
+    expect(result).toContain('₫')
+    expect(result).toContain('50')
+  })
+
+  it('formats JPY as integer', () => {
+    const result = formatAmount(1000, 'JPY', 'ja')
+    expect(result).toMatch(/1[,.]?000|¥/)
+  })
+
+  it('formats KRW as integer', () => {
+    const result = formatAmount(5000, 'KRW', 'ko')
+    expect(result).toContain('5')
+  })
+
+  it('formats USD with 2 decimal places', () => {
+    const result = formatAmount(1234, 'USD', 'en')
+    expect(result).toContain('12.34')
+  })
+
+  it('formats EUR', () => {
+    const result = formatAmount(999, 'EUR', 'fr')
+    expect(result).toMatch(/9[,.]99/)
   })
 })

@@ -11,7 +11,7 @@ jest.mock('../database/core/db', () => ({
 jest.mock('../services/uuid', () => ({ uuid: () => 'queue-id-1' }))
 jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }))
 
-import { clearAll, enqueue, getPending, markFailed, markSynced } from '../database/sync/queue'
+import { clearAll, enqueue, getPending, markFailed, markSynced, purgeFailed } from '../database/sync/queue'
 import { logger } from '../services/logger'
 
 beforeEach(() => jest.clearAllMocks())
@@ -67,5 +67,30 @@ describe('sync queue', () => {
       table_name: 'reminder',
       operation: 'upsert',
     }))
+  })
+
+  it('logs wipe enqueue failures without throwing', async () => {
+    mockDb.runAsync.mockRejectedValueOnce(new Error('db locked'))
+    await expect(enqueue('journal', 'ALL', 'wipe')).resolves.toBeUndefined()
+    expect(logger.warn).toHaveBeenCalledWith('sync.queue', 'enqueue failed', expect.objectContaining({
+      operation: 'wipe',
+    }))
+  })
+
+  it('purges failed items over max retry limit', async () => {
+    await purgeFailed()
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM sync_queue WHERE retry_count >='),
+      [3]
+    )
+  })
+
+  it('getPending uses default limit of 50 when called without arguments', async () => {
+    mockDb.getAllAsync.mockResolvedValueOnce([])
+    await getPending()
+    expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining('LIMIT ?'),
+      [3, 50]
+    )
   })
 })

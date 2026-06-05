@@ -44,4 +44,33 @@ describe('analytics', () => {
       error_code: 'TIMEOUT',
     })
   })
+
+  it('drops null and undefined values', () => {
+    const result = sanitizeAnalyticsProps('data_exported', {
+      module: 'finance',
+      item_count: null as any,
+    })
+    expect(result).toEqual({ module: 'finance' })
+  })
+
+  it('drops non-primitive object values', () => {
+    const result = sanitizeAnalyticsProps('data_exported', {
+      module: 'finance',
+      item_count: { nested: true } as any,
+    })
+    expect(result).toEqual({ module: 'finance' })
+  })
+
+  it('track works without transport set', () => {
+    setAnalyticsTransport(null)
+    expect(() => track('app_open', {})).not.toThrow()
+  })
+
+  it('track logs warning when transport throws', () => {
+    const { logger } = require('../services/logger')
+    const transport = jest.fn().mockImplementation(() => { throw new Error('transport error') })
+    setAnalyticsTransport(transport)
+    expect(() => track('app_open', {})).not.toThrow()
+    expect(logger.warn).toHaveBeenCalled()
+  })
 })

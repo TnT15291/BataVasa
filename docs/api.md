@@ -1,93 +1,84 @@
 # API Contracts
 
-> Supabase REST/RPC + custom endpoints. Document every endpoint here.
+> Current status: there is no custom backend REST API implemented in the app.
+> The client uses Supabase Auth plus direct Supabase table mirroring from the
+> local sync worker.
 
-## Conventions
+## Implemented External Interfaces
 
-- Routes: `/<module>/<action>` (e.g. `/finance/create`)
-- All requests authenticated via Supabase JWT
-- Responses always `{ success: boolean, data?: T, error?: string }`
-- Validation: zod schemas in `services/<module>/schemas.ts`
+### Supabase Auth
 
-## Endpoints
+Used by:
 
-### POST /finance/create
+- `services/supabase.ts`
+- `store/authStore.ts`
+- `features/auth/`
 
-**Request:**
+Auth currently supports email/password flows, session restore, sign out, and
+password recovery.
+
+### Supabase Table Mirror
+
+Used by:
+
+- `services/sync.ts`
+- `database/sync/queue.ts`
+
+The sync worker reads local `sync_queue` rows and writes directly to Supabase
+tables.
+
+Implemented queue operations:
+
+- `upsert`: fetch the local row and `upsert` it to the matching Supabase table.
+- `wipe`: delete all rows for the signed-in user from the target Supabase table.
+
+Supabase schema and RLS are documented in `docs/supabase-setup.sql`.
+
+## Not Implemented Yet
+
+These endpoint families are product/backend roadmap items, not current app
+contracts:
+
+- `POST /finance/create`
+- `GET /finance/transactions`
+- `PATCH /finance/:id`
+- `DELETE /finance/:id`
+- `POST /ai/insight/generate`
+- `GET /sync/pull`
+- `POST /sync/push`
+
+Do not build client code against those routes unless a backend service or
+Supabase Edge Function is added first.
+
+## Future Backend Shape
+
+If BataVasa moves from direct table mirroring to server-mediated sync or managed
+AI keys, prefer Supabase Edge Functions with this response shape:
+
 ```ts
-{
-  amount_cents: number       // signed: negative = expense, positive = income
-  currency?: string          // default 'VND'
-  category_id: string
-  merchant?: string
-  note?: string
-  occurred_at: string        // ISO 8601
-  mood?: 'great' | 'good' | 'neutral' | 'low' | 'bad'
-  source: 'manual' | 'ocr' | 'voice' | 'import'
-}
+type ApiResponse<T> =
+  | { success: true; data: T }
+  | { success: false; error: { code: string; message: string } }
 ```
 
-**Response:**
-```ts
-{ success: true, data: { id: string } }
-| { success: false, error: { code: string, message: string } }
-```
+Recommended future endpoint groups:
 
-### GET /finance/transactions
+- `/sync/push`: batch local operations, server validates and applies conflicts.
+- `/sync/pull`: pull changes since a cursor.
+- `/ai/*`: managed AI proxy with auth, quotas, metering, prompt caching, and PII
+  scrubbing.
+- `/account/delete`: service-role-only account deletion and data purge.
 
-Query params: `from`, `to` (ISO dates), `category_id?`, `cursor?`, `limit=50`
-
-**Response:** paginated list `{ items: Transaction[], next_cursor: string | null }`
-
-### PATCH /finance/:id
-
-Partial update. Same field shape as create.
-
-### DELETE /finance/:id
-
-Soft delete (sets `deleted_at`).
-
-### POST /ai/insight/generate
-
-**Request:** `{ module: 'finance'|'habit'|'journal', kind: 'weekly'|'monthly', period_start: string }`
-
-**Response:** `{ success: true, data: { insight_id: string, content: object } }`
-
-### GET /sync/pull
-
-Pull server-side changes since `since` cursor. Used after reconnect.
-
-**Request:** `{ since: string /* ISO */ }`
-**Response:** `{ changes: SyncChange[], next_cursor: string }`
-
-### POST /sync/push
-
-Push local changes batch.
-
-**Request:** `{ ops: SyncOp[] }`
-**Response:** `{ accepted: string[], conflicts: ConflictReport[] }`
-
-## Error Codes
+## Error Codes For Future APIs
 
 | Code | Meaning | HTTP |
 |---|---|---|
-| `AUTH_REQUIRED` | No/invalid JWT | 401 |
-| `AUTH_FORBIDDEN` | Authenticated but not allowed (RLS denied) | 403 |
-| `VALIDATION_FAILED` | Request body failed schema | 400 |
+| `AUTH_REQUIRED` | Missing or invalid JWT | 401 |
+| `AUTH_FORBIDDEN` | Authenticated but not authorized | 403 |
+| `VALIDATION_FAILED` | Invalid request | 400 |
 | `NOT_FOUND` | Resource missing | 404 |
-| `CONFLICT` | Sync conflict, client should resolve | 409 |
+| `CONFLICT` | Sync conflict | 409 |
 | `RATE_LIMITED` | Too many requests | 429 |
-| `AI_BUDGET_EXCEEDED` | User exceeded AI quota for period | 429 |
-| `UPSTREAM_AI_ERROR` | OpenAI failed | 502 |
+| `AI_BUDGET_EXCEEDED` | AI quota exceeded | 429 |
+| `UPSTREAM_AI_ERROR` | AI provider failed | 502 |
 | `INTERNAL` | Unhandled server error | 500 |
-
-## Rate Limits
-
-| Endpoint family | Limit | Window |
-|---|---|---|
-| `/finance/*` writes | 60 | 1 min |
-| `/finance/*` reads | 300 | 1 min |
-| `/ai/insight/generate` | 10 | 1 hour (per user) |
-| `/sync/*` | 30 | 1 min |
-
-429 responses include `Retry-After` header.

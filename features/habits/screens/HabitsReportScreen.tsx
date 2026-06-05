@@ -73,6 +73,7 @@ export function HabitsReportScreen() {
   const [customTo, setCustomTo] = useState('')
   const [datePickerTarget, setDatePickerTarget] = useState<'from' | 'to' | null>(null)
   const [allLogs, setAllLogs] = useState<HabitLog[]>([])
+  const [exportedHabits, setExportedHabits] = useState<Habit[]>([])
   const [loading, setLoading] = useState(true)
   const [insight, setInsight] = useState<HabitInsight | null>(null)
   const [generatingInsight, setGeneratingInsight] = useState(false)
@@ -84,6 +85,7 @@ export function HabitsReportScreen() {
         try {
           const parsed = JSON.parse(r.value)
           setAllLogs(parsed.logs ?? [])
+          setExportedHabits(parsed.habits ?? [])
         } catch {}
       }
       setLoading(false)
@@ -228,7 +230,12 @@ export function HabitsReportScreen() {
     return map
   }, [allLogs])
 
-  const habitById = useMemo(() => new Map(habits.map((habit) => [habit.id, habit])), [habits])
+  const habitById = useMemo(() => {
+    const map = new Map<string, Habit>()
+    for (const h of exportedHabits) map.set(h.id, h)
+    for (const h of habits) map.set(h.id, h)
+    return map
+  }, [habits, exportedHabits])
 
   const handleGenerateInsight = async () => {
     const key = await getProviderKey(aiProvider)
@@ -381,7 +388,10 @@ export function HabitsReportScreen() {
               </View>
               {habits.map((h) => (
                 <View key={h.id} style={styles.habitRow}>
-                  <Text style={styles.habitIcon}>{h.icon}</Text>
+                  {(h.icon?.codePointAt(0) ?? 0) > 127
+                    ? <Text style={styles.habitIcon}>{h.icon}</Text>
+                    : <Feather name="check-circle" size={22} color={theme.brand.primary} />
+                  }
                   <View style={{ flex: 1, gap: CELL_GAP }}>
                     <View style={styles.habitNameRow}>
                       <Text style={[styles.habitName, { color: theme.text.primary }]}>{h.name}</Text>
@@ -432,9 +442,12 @@ export function HabitsReportScreen() {
                   const habit = habitById.get(log.habit_id)
                   return (
                     <View key={log.id} style={[styles.skipRow, { borderColor: theme.border.subtle }]}>
-                      <Text style={styles.habitIcon}>{habit?.icon ?? '...'}</Text>
+                      {(habit?.icon?.codePointAt(0) ?? 0) > 127
+                        ? <Text style={styles.habitIcon}>{habit?.icon}</Text>
+                        : <Feather name="check-circle" size={22} color={theme.brand.primary} />
+                      }
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.habitName, { color: theme.text.primary }]}>{habit?.name ?? log.habit_id}</Text>
+                        <Text style={[styles.habitName, { color: theme.text.primary }]}>{habit?.name ?? t.deleted_habit}</Text>
                         <Text style={[styles.habitMeta, { color: theme.text.muted }]}>
                           {format(new Date(log.occurred_at), 'EEE, dd MMM', { locale: dfLocale })}
                         </Text>

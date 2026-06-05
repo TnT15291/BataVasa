@@ -14,6 +14,8 @@ import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJ
 import { formatAmount } from '@features/finance/services'
 import { translateCategoryName } from '@features/finance/i18n'
 import { convertMinorAmount, getRates } from '@services/fx'
+import { InsightText } from '@/components/InsightText'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export function AnalysisScreen() {
   useFinanceBootstrap()
@@ -21,6 +23,7 @@ export function AnalysisScreen() {
   useJournalsBootstrap()
 
   const theme = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { t } = useTranslation()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
@@ -257,7 +260,7 @@ export function AnalysisScreen() {
               <Text style={styles.cardHeaderIcon}>✨</Text>
               <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.analysis_patterns}</Text>
             </View>
-            <Text style={[styles.resultText, { color: theme.text.primary }]}>{result}</Text>
+            <InsightText text={result} />
           </View>
         ) : !loading ? (
           <View style={[styles.empty, !hasData && { flex: 1 }]}>
@@ -265,9 +268,11 @@ export function AnalysisScreen() {
             <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>
               {hasData ? t.analysis_subtitle : t.analysis_title}
             </Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>
-              {moduleCount < 2 ? t.analysis_no_data_msg : t.analysis_subtitle}
-            </Text>
+            {moduleCount < 2 && (
+              <Text style={[styles.emptyBody, { color: theme.text.muted }]}>
+                {t.analysis_no_data_msg}
+              </Text>
+            )}
           </View>
         ) : (
           <View style={styles.spinner}>
@@ -277,7 +282,7 @@ export function AnalysisScreen() {
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
+      <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated, paddingBottom: spacing[4] + insets.bottom }]}>
         <Pressable
           onPress={run}
           disabled={loading}
@@ -375,7 +380,6 @@ const styles = StyleSheet.create({
   compValue: { fontSize: 13, fontWeight: '600' },
   deltaBadge: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
   deltaText: { fontSize: 11, fontWeight: '600' },
-  resultText: { fontSize: 15, lineHeight: 24 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: spacing[6] },
   emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
   emptyTitle: { fontSize: 16, fontWeight: '600', marginBottom: spacing[2], textAlign: 'center' },

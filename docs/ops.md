@@ -96,7 +96,7 @@ Track:
 - Transaction amounts, merchants, notes
 - Journal content, mood values
 - Any PII (email, name, exact location)
-- Anything raw from `journal_entry.body`
+- Anything raw from `journal.content`
 
 ## Bug Tracking
 

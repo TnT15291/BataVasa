@@ -20,12 +20,20 @@
         "buildType": "apk"
       },
       "env": {
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://fuhntgxkxcnyedmuvnav.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_YQEKqwnuWa48AppUf0gnaQ_y7P4imaz",
+        "EXPO_PUBLIC_ENV": "preview"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://fuhntgxkxcnyedmuvnav.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_YQEKqwnuWa48AppUf0gnaQ_y7P4imaz",
+        "EXPO_PUBLIC_ENV": "prod"
       }
     }
   }

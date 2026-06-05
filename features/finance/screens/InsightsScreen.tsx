@@ -9,10 +9,13 @@ import { useSettingsStore } from '@store/settingsStore'
 import { getProviderKey } from '@services/ai/openai'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
 import { generateFinanceInsights } from '@services/ai/financeInsight'
+import { InsightText } from '@/components/InsightText'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export function InsightsScreen() {
   useFinanceBootstrap()
   const theme = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { t } = useTranslation()
   const allTxs = useTransactions()
@@ -57,7 +60,7 @@ export function InsightsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {result ? (
           <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.resultText, { color: theme.text.primary }]}>{result}</Text>
+            <InsightText text={result} />
           </View>
         ) : !loading ? (
           <View style={styles.empty}>
@@ -72,7 +75,7 @@ export function InsightsScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
+      <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated, paddingBottom: spacing[4] + insets.bottom }]}>
         {keyChecked && !hasApiKey ? (
           <Pressable
             onPress={() => router.push('/ai-settings')}
@@ -105,7 +108,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[4],
   },
-  resultText: { fontSize: 15, lineHeight: 24 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
   emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },

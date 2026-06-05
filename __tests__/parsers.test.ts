@@ -6,9 +6,9 @@ jest.mock('../services/ai/openai', () => ({ chatCompletion: jest.fn() }))
 jest.mock('../services/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }))
 
 import { chatCompletion } from '../services/ai/openai'
-import { parseReminderEntry } from '../services/ai/reminderParser'
-import { parseHabitLog } from '../services/ai/habitParser'
-import { parseJournalEntry } from '../services/ai/journalParser'
+import { parseReminderEntry } from '../features/reminders/aiParser'
+import { parseHabitLog } from '../features/habits/aiParser'
+import { parseJournalEntry } from '../features/journals/aiParser'
 
 const mockChat = chatCompletion as jest.MockedFunction<typeof chatCompletion>
 

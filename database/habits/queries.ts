@@ -7,11 +7,12 @@ export async function insertHabit(h: Habit): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO habit
-      (id,user_id,name,icon,color,cadence,target_per_period,schedule_days,
+      (id,user_id,name,icon,color,cadence,target_per_period,schedule_days,notification_times,
        location_lat,location_lng,location_label,
        created_at,updated_at,deleted_at,synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [h.id, h.user_id, h.name, h.icon, h.color, h.cadence, h.target_per_period, h.schedule_days ?? null,
+     h.notification_times ?? null,
      h.location_lat ?? null, h.location_lng ?? null, h.location_label ?? null,
      h.created_at, h.updated_at, null, null]
   )
@@ -57,7 +58,7 @@ export async function wipeHabits(userId: string | null): Promise<number> {
 
 export async function exportHabitsData(userId: string | null): Promise<{ habits: Habit[]; logs: HabitLog[] }> {
   const db = await getDb()
-  const habits = await db.getAllAsync<Habit>(`SELECT * FROM habit WHERE deleted_at IS NULL AND user_id = ?`, [userId])
+  const habits = await db.getAllAsync<Habit>(`SELECT * FROM habit WHERE user_id = ?`, [userId])
   const logs = await db.getAllAsync<HabitLog>(`SELECT * FROM habit_log WHERE deleted_at IS NULL AND user_id = ? ORDER BY occurred_at DESC`, [userId])
   return { habits, logs }
 }

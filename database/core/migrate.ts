@@ -79,6 +79,10 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   async (db) => {
     await safeAddColumn(db, 'habit', 'schedule_days', 'TEXT')
   },
+  // v13 - habit notification times (JSON array of "HH:MM" strings)
+  async (db) => {
+    await safeAddColumn(db, 'habit', 'notification_times', 'TEXT')
+  },
 ]
 
 async function safeAddColumn(

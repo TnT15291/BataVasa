@@ -1,210 +1,242 @@
 # Database
 
-> SQLite (local, source of truth) + Supabase (cloud mirror via sync engine).
+> SQLite local source of truth, with Supabase as a cloud mirror through the sync
+> queue. Current local schema version: v12.
 
-## Schema Conventions
+## Conventions
 
-- Tables in `snake_case`, columns in `snake_case`
-- Every table has: `id` (uuid), `created_at`, `updated_at`, `deleted_at` (soft delete), `synced_at`
-- **`occurred_at` vs `created_at`** (Cross-Module Rule 4): every entry table that represents a user-meaningful event MUST have both. `occurred_at` = when the event happened (user-editable, supports backdating); `created_at` = system insert time (immutable). Lists, reports, and AI insights group by `occurred_at`, audit logs by `created_at`.
-- Foreign keys explicit, no implicit cascades
-- **Soft delete** = regular delete via UI (sets `deleted_at`). **Hard delete** = only via `wipeAllData()` from Settings → "Delete all data" (see `docs/sync-offline.md`).
+- Tables and columns use `snake_case`.
+- IDs are UUID strings stored as `TEXT` locally.
+- User-owned rows carry `user_id`.
+- Normal delete is soft delete via `deleted_at`.
+- Module wipe is hard local delete plus a `sync_queue` wipe operation.
+- Domain writes go through `features/<domain>/services.ts`, then
+  `database/<domain>/queries.ts`.
 
-### Location columns (Cross-Module Rule 6)
+Entry rows that represent user activity should carry:
 
-Every entry table that represents a user activity (transactions, habit logs, journal entries, reminders, …) MUST include three nullable location columns:
+- `occurred_at`: user-meaningful event time, editable and used by reports;
+- `created_at`: system insertion time, immutable in normal flows;
+- `updated_at`;
+- `deleted_at`;
+- `synced_at`.
+
+## Location Columns
+
+Activity rows may include optional location fields:
 
 ```sql
-location_lat   REAL    -- WGS84, nullable
-location_lng   REAL    -- WGS84, nullable
-location_label TEXT    -- reverse-geocoded or user-typed, nullable
+location_lat   REAL
+location_lng   REAL
+location_label TEXT
 ```
 
-All three are independently nullable. At save time, an empty `location_label` from the form means store `NULL` for **all three** columns — respect user intent if they clear it.
+If the user clears the label in the form, save all three as `NULL`.
 
-### Translatable seed data (Cross-Module Rule 2)
+## Core Tables
 
-System-seeded rows (default categories, habit templates, mood labels, …) store their canonical **English** `name` in the DB. Translation happens at the UI layer via a per-module lookup helper:
+### `finance_transaction`
 
-- `features/<module>/i18n.ts` exports `translateX(row, t)` that:
-  - Returns `t.<key>` if `row.user_id == null` and `row.name` matches a known seed
-  - Returns `row.name` as-is for user-created rows
-- AI prompts and matching logic use the English `name` for stability (don't break when user switches language)
-- Adding a new seed row: insert canonical English name + add translation key to all 6 language files + register in `<module>/i18n.ts`
+Primary finance record.
 
-Why not store a translation key in the DB? Schema stays language-agnostic, no migration needed when adding languages or renaming labels, and user-created rows naturally fall through.
+Important columns:
 
-## Tables
+- `amount_cents INTEGER NOT NULL`: signed; negative expense, positive income.
+- `currency TEXT NOT NULL`: transaction native currency.
+- `category_id TEXT NOT NULL`.
+- `merchant TEXT`.
+- `note TEXT`.
+- `occurred_at TEXT NOT NULL`.
+- `mood TEXT`.
+- `source TEXT`: `manual`, `ocr`, `voice`, or `import`.
+- `needs_review INTEGER NOT NULL DEFAULT 0`.
+- `review_reason TEXT`.
+- location columns.
+- timestamps and sync columns.
 
-### finance_transaction
+### `finance_category`
 
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid | PK |
-| user_id | uuid | FK → auth.users (Supabase) |
-| amount_cents | integer | required, signed (negative = expense, positive = income) |
-| currency | text | ISO 4217, default `VND` |
-| category_id | uuid | FK → finance_category.id |
-| merchant | text | nullable, free-text |
-| note | text | nullable |
-| occurred_at | timestamptz | when the transaction happened (not when logged) |
-| mood | text | nullable, FK → journal_mood (for emotional spending correlation) |
-| source | text | `manual` · `ocr` · `voice` · `import` |
-| created_at | timestamptz | required |
-| updated_at | timestamptz | required |
-| deleted_at | timestamptz | soft delete |
-| synced_at | timestamptz | last successful Supabase sync |
+System and user categories.
 
-Indexes: `(user_id, occurred_at DESC)`, `(user_id, category_id, occurred_at DESC)`
+Important columns:
 
-### finance_category
+- `user_id TEXT`: `NULL` means system seed row.
+- `name TEXT NOT NULL`: canonical English name for seed rows.
+- `icon TEXT`.
+- `color TEXT`.
+- `kind TEXT`: `essential`, `discretionary`, `income`, `savings`.
+- `monthly_budget_cents INTEGER`.
+- `parent_id TEXT`.
+- `sort_order INTEGER`.
+- timestamps and sync columns.
 
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid | PK |
-| user_id | uuid | nullable — null = system default |
-| name | text | required |
-| icon | text | icon key |
-| color | text | hex |
-| kind | text | `essential` · `discretionary` · `income` · `savings` |
-| monthly_budget_cents | integer | nullable — null = no limit |
-| parent_id | uuid | nullable, FK self-ref for hierarchy |
-| sort_order | integer | |
-| ...timestamps | | |
+System category names are translated at display time through
+`features/finance/i18n.ts`.
 
-### habit
+### `finance_rule`
 
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid | PK |
-| user_id | uuid | |
-| name | text | |
-| cadence | text | `daily` · `weekdays` · `custom` |
-| target_per_period | integer | e.g. 1 per day |
-| reminder_time | time | nullable |
-| ...timestamps | | |
+Merchant/category learning rules.
 
-### habit_log
+Important columns:
 
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid | PK |
-| habit_id | uuid | FK |
-| logged_at | timestamptz | |
-| ...timestamps | | |
+- `merchant_pattern TEXT NOT NULL`.
+- `category_id TEXT NOT NULL`.
+- timestamps and sync columns.
 
-### journal
+### `reminder`
 
-| Column | Type | Notes |
-|---|---|---|
-| id | TEXT | PK (uuid) |
-| user_id | TEXT | nullable |
-| content | TEXT | required, free-form text (up to 10 000 chars) |
-| mood | INTEGER | nullable, 1–5 (1=very sad → 5=very happy) |
-| occurred_at | TEXT | ISO datetime — when the entry is about |
-| location_lat | REAL | nullable |
-| location_lng | REAL | nullable |
-| location_label | TEXT | nullable |
-| created_at | TEXT | required |
-| updated_at | TEXT | required |
-| deleted_at | TEXT | soft delete |
-| synced_at | TEXT | last Supabase sync |
+Reminder and inbox item table.
 
-Index: `(user_id, occurred_at)` WHERE `deleted_at IS NULL`
+Important columns:
 
-### reminder
+- `title TEXT NOT NULL`.
+- `note TEXT`.
+- `remind_at TEXT NOT NULL`: scheduled time; inbox items still store a timestamp.
+- `advance_minutes INTEGER NOT NULL DEFAULT 0`.
+- `recurrence TEXT`: `none`, `daily`, `weekly`, `monthly`.
+- `priority TEXT NOT NULL DEFAULT 'medium'`.
+- `is_inbox INTEGER NOT NULL DEFAULT 0`.
+- `completed INTEGER NOT NULL DEFAULT 0`.
+- location columns.
+- timestamps and sync columns.
 
-| Column | Type | Notes |
-|---|---|---|
-| id | TEXT | PK (uuid) |
-| user_id | TEXT | nullable |
-| title | TEXT | required |
-| note | TEXT | nullable |
-| remind_at | TEXT | ISO datetime — when to fire |
-| recurrence | TEXT | `none` · `daily` · `weekly` · `monthly` |
-| completed | INTEGER | 0 or 1 (SQLite boolean) |
-| location_lat | REAL | nullable |
-| location_lng | REAL | nullable |
-| location_label | TEXT | nullable |
-| created_at | TEXT | required |
-| updated_at | TEXT | required |
-| deleted_at | TEXT | soft delete |
-| synced_at | TEXT | last Supabase sync |
+Notification IDs are not stored in SQLite. Runtime notification cleanup is handled
+by `services/notifications.ts` and the reminders service.
 
-Index: `(user_id, remind_at)` WHERE `deleted_at IS NULL`
+### `habit`
 
-Note: notification scheduling is handled in-process via `expo-notifications` (`services/notifications.ts`). No `notification_id` column — IDs are cached in-memory via `notifCache: Map<reminderId, notifId>` in `features/reminders/services.ts`.
+Habit definition table.
 
-### ai_insight
+Important columns:
 
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid | PK |
-| user_id | uuid | |
-| module | text | `finance` · `habit` · `journal` · `cross` |
-| kind | text | `weekly` · `monthly` · `pattern` · `recommendation` |
-| period_start | date | |
-| period_end | date | |
-| content | jsonb | structured insight |
-| model | text | OpenAI model used |
-| tokens_used | integer | |
-| ...timestamps | | |
+- `name TEXT NOT NULL`.
+- `icon TEXT`.
+- `color TEXT`.
+- `cadence TEXT`: `daily`, `weekdays`, `weekly`, `monthly`, `custom`.
+- `target_per_period INTEGER NOT NULL`.
+- `schedule_days TEXT`: comma-separated weekday numbers for custom schedules.
+- location columns.
+- timestamps and sync columns.
 
-### sync_queue
+Soft-deleted habit rows may still be read by export/report paths so historical
+`habit_log` rows can display meaningful names. Normal list screens still use
+`deleted_at IS NULL`.
 
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid | PK |
-| table_name | text | target table |
-| row_id | uuid | target row |
-| op | text | `insert` · `update` · `delete` |
-| payload | jsonb | row data |
-| attempts | integer | |
-| last_error | text | nullable |
-| next_attempt_at | timestamptz | |
-| created_at | timestamptz | |
+### `habit_log`
+
+Habit completion or skip history.
+
+Important columns:
+
+- `habit_id TEXT NOT NULL`.
+- `user_id TEXT`.
+- `occurred_at TEXT NOT NULL`.
+- `note TEXT`.
+- `skipped INTEGER NOT NULL DEFAULT 0`.
+- timestamps and sync columns.
+
+Report UI must join or map logs back to habit definitions. Never display
+`habit_log.id` or `habit_id` as a user-facing history label; use the habit name
+or the translated `deleted_habit` fallback.
+
+### `journal`
+
+Journal entry table. The implemented table name is `journal`, not
+`journal_entry`.
+
+Important columns:
+
+- `content TEXT NOT NULL`.
+- `mood INTEGER`: 1 to 5.
+- `is_important INTEGER NOT NULL DEFAULT 0`.
+- `occurred_at TEXT NOT NULL`.
+- location columns.
+- timestamps and sync columns.
+
+### `settings`
+
+Key/value settings table used by `store/settingsStore.ts`.
+
+Important settings include language, storage currency, display currency, theme,
+AI provider, location access, AI confirmation, per-module sync toggles,
+onboarding, biometric lock, and microphone privacy prompt state.
+
+### `sync_queue`
+
+Local queue for Supabase mirroring.
+
+Columns:
+
+- `id TEXT PRIMARY KEY`.
+- `table_name TEXT NOT NULL`.
+- `row_id TEXT NOT NULL`.
+- `operation TEXT NOT NULL`: `upsert` or `wipe`.
+- `created_at TEXT NOT NULL`.
+- `retry_count INTEGER NOT NULL DEFAULT 0`.
+- `last_error TEXT`.
+
+`upsert` operations are deduplicated by `(table_name, row_id)`. `wipe` uses
+`row_id = 'ALL'`.
 
 ## Migrations
 
-- Migration runner: `database/core/migrate.ts` — `runMigrations()` called once in `app/_layout.tsx` before settings load
-- Each migration is a function in the `MIGRATIONS` array (0-indexed), applied via `PRAGMA user_version`
-- All migrations use `CREATE TABLE IF NOT EXISTS` / `safeAddColumn()` — fully idempotent
-- Never remove or reorder a migration — only append new ones
+Migration runner: `database/core/migrate.ts`.
 
-**Current schema versions:**
+Rules:
+
+- Append only; never reorder or remove existing migrations.
+- Use idempotent schema changes (`CREATE TABLE IF NOT EXISTS`, safe add column).
+- `PRAGMA user_version` stores the applied version.
+
+Current versions:
+
 | Version | Content |
 |---|---|
-| v1 | `finance_transaction`, `finance_category`, `settings` |
-| v2 | Location columns (`location_lat/lng/label`) on `finance_transaction` |
-| v3 | `monthly_budget_cents` on `finance_category` |
-| v4 | `reminder` table |
-| v5 | `journal` table |
+| v1 | Finance and settings schemas |
+| v2 | Finance transaction location columns |
+| v3 | Finance category monthly budget |
+| v4 | Reminder schema |
+| v5 | Journal schema |
+| v6 | Habit schema |
+| v7 | Reminder advance minutes |
+| v8 | Sync queue |
+| v9 | Journal important, reminder priority, habit skip, finance review fields |
+| v10 | Finance merchant/category rules |
+| v11 | Reminder inbox flag |
+| v12 | Habit custom schedule days |
 
 ## Query Patterns
 
-- All queries typed via generated types from schema
-- No raw SQL in feature code — go through `database/<module>/queries.ts`
-- Reads can be cached in-memory; writes always hit SQLite immediately
+- Feature UI should not import database query modules directly.
+- Services call query modules.
+- Unbounded list queries should paginate at the query layer.
+- Counts and summaries should use aggregate queries, not `.length` on a paginated
+  page.
+- Export/report queries may intentionally include soft-deleted parent records
+  when needed to preserve readable history, such as habit skip logs.
 
-### Pagination (mandatory for unbounded lists)
+Current gap: finance transaction listing is paginated, but reminders, habits,
+habit logs, and journals still have some full-list query paths. Treat pagination
+for those paths as a product-hardening task before large public use.
 
-Any table that grows unboundedly (transactions, habit logs, journal entries, …) MUST paginate at the query layer:
+## Planned Tables (not yet created)
 
-- Query exposes `{ limit?: number; offset?: number }` or `{ cursor?: string; limit?: number }`
-- Default `limit = 50`, hard cap `200`
-- UI uses `FlashList` `onEndReached` to load next page; store accumulates pages in memory
-- "Load older" CTA + skeleton at list bottom while fetching
-- Counts (for summary cards) use a separate `SELECT COUNT(*)` / `SUM(...)` query — never `.length` on a paginated list
+### `ai_insight` (planned)
 
-Anti-pattern: `listX()` with no limit + UI shows `data.slice(0, 100)` → silent truncation hides user data.
+Intended to cache generated AI insights per user/module/period to avoid redundant
+API calls.
 
-## Web fallback
+Planned columns: `id`, `user_id`, `module` (`finance`/`habit`/`journal`/`cross`),
+`kind` (`weekly`/`monthly`/`pattern`), `period_start`, `period_end`, `content`
+(JSON), `model`, `tokens_used`, timestamps.
 
-`expo-sqlite` on web uses **wa-sqlite + OPFS** for persistence. Browser support:
-- ✅ Chrome 110+, Edge, Safari 17+ — full persistence
-- ⚠️ Firefox — falls back to in-memory; data lost on reload
-- Recommendation: show a non-blocking banner on web Firefox users: "Your browser doesn't support persistent storage. Use Chrome/Safari for best experience, or install the mobile app."
+**Status:** Not yet created — no migration exists. Current AI calls regenerate on
+every request. Implement when adding AI budget/caching as a feature.
 
-## Sync to Supabase
+## Supabase Mirror
 
-See `docs/sync-offline.md` for sync engine details.
+Supabase schema and RLS live in `docs/supabase-setup.sql`.
+
+The implemented client sync worker mirrors rows directly with Supabase table
+`upsert` and `delete` for wipe operations. There is no custom sync REST endpoint
+in the current app.

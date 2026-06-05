@@ -89,10 +89,40 @@
       "Bash(sed -n '397,400p' services/i18n/translations/fr.ts)",
       "Bash(sed -n '397,400p' services/i18n/translations/ja.ts)",
       "Bash(sed -n '397,400p' services/i18n/translations/ko.ts)",
-      "Bash(sed -n '414,417p' services/i18n/translations/vi.ts)"
+      "Bash(sed -n '414,417p' services/i18n/translations/vi.ts)",
+      "Bash(Get-ChildItem -Path \"d:\\\\Claude\\\\BataVasa\" -Recurse -Name)",
+      "Bash(sed -n '413,420p' d:/Claude/BataVasa/features/finance/screens/TransactionListScreen.tsx)",
+      "Bash(sed -n '68,74p' d:/Claude/BataVasa/features/home/components/UniversalAddSheet.tsx)",
+      "Bash(mkdir -p d:/Claude/BataVasa/features/assistant/screens && echo \"ok\")",
+      "Bash(Remove-Item \"d:\\\\Claude\\\\BataVasa\\\\features\\\\finance\\\\screens\\\\ChatScreen.tsx\")",
+      "Bash(rm \"d:/Claude/BataVasa/features/finance/screens/ChatScreen.tsx\")",
+      "Bash(npm run *)",
+      "Bash(sort -t'|' -k3 -n)",
+      "Bash(awk -F'|' '{gsub\\(/ /,\"\",$3\\); if \\($3+0 > 0 && $3+0 < 70\\) print $1, \"branch:\", $3}')",
+      "Bash(awk -F'|' '{gsub\\(/ /,\"\",$3\\); if \\($3+0 > 0 && $3+0 < 70\\) print $3\"%\\\\t\" $1, $5}')",
+      "Bash(awk -F'|' '{gsub\\(/ /,\"\",$3\\); if \\($3+0 > 0 && $3+0 < 70\\) print $3\"%\\\\t\" $1 \"\\\\t lines:\" $5}')",
+      "Bash(awk -F'|' '{gsub\\(/ /,\"\",$3\\); if \\($3+0 > 0 && $3+0 < 70\\) print $3\"%\\\\t\" $1 \"\\\\tuncovered:\" $5}')",
+      "Bash(Remove-Item services/moodDetector.ts)",
+      "Bash(Remove-Item __tests__/moodDetector.test.ts)",
+      "Bash(python skills/ui-ux-pro-max/scripts/search.py \"personal OS productivity AI finance habits journals reminders mobile app calm minimal\" --design-system -p \"BataVasa\" -f markdown)",
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"personal OS productivity AI finance habits journals reminders mobile calm minimal\" --design-system -p \"BataVasa\" -f markdown)",
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"animation loading touch accessibility mobile\" --domain ux -n 10)",
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"react-native performance list skeleton empty state navigation\" --stack react-native)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(Object.keys\\(p.dependencies\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e \"const p=JSON.parse\\(require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\)\\); console.log\\(p.expo?.sdkVersion || 'check app.json'\\)\")",
+      "Bash(node -e \"const p=JSON.parse\\(require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\)\\); console.log\\('SDK:', p.expo?.sdkVersion\\)\")",
+      "Bash(node -e \"const p=require\\('./app.json'\\); console.log\\('SDK:', p.expo?.sdkVersion\\)\")",
+      "Bash(ls components/)",
+      "Bash(node -e \"const p=require\\('./node_modules/react-native-reanimated/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(sed -i 's/  nav_finance: '\\\\''Tài chính'\\\\'',/  nav_home: '\\\\''Trang chủ'\\\\'',\\\\n  nav_finance: '\\\\''Tài chính'\\\\'',/' services/i18n/translations/vi.ts)",
+      "Bash(sed -i 's/  nav_finance: '\\\\''財務'\\\\'',/  nav_home: '\\\\''ホーム'\\\\'',\\\\n  nav_finance: '\\\\''財務'\\\\'',/' services/i18n/translations/ja.ts)",
+      "Bash(sed -i 's/  nav_finance: '\\\\''재정'\\\\'',/  nav_home: '\\\\''홈'\\\\'',\\\\n  nav_finance: '\\\\''재정'\\\\'',/' services/i18n/translations/ko.ts)",
+      "Bash(sed -i 's/  nav_finance: '\\\\''财务'\\\\'',/  nav_home: '\\\\''首页'\\\\'',\\\\n  nav_finance: '\\\\''财务'\\\\'',/' services/i18n/translations/zh.ts)"
     ],
     "additionalDirectories": [
-      "\\tmp"
+      "\\tmp",
+      "d:\\Claude\\BataVasa\\features\\assistant",
+      "d:\\Claude\\BataVasa\\features\\finance\\screens"
     ]
   }
 }

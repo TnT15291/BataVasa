@@ -16,13 +16,19 @@ import {
   getTransaction,
   listTransactions,
   listCategories,
+  getCategory,
   findDuplicateTransaction,
   wipeFinanceData,
   insertCategory,
   updateCategory,
   softDeleteCategory,
   exportFinanceData,
+  upsertTransactionRule,
+  findRuleForMerchant,
+  findRuleByPattern,
+  listTransactionRules,
 } from '../database/finance/queries'
+import type { TransactionRule } from '../features/finance/types'
 import type { Category, Transaction } from '../features/finance/types'
 
 const baseTx: Transaction = {
@@ -138,5 +144,127 @@ describe('finance queries', () => {
     )
     expect(exported.categories).toEqual([baseCategory])
     expect(exported.transactions).toEqual([baseTx])
+  })
+
+  it('no-ops empty category patch', async () => {
+    await updateCategory('cat-1', { id: 'cat-1' } as any)
+    expect(mockDb.runAsync).not.toHaveBeenCalled()
+  })
+
+  it('gets category by id', async () => {
+    mockDb.getFirstAsync.mockResolvedValueOnce(baseCategory)
+    await expect(getCategory('cat-1', 'user-1')).resolves.toBe(baseCategory)
+    expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+      expect.stringContaining('finance_category WHERE id = ?'),
+      ['cat-1', 'user-1']
+    )
+  })
+
+  it('returns null from getCategory when not found', async () => {
+    mockDb.getFirstAsync.mockResolvedValueOnce(null)
+    await expect(getCategory('missing', 'user-1')).resolves.toBeNull()
+  })
+
+  it('listTransactions with needsReview=true filter', async () => {
+    mockDb.getAllAsync.mockResolvedValueOnce([baseTx])
+    await listTransactions('user-1', { needsReview: true })
+    expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining('COALESCE(needs_review, 0) = ?'),
+      ['user-1', 1, 100, 0]
+    )
+  })
+
+  it('listTransactions with needsReview=false filter', async () => {
+    mockDb.getAllAsync.mockResolvedValueOnce([baseTx])
+    await listTransactions('user-1', { needsReview: false })
+    expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining('COALESCE(needs_review, 0) = ?'),
+      ['user-1', 0, 100, 0]
+    )
+  })
+
+  it('listTransactions with no params uses defaults', async () => {
+    mockDb.getAllAsync.mockResolvedValueOnce([])
+    await listTransactions('user-1')
+    expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining('ORDER BY occurred_at DESC LIMIT ? OFFSET ?'),
+      ['user-1', 100, 0]
+    )
+  })
+
+  it('wipeFinanceData returns 0 when counts are null', async () => {
+    mockDb.getFirstAsync.mockResolvedValue(null)
+    const result = await wipeFinanceData('user-1')
+    expect(result).toEqual({ transactions: 0, categories: 0, rules: 0 })
+  })
+})
+
+describe('finance rule queries', () => {
+  const baseRule: TransactionRule = {
+    id: 'rule-1',
+    user_id: 'user-1',
+    merchant_pattern: 'Starbucks',
+    category_id: 'cat-1',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    deleted_at: null,
+    synced_at: null,
+  }
+
+  beforeEach(() => jest.clearAllMocks())
+
+  it('upsertTransactionRule inserts or replaces', async () => {
+    await upsertTransactionRule(baseRule)
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO finance_rule'),
+      expect.arrayContaining(['rule-1', 'Starbucks', 'cat-1'])
+    )
+  })
+
+  it('findRuleForMerchant returns null for null merchant', async () => {
+    await expect(findRuleForMerchant(null, 'user-1')).resolves.toBeNull()
+    expect(mockDb.getFirstAsync).not.toHaveBeenCalled()
+  })
+
+  it('findRuleForMerchant returns null for empty merchant', async () => {
+    await expect(findRuleForMerchant('   ', 'user-1')).resolves.toBeNull()
+    expect(mockDb.getFirstAsync).not.toHaveBeenCalled()
+  })
+
+  it('findRuleForMerchant returns matching rule', async () => {
+    mockDb.getFirstAsync.mockResolvedValueOnce(baseRule)
+    await expect(findRuleForMerchant('Starbucks', 'user-1')).resolves.toBe(baseRule)
+    expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+      expect.stringContaining('finance_rule'),
+      ['user-1', 'starbucks', 'starbucks']
+    )
+  })
+
+  it('findRuleForMerchant returns null when no match', async () => {
+    mockDb.getFirstAsync.mockResolvedValueOnce(null)
+    await expect(findRuleForMerchant('Unknown Shop', 'user-1')).resolves.toBeNull()
+  })
+
+  it('findRuleByPattern returns matching rule', async () => {
+    mockDb.getFirstAsync.mockResolvedValueOnce(baseRule)
+    await expect(findRuleByPattern('Starbucks', 'user-1')).resolves.toBe(baseRule)
+    expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+      expect.stringContaining('lower(merchant_pattern) = lower(?)'),
+      ['starbucks', 'user-1']
+    )
+  })
+
+  it('findRuleByPattern returns null when not found', async () => {
+    mockDb.getFirstAsync.mockResolvedValueOnce(null)
+    await expect(findRuleByPattern('Unknown', 'user-1')).resolves.toBeNull()
+  })
+
+  it('listTransactionRules returns all rules for user', async () => {
+    mockDb.getAllAsync.mockResolvedValueOnce([baseRule])
+    await expect(listTransactionRules('user-1')).resolves.toEqual([baseRule])
+    expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining('finance_rule'),
+      ['user-1']
+    )
   })
 })

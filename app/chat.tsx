@@ -1,4 +1,4 @@
-import { ChatScreen } from '@features/finance/screens/ChatScreen'
+import { AssistantScreen } from '@features/assistant/screens/AssistantScreen'
 export default function ChatRoute() {
-  return <ChatScreen />
+  return <AssistantScreen />
 }

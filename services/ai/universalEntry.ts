@@ -1,6 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency } from './aiLanguage'
-import { extractAmount } from './smartEntry'
+import { extractAmount, hasMultipleAmounts } from './smartEntry'
 
 export type UniversalModule = 'finance' | 'reminder' | 'habits' | 'journal'
 
@@ -164,18 +164,25 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null): Univ
 }
 
 function candidateId(entry: UniversalEntry): string {
-  if (entry.module === 'finance') return `finance:${entry.direction}:${entry.amount_cents}`
+  if (entry.module === 'finance') return `finance:${entry.direction}:${entry.amount_cents}:${entry.merchant}`
   if (entry.module === 'reminder') return `reminder:${entry.title}:${entry.remind_at}`
   if (entry.module === 'habits') return `habits:${entry.title}`
   return `journal:${entry.content.slice(0, 48)}`
 }
 
 function dedupeCandidates(candidates: UniversalCandidate[]): UniversalCandidate[] {
-  const seen = new Set<string>()
+  const seenModules = new Set<string>()
+  const seenIds = new Set<string>()
   const result: UniversalCandidate[] = []
   for (const c of candidates) {
-    if (seen.has(c.entry.module)) continue
-    seen.add(c.entry.module)
+    if (c.entry.module === 'finance') {
+      // Finance allows multiple entries (different transactions); dedupe by id only
+      if (seenIds.has(c.id)) continue
+      seenIds.add(c.id)
+    } else {
+      if (seenModules.has(c.entry.module)) continue
+      seenModules.add(c.entry.module)
+    }
     result.push(c)
   }
   return result.sort((a, b) => b.confidence - a.confidence)
@@ -187,7 +194,10 @@ export async function parseUniversalCandidates(text: string): Promise<UniversalC
   const now = new Date()
   const localNow = toLocalISOString(now)
   const tzOffset = getLocalTzOffset()
-  const localAmount = extractAmount(text, currency)
+  const multiAmounts = hasMultipleAmounts(text)
+  // When the input has multiple amounts (multiple transactions), skip per-entry localAmount
+  // override to avoid applying the first extracted amount to all entries.
+  const localAmount = multiAmounts ? null : extractAmount(text, currency)
 
   const prompt = `Classify the user input and extract candidate entries. Return ONLY valid JSON.
 
@@ -205,9 +215,10 @@ Classification rules:
 - reminder: mentions future time/date + task/meeting/appointment/hop/nhac/lich/remind
 - habits: recurring behavior goal without specific time (exercise/eat/sleep/read/thoi quen/tap/uong)
 - journal: reflection/diary/memory/feeling without action items (nho/cam xuc/ghi lai/ky niem)
-- If the input clearly contains both a financial event and a personal feeling/reflection, return TWO candidates: finance and journal.
+- MULTIPLE TRANSACTIONS: If the input contains multiple separate finance events (e.g. "ăn cơm 15k và uống nước 20k", "coffee 30k and taxi 50k"), return ONE finance candidate PER transaction, each with its own amount_cents, category_hint, and merchant. Do NOT merge them or pick only the first.
+- If the input clearly contains both a financial event and a personal feeling/reflection, also add a journal candidate.
 - If the input is ambiguous between modules, return multiple candidates with confidence scores.
-- Do not create duplicate candidates unless two different intents are clearly present.
+- Do not create duplicate candidates for non-finance modules.
 
 Return this JSON shape:
 {"candidates":[{"confidence":0.0-1.0,"reason":"short reason","selectedByDefault":true|false,"entry":<one entry>}]}
@@ -244,6 +255,10 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
     for (const rawCandidate of rawCandidates) {
       const entry = normalizeEntry(rawCandidate.entry ?? rawCandidate, now, localAmount)
       if (!entry) continue
+      // Journal content must always equal the user's exact original text — AI output
+      // often corrupts tonal-language diacritics (e.g. Vietnamese ấ→á, ồ→ổ) when
+      // paraphrasing, and the raw input is always the correct source of truth here.
+      if (entry.module === 'journal') entry.content = text
       candidates.push({
         id: candidateId(entry),
         entry,

@@ -1,91 +1,134 @@
 # Sync & Offline
 
-> Offline-first architecture. SQLite = source of truth. Supabase = cloud mirror.
-> **Status: IMPLEMENTED (2026-05-21)** — migration v8, `database/sync/`, `services/sync.ts`, 4 modules wired.
-> Supabase tables: run `docs/supabase-setup.sql` on Supabase Dashboard → SQL Editor.
+> Offline-first architecture. SQLite is the local source of truth. Supabase is a
+> cloud mirror driven by `sync_queue`.
+
+## Current Status
+
+Implemented:
+
+- Local `sync_queue` table.
+- Queue enqueue from Finance, Reminders, Habits, and Journals service writes.
+- AppState-based sync worker in `services/sync.ts`.
+- Per-module sync toggles in `store/settingsStore.ts`.
+- Supabase table/RLS setup SQL in `docs/supabase-setup.sql`.
+- Queue retry count and last error tracking.
+
+Not implemented yet:
+
+- Server-mediated `/sync/push` or `/sync/pull`.
+- Cloud-to-local pull/merge.
+- Conflict review UI.
+- `conflict_log` table.
+- Network reachability listener beyond app foreground drain.
+- Five-second undo delay before sync queue insertion for `aiAutoConfirm = false`.
 
 ## Principles
 
-- **Local-first writes** — every mutation hits SQLite immediately
-- **Optimistic UI** — UI reflects local state, sync happens in background
-- **Eventually consistent** — cloud catches up when network available
+- Local writes must succeed without network.
+- UI reads from SQLite-backed stores, not Supabase.
+- Supabase writes happen in the background through the queue.
+- If module sync is disabled, local writes still happen and queue rows remain
+  pending.
 
-## AI-parsed entries — Undo window (Cross-Module Rule 5)
+## Queue Schema
 
-When user sets `settingsStore.aiAutoConfirm = false`, AI-parsed entries skip the confirm sheet and save directly. To preserve the safeguard, the sync engine MUST honor a 5-second Undo window:
+`database/sync/schema.ts` defines:
 
-1. Service writes row to SQLite + marks it with `pending_undo = true` (or holds in memory + delays `sync_queue` insert)
-2. Toast shown: `"✓ Saved · Undo"` for 5 seconds
-3. On Undo tap → hard-delete the row, never enters `sync_queue`
-4. After 5s → drop `pending_undo` flag → row enters `sync_queue` as normal
-
-Voice inputs are exempt — they always show the full confirm sheet regardless of this setting.
-
-## Per-module sync toggle (Cross-Module Rule 1)
-
-Each domain module exposes a sync on/off toggle in Settings.
-
-- Stored: `settingsStore.moduleSync[<module>]: boolean` (default `true`)
-- When OFF: writes still go to SQLite + `sync_queue`, but the worker filters out `<module>_*` table ops
-- Toggling back ON: worker drains accumulated queue entries on next tick
-- Hard requirement: every module that touches user data must register in the toggle list
-
-## Wipe operation
-
-Every module exports `wipeAllData()` from its service layer:
-
-```ts
-async function wipeAllData(): Promise<Result<{ deleted: number }, AppError>>
+```sql
+sync_queue (
+  id TEXT PRIMARY KEY NOT NULL,
+  table_name TEXT NOT NULL,
+  row_id TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK (operation IN ('upsert', 'wipe')),
+  created_at TEXT NOT NULL,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT
+)
 ```
 
-Steps:
-1. Hard `DELETE FROM <module>_*` in SQLite (no soft tombstone — user wants real removal)
-2. Insert special `op: 'wipe'` row into `sync_queue` with table prefix
-3. Clear in-memory Zustand store state for that module
-4. Sync worker, on next drain, calls `DELETE` on Supabase for matching `user_id` + table prefix
-5. Return `{ deleted: <count> }` for confirmation toast
+`upsert` rows are deduplicated by `(table_name, row_id)`.
 
-UI lives in `features/settings/screens/<Module>DataScreen.tsx` with destructive-button + double-confirm pattern.
+## Operations
 
-## Sync Engine
+### `upsert`
 
-Location: `database/sync/`
+Used for create, update, and soft delete.
 
 Flow:
-1. Local write → SQLite + `sync_queue` table (entry per pending op)
-2. Background worker drains queue → POST to Supabase
-3. On success: remove from queue, set `synced_at` on row
-4. On failure: exponential backoff, max retries, then surface to user
 
-## Conflict Resolution
+1. Domain service writes the row to SQLite.
+2. Domain service enqueues `operation = 'upsert'`.
+3. Worker fetches the current local row.
+4. Worker sends the row to Supabase with `upsert(..., { onConflict: 'id' })`.
+5. On success, worker updates the row `synced_at` and removes the queue item.
 
-**Per-table policies:**
+Soft-deleted rows are mirrored as rows with `deleted_at` set.
 
-| Table | Policy | Why |
-|---|---|---|
-| `finance_transaction` | LWW by `updated_at`, but **never resurrect** deleted rows | financial integrity — deletion is intentional |
-| `finance_category` (user-owned) | LWW | low-frequency edits |
-| `journal_entry` | **Manual review** — surface both versions | body is irreplaceable user content |
-| `habit`, `habit_log` | LWW | low value if lost |
-| `reminder` | LWW; if local trigger already fired, mark `completed` not `pending` | avoid re-firing notifications |
-| `ai_insight` | Server wins | server is generator |
+### `wipe`
 
-**Mechanics:**
-1. Server is authority for conflict detection (compares incoming `updated_at` vs current row)
-2. On conflict: server returns `409 CONFLICT` with `{ server_version, client_version }`
-3. Client applies table's policy:
-   - LWW → take newer `updated_at`, re-queue if local newer
-   - Manual → write to `conflict_log` table, prompt user on next app open
-4. Soft-deletes are **tombstones**: `deleted_at != NULL` always wins over later un-deletes (no resurrection)
+Used by module-level destructive wipe actions.
 
-## Network Detection
+Flow:
 
-- Listen to NetInfo (React Native)
-- Pause sync worker when offline
-- Resume + drain on reconnect
+1. Domain service hard-deletes local rows for the module.
+2. Domain service enqueues `operation = 'wipe'` for each affected table.
+3. Worker deletes Supabase rows where `user_id` is the signed-in user.
+4. Worker removes the queue item.
 
-## Edge Cases
+## Table Mapping
 
-- App killed mid-sync → queue persists in SQLite, resumes on next launch
-- Same row edited offline on 2 devices → LWW resolves; surface "conflict log" for user review
-- Supabase schema drift → fail loudly in dev, log + skip in prod
+The sync worker maps tables to settings toggles in `services/sync.ts`.
+
+| Table | Toggle |
+|---|---|
+| `finance_transaction` | `syncFinance` |
+| `finance_category` | `syncFinance` |
+| `finance_rule` | `syncFinance` |
+| `reminder` | `syncReminders` |
+| `habit` | `syncHabits` |
+| `habit_log` | `syncHabits` |
+| `journal` | `syncJournals` |
+
+Any future domain table must be added to this map and to the data-management UI.
+
+## Retry Behavior
+
+- Worker processes up to 50 pending items per drain.
+- Failed items increment `retry_count` and store `last_error`.
+- Items with retry count at or above the max retry threshold are purged by the
+  current implementation.
+
+Current hardening gap: purging max-retry items can hide persistent sync failure
+from users. Before public launch, prefer a visible "sync needs attention" state
+instead of silent purge.
+
+## Conflict Model
+
+Current implementation is push-only and direct-table upsert. It does not yet
+perform explicit conflict detection.
+
+Target conflict policy for a future pull/merge system:
+
+| Table | Target policy |
+|---|---|
+| `finance_transaction` | Last-write-wins, with deleted rows never resurrected |
+| `finance_category` | Last-write-wins |
+| `journal` | Last-write-wins (manual review UI is not implemented — do not mark complete until a pull/merge path and conflict review UI exist) |
+| `habit`, `habit_log` | Last-write-wins |
+| `reminder` | Last-write-wins, avoid refiring stale notifications |
+
+Do not mark conflict handling complete until there is a pull/merge path and tests.
+
+## AI Save Undo Window
+
+Security/product docs describe a desired five-second undo window when
+`settingsStore.aiAutoConfirm === false`. The current sync queue enqueues
+immediately from domain services.
+
+If this safeguard is implemented later, the service should either:
+
+- delay queue insertion until the undo window expires; or
+- write a local pending state and have the queue worker skip pending rows.
+
+Voice input still must always show confirmation before saving.

@@ -30,7 +30,7 @@ export async function createJournal(
       id: uuid(),
       user_id: getCurrentUserId(),
       content: data.content,
-      mood: data.mood ?? null,
+      mood: data.mood ?? 3,
       is_important: data.is_important ?? 0,
       occurred_at: data.occurred_at,
       location_lat: data.location_lat ?? null,

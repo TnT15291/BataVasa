@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
+import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator, Alert } from 'react-native'
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { FlashList } from '@shopify/flash-list'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -27,8 +28,11 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getRates, convertMinorAmount, summarizeInCurrency } from '@services/fx'
 import { formatAmount } from '@features/finance/services'
+import { translateCategoryName } from '../i18n'
 import { getDateFnsLocale } from '@services/locale'
 import type { Transaction } from '../types'
+import { SkeletonTransactionList } from '@components/SkeletonBox'
+import { FAB } from '@components/FAB'
 
 type Period = 'today' | 'week' | 'month' | 'all'
 type CurrencyTotals = { income: number; expense: number }
@@ -337,7 +341,7 @@ export function TransactionListScreen() {
                 {reviewCount > 0
                   ? t.review_queue_count.replace('{{count}}', String(reviewCount))
                   : topCategory?.category
-                    ? `${topCategory.category.name} / ${formatAmount(topCategory.amount, topCategory.currency, language)}`
+                    ? `${translateCategoryName(topCategory.category, t)} / ${formatAmount(topCategory.amount, topCategory.currency, language)}`
                     : t.no_transactions}
               </Text>
             </View>
@@ -410,7 +414,6 @@ export function TransactionListScreen() {
               {[
                 { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/reports' },
                 { label: t.nav_insights, icon: 'activity' as const, route: '/insights' },
-                { label: t.nav_chat, icon: 'message-circle' as const, route: '/chat' },
               ].map((item) => (
                 <Pressable
                   key={item.route}
@@ -440,12 +443,35 @@ export function TransactionListScreen() {
             )
           }
           return (
-            <TransactionRow
-              tx={item.tx}
-              category={catById.get(item.tx.category_id)}
-              onPress={() => router.push({ pathname: '/new', params: { id: item.tx.id } })}
-              onLongPress={() => remove(item.tx.id)}
-            />
+            <ReanimatedSwipeable
+              renderRightActions={(_progress, _drag, swipeable) => (
+                <Pressable
+                  onPress={() => {
+                    swipeable.close()
+                    Alert.alert(t.delete, t.confirm_delete_msg, [
+                      { text: t.cancel, style: 'cancel' },
+                      { text: t.delete, style: 'destructive', onPress: () => remove(item.tx.id) },
+                    ])
+                  }}
+                  style={[styles.swipeDelete, { backgroundColor: theme.semantic.danger }]}
+                >
+                  <Feather name="trash-2" size={20} color="#fff" />
+                </Pressable>
+              )}
+              overshootRight={false}
+            >
+              <TransactionRow
+                tx={item.tx}
+                category={catById.get(item.tx.category_id)}
+                onPress={() => router.push({ pathname: '/new', params: { id: item.tx.id } })}
+                onLongPress={() => {
+                  Alert.alert(t.delete, t.confirm_delete_msg, [
+                    { text: t.cancel, style: 'cancel' },
+                    { text: t.delete, style: 'destructive', onPress: () => remove(item.tx.id) },
+                  ])
+                }}
+              />
+            </ReanimatedSwipeable>
           )
         }}
         onEndReached={!reviewOnly && activePeriod === 'all' && hasMore ? loadMore : undefined}
@@ -465,9 +491,7 @@ export function TransactionListScreen() {
         }
         ListEmptyComponent={
           isLoading ? (
-            <View style={styles.empty}>
-              <ActivityIndicator size="large" color={theme.brand.primary} />
-            </View>
+            <SkeletonTransactionList />
           ) : reviewOnly ? (
             <View style={styles.empty}>
               <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
@@ -493,14 +517,13 @@ export function TransactionListScreen() {
         }
       />
 
-      <Pressable
+      <FAB
         onPress={() => router.push('/new')}
-        accessibilityRole="button"
         accessibilityLabel={t.nav_new_transaction}
-        style={[styles.fab, { backgroundColor: theme.brand.primary }]}
+        style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
       >
         <Feather name="plus" size={28} color="#fff" />
-      </Pressable>
+      </FAB>
 
     </View>
   )
@@ -514,11 +537,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[4],
-    gap: spacing[4],
+    gap: spacing[3],
   },
   overviewTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3] },
   eyebrow: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing[1] },
-  netAmount: { fontSize: 28, fontWeight: '800' },
+  netAmount: { fontSize: 26, fontWeight: '800' },
   converted: { fontSize: 12, fontWeight: '600' },
   metricRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   metric: { flex: 1, gap: spacing[1] },
@@ -538,7 +561,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   segment: { flex: 1, alignItems: 'center', borderRadius: radius.sm, paddingVertical: spacing[2] },
-  segmentText: { fontSize: 12, fontWeight: '700' },
+  segmentText: { fontSize: 13, fontWeight: '700' },
   analysisRow: { flexDirection: 'row', gap: spacing[2] },
   reviewFilter: {
     minHeight: 44,
@@ -571,8 +594,8 @@ const styles = StyleSheet.create({
   recurringMeta: { fontSize: 11 },
   recurringAmount: { fontSize: 12, fontWeight: '800' },
   recurringBtn: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
     borderWidth: 1,
     alignItems: 'center',
@@ -619,10 +642,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  swipeDelete: {
+    width: 72,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    marginBottom: spacing[2],
+  },
   fab: {
     position: 'absolute',
     right: spacing[6],
-    bottom: spacing[8],
     width: 56,
     height: 56,
     borderRadius: radius.full,

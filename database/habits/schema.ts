@@ -11,6 +11,7 @@ export async function createHabitSchema(db: SQLiteDatabase): Promise<void> {
       cadence         TEXT NOT NULL DEFAULT 'daily',
       target_per_period INTEGER NOT NULL DEFAULT 1,
       schedule_days   TEXT,
+      notification_times TEXT,
       location_lat    REAL,
       location_lng    REAL,
       location_label  TEXT,

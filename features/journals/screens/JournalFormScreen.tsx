@@ -14,7 +14,7 @@ import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
-import { parseJournalEntry } from '@services/ai/journalParser'
+import { parseJournalEntry } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { Feather } from '@expo/vector-icons'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
@@ -315,10 +315,10 @@ export function JournalFormScreen() {
           <Feather name="calendar" size={18} color={remindAfterYear ? theme.brand.primary : theme.text.muted} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.importantText, { color: remindAfterYear ? theme.brand.primary : theme.text.secondary }]}>
-              Remind me in 1 year
+              {t.journal_anniversary_reminder}
             </Text>
             <Text style={[styles.anniversaryHint, { color: theme.text.muted }]}>
-              Creates a high-priority reminder for this important event.
+              {t.journal_anniversary_reminder_hint}
             </Text>
           </View>
         </Pressable>

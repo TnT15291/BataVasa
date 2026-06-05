@@ -34,6 +34,7 @@ const baseHabit: Habit = {
   cadence: 'daily',
   target_per_period: 1,
   schedule_days: null,
+  notification_times: null,
   location_lat: null,
   location_lng: null,
   location_label: null,

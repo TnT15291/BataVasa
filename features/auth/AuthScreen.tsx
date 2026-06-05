@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, Pressable, StyleSheet,
   Platform, ActivityIndicator, ScrollView, Modal,
 } from 'react-native'
-import { Feather } from '@expo/vector-icons'
+import { Feather, AntDesign } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation, LANGUAGES } from '@services/i18n'
@@ -80,6 +80,7 @@ export function AuthScreen() {
   const error = useAuthStore((s) => s.error)
   const signIn = useAuthStore((s) => s.signIn)
   const signUp = useAuthStore((s) => s.signUp)
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const resetPassword = useAuthStore((s) => s.resetPassword)
   const clearError = useAuthStore((s) => s.clearError)
 
@@ -209,6 +210,24 @@ export function AuthScreen() {
             : <Text style={styles.ctaText}>{mode === 'signin' ? t.auth_signin_cta : t.auth_signup_cta}</Text>}
         </Pressable>
 
+        <View style={styles.divider}>
+          <View style={[styles.dividerLine, { backgroundColor: theme.border.subtle }]} />
+          <Text style={[styles.dividerText, { color: theme.text.muted }]}>{t.auth_or_divider}</Text>
+          <View style={[styles.dividerLine, { backgroundColor: theme.border.subtle }]} />
+        </View>
+
+        <Pressable
+          onPress={signInWithGoogle}
+          disabled={busy}
+          style={({ pressed }) => [
+            styles.googleBtn,
+            { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.strong, opacity: busy ? 0.6 : 1 },
+          ]}
+        >
+          <AntDesign name="google" size={18} color="#DB4437" />
+          <Text style={[styles.googleBtnText, { color: theme.text.primary }]}>{t.auth_google_cta}</Text>
+        </Pressable>
+
         <Pressable onPress={toggleMode} style={styles.toggle} hitSlop={8}>
           <Text style={[styles.toggleText, { color: theme.brand.primary }]}>
             {mode === 'signin' ? t.auth_toggle_to_signup : t.auth_toggle_to_signin}
@@ -269,6 +288,20 @@ const styles = StyleSheet.create({
   forgotText: { fontSize: 13, fontWeight: '600' },
   cta: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[5] },
   ctaText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: spacing[4] },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  dividerText: { fontSize: 13 },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[3],
+    paddingVertical: spacing[3] + 2,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginTop: spacing[3],
+  },
+  googleBtnText: { fontSize: 15, fontWeight: '600' },
   toggle: { alignItems: 'center', paddingVertical: spacing[4] },
   toggleText: { fontSize: 14, fontWeight: '500' },
   code: { fontSize: 13, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginTop: spacing[5], borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },

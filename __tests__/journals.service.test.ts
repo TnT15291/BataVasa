@@ -34,7 +34,7 @@ jest.mock('../services/logger', () => ({
 }))
 
 import * as q from '../database/journals/queries'
-import { createJournal, updateJournal, deleteJournal, loadJournals, wipeAllJournals } from '../features/journals/services'
+import { createJournal, updateJournal, deleteJournal, loadJournals, wipeAllJournals, exportAllJournals } from '../features/journals/services'
 import type { Journal } from '../features/journals/types'
 
 const mockQ = q as jest.Mocked<typeof q>
@@ -165,5 +165,66 @@ describe('wipeAllJournals', () => {
     const result = await wipeAllJournals()
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.value.deleted).toBe(5)
+  })
+
+  it('returns DB_ERROR on throw', async () => {
+    mockQ.wipeJournals.mockRejectedValue(new Error('fail'))
+    const result = await wipeAllJournals()
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+})
+
+describe('updateJournal — error paths', () => {
+  it('returns VALIDATION_FAILED for empty id', async () => {
+    const result = await updateJournal({ id: '' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED')
+  })
+
+  it('returns INTERNAL when fresh journal vanishes after update', async () => {
+    mockQ.getJournal.mockResolvedValueOnce(baseJournal).mockResolvedValueOnce(null)
+    mockQ.updateJournal.mockResolvedValue(undefined as any)
+    const result = await updateJournal({ id: baseJournal.id, content: 'Ghost' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('INTERNAL')
+  })
+
+  it('returns DB_ERROR on throw', async () => {
+    mockQ.getJournal.mockResolvedValue(baseJournal)
+    mockQ.updateJournal.mockRejectedValue(new Error('fail'))
+    const result = await updateJournal({ id: baseJournal.id, content: 'X' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+})
+
+describe('deleteJournal — error path', () => {
+  it('returns DB_ERROR on throw', async () => {
+    mockQ.getJournal.mockResolvedValue(baseJournal)
+    mockQ.softDeleteJournal.mockRejectedValue(new Error('fail'))
+    const result = await deleteJournal(baseJournal.id)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+})
+
+describe('exportAllJournals', () => {
+  it('returns JSON with exported_at', async () => {
+    mockQ.exportJournalsData.mockResolvedValue([baseJournal])
+    const result = await exportAllJournals()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const parsed = JSON.parse(result.value)
+      expect(parsed.exported_at).toBeDefined()
+      expect(parsed.journals).toHaveLength(1)
+    }
+  })
+
+  it('returns DB_ERROR on throw', async () => {
+    mockQ.exportJournalsData.mockRejectedValue(new Error('fail'))
+    const result = await exportAllJournals()
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
   })
 })

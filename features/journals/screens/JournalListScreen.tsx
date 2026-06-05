@@ -8,15 +8,17 @@ import { useRouter } from 'expo-router'
 import { endOfDay, format, startOfDay, subDays } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
+import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { getProviderKey } from '@services/ai/openai'
-import { parseJournalEntry, type ParsedJournal } from '@services/ai/journalParser'
+import { parseJournalEntry, type ParsedJournal } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
 import { generateJournalReflection, type JournalReflection } from '@services/ai/journalInsight'
 import type { Journal } from '../types'
+import { FAB } from '@components/FAB'
 
 const MOOD_COLORS = ['', '#D96C6C', '#E0A84B', '#8A8A8A', '#6FAE75', '#4FA3D8'] as const
 
@@ -275,12 +277,14 @@ export function JournalListScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={styles.list}>
-        <View style={[styles.hero, { backgroundColor: '#9C27B014', borderColor: '#9C27B044' }]}>
+        <View style={[styles.hero, { backgroundColor: MODULE_COLORS.journal + '14', borderColor: MODULE_COLORS.journal + '44' }]}>
           <View style={styles.heroTop}>
             <View style={styles.heroText}>
               <Text style={[styles.heroKicker, { color: theme.text.muted }]}>{t.nav_journal}</Text>
               <Text style={[styles.heroTitle, { color: theme.text.primary }]} numberOfLines={2}>
-                {journalStats.latest ? journalStats.latest.content.slice(0, 90) : t.journal_empty_prompt}
+                {journalStats.latest
+                  ? journalStats.latest.content.replace(/^#+\s?/gm, '').replace(/[*_`]/g, '').replace(/\n+/g, ' ').trim().slice(0, 90)
+                  : t.journal_empty_prompt}
               </Text>
               <Text style={[styles.heroSubtitle, { color: theme.text.muted }]}>
                 {journalStats.latest
@@ -288,8 +292,8 @@ export function JournalListScreen() {
                   : t.no_journals_msg}
               </Text>
             </View>
-            <View style={[styles.heroIcon, { backgroundColor: '#9C27B01F' }]}>
-              <Feather name="book-open" size={28} color="#9C27B0" />
+            <View style={[styles.heroIcon, { backgroundColor: MODULE_COLORS.journal + '1F' }]}>
+              <Feather name="book-open" size={28} color={MODULE_COLORS.journal} />
             </View>
           </View>
           <View style={styles.statGrid}>
@@ -298,7 +302,7 @@ export function JournalListScreen() {
               <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.today}</Text>
             </View>
             <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.statValue, { color: '#9C27B0' }]}>{journalStats.weekCount}</Text>
+              <Text style={[styles.statValue, { color: MODULE_COLORS.journal }]}>{journalStats.weekCount}</Text>
               <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.weekly}</Text>
             </View>
             <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
@@ -308,6 +312,32 @@ export function JournalListScreen() {
               <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_important}</Text>
             </View>
           </View>
+        </View>
+
+        <View style={styles.actionRow}>
+          <Pressable
+            onPress={handleReflect}
+            disabled={reflecting}
+            style={[styles.actionBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.brand.primary }]}
+          >
+            {reflecting ? (
+              <ActivityIndicator size="small" color={theme.brand.primary} />
+            ) : (
+              <Feather name="star" size={16} color={theme.brand.primary} />
+            )}
+            <Text style={[styles.actionText, { color: theme.brand.primary }]} numberOfLines={1}>
+              {t.journal_ai_reflect}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/journals-report')}
+            style={[styles.actionBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+          >
+            <Feather name="bar-chart-2" size={16} color={theme.text.secondary} />
+            <Text style={[styles.actionText, { color: theme.text.secondary }]} numberOfLines={1}>
+              {t.journals_report_title}
+            </Text>
+          </Pressable>
         </View>
 
         {groups.map((group) => (
@@ -324,40 +354,13 @@ export function JournalListScreen() {
         ))}
       </ScrollView>
 
-      <Pressable
-        onPress={handleReflect}
-        disabled={reflecting}
-        accessibilityRole="button"
-        accessibilityLabel={t.journal_ai_reflect}
-        style={[styles.reflectBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.brand.primary }]}
-      >
-        {reflecting ? (
-          <ActivityIndicator size="small" color={theme.brand.primary} />
-        ) : (
-          <>
-            <Feather name="star" size={16} color={theme.brand.primary} />
-            <Text style={[styles.reflectBtnText, { color: theme.brand.primary }]}>{t.journal_ai_reflect}</Text>
-          </>
-        )}
-      </Pressable>
-
-      <Pressable
-        onPress={() => router.push('/journals-report')}
-        accessibilityRole="button"
-        accessibilityLabel={t.journals_report_title}
-        style={[styles.reportBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
-      >
-        <Feather name="bar-chart-2" size={20} color={theme.text.secondary} />
-      </Pressable>
-
-      <Pressable
+      <FAB
         onPress={() => router.push('/journal')}
-        accessibilityRole="button"
         accessibilityLabel={t.new_journal}
-        style={[styles.fab, { backgroundColor: theme.brand.primary }]}
+        style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
       >
         <Feather name="plus" size={28} color="#fff" />
-      </Pressable>
+      </FAB>
 
       <ReflectSheet
         visible={sheetVisible}
@@ -418,11 +421,11 @@ const styles = StyleSheet.create({
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   heroText: { flex: 1, gap: spacing[1] },
   heroKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroTitle: { fontSize: 21, lineHeight: 27, fontWeight: '800' },
+  heroTitle: { fontSize: 19, lineHeight: 25, fontWeight: '800' },
   heroSubtitle: { fontSize: 13, lineHeight: 18 },
   heroIcon: {
-    width: 62,
-    height: 62,
+    width: 56,
+    height: 56,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -438,6 +441,19 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 20, fontWeight: '800' },
   statLabel: { fontSize: 11, fontWeight: '700', marginTop: 2 },
+  actionRow: { flexDirection: 'row', gap: spacing[2] },
+  actionBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+  },
+  actionText: { fontSize: 12, fontWeight: '800' },
   group: { gap: spacing[2] },
   dateLabel: { fontSize: 15, fontWeight: '800', marginBottom: 2 },
   row: {
@@ -461,24 +477,8 @@ const styles = StyleSheet.create({
   emptyPrompt: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[3], fontSize: 14, marginTop: spacing[1] },
   emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
   emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  reflectBtn: {
-    position: 'absolute', left: spacing[6], bottom: spacing[8],
-    paddingHorizontal: spacing[4], paddingVertical: spacing[3],
-    borderRadius: radius.full, borderWidth: 1.5,
-    flexDirection: 'row', alignItems: 'center', gap: spacing[2],
-    elevation: 3, shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    minWidth: 44, justifyContent: 'center',
-  },
-  reflectBtnText: { fontSize: 14, fontWeight: '600' },
-  reportBtn: {
-    position: 'absolute', left: spacing[6], bottom: spacing[8] + 56,
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1,
-    elevation: 3, shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
-  },
   fab: {
-    position: 'absolute', right: spacing[6], bottom: spacing[8],
+    position: 'absolute', right: spacing[6],
     width: 56, height: 56, borderRadius: radius.full,
     alignItems: 'center', justifyContent: 'center',
     elevation: 6, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },

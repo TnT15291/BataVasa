@@ -12,6 +12,7 @@ export type Habit = {
   cadence: Cadence
   target_per_period: number
   schedule_days: string | null // comma-separated weekday indexes, 0=Sun ... 6=Sat
+  notification_times: string | null // JSON array of "HH:MM" strings, e.g. '["07:00","21:30"]'
   location_lat: number | null
   location_lng: number | null
   location_label: string | null
@@ -41,6 +42,7 @@ export const CreateHabitInputSchema = z.object({
   cadence: CadenceSchema.default('daily'),
   target_per_period: z.number().int().min(1).max(99).default(1),
   schedule_days: z.string().max(20).nullable().optional(),
+  notification_times: z.string().nullable().optional(),
   location_lat: z.number().min(-90).max(90).optional(),
   location_lng: z.number().min(-180).max(180).optional(),
   location_label: z.string().max(200).optional(),

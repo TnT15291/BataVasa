@@ -3,6 +3,17 @@ import {
   View, Text, TextInput, Pressable, StyleSheet,
   Modal, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  runOnJS,
+  FadeInDown,
+  ZoomIn,
+} from 'react-native-reanimated'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { format } from 'date-fns'
@@ -40,6 +51,100 @@ type Props = {
   autoAnalyzeToken?: number
 }
 
+type CandidateCardProps = {
+  candidate: UniversalCandidate
+  selected: boolean
+  onToggle: (id: string) => void
+  index: number
+  language: string
+  currency: string
+  t: ReturnType<typeof useTranslation>['t']
+  theme: ReturnType<typeof useTheme>
+}
+
+function CandidateCard({ candidate, selected, onToggle, index, language, currency, t, theme }: CandidateCardProps) {
+  const result = candidate.entry
+  const meta = MODULE_META[result.module]!
+  const locale = getDateFnsLocale(language)
+  const scale = useSharedValue(1)
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  const handlePress = () => {
+    scale.value = withSpring(0.97, { damping: 15 }, () => {
+      scale.value = withSpring(1, { damping: 12 })
+    })
+    onToggle(candidate.id)
+  }
+
+  let lines: string[] = []
+  if (result.module === 'finance') {
+    const sign = result.direction === 'expense' ? '- ' : '+ '
+    lines = [
+      `${sign}${formatAmount(result.amount_cents, currency, language)}`,
+      result.category_hint,
+      result.merchant || '',
+      result.occurred_at ? format(new Date(result.occurred_at), 'dd/MM/yyyy', { locale }) : '',
+    ].filter(Boolean)
+  } else if (result.module === 'reminder') {
+    lines = [
+      result.title,
+      result.remind_at ? format(new Date(result.remind_at), 'dd/MM/yyyy HH:mm', { locale }) : '',
+      result.recurrence !== 'none' ? result.recurrence : '',
+      result.note || '',
+    ].filter(Boolean)
+  } else if (result.module === 'habits') {
+    lines = [result.title, result.frequency]
+  } else {
+    lines = [result.content?.slice(0, 120) ?? '']
+  }
+
+  const moduleLabel: Record<string, string> = {
+    finance: t.classified_finance,
+    reminder: t.classified_reminder,
+    habits: t.classified_habits,
+    journal: t.classified_journal,
+  }
+
+  return (
+    <Animated.View entering={FadeInDown.delay(index * 80).springify().damping(14)} style={cardStyle}>
+      <Pressable
+        onPress={handlePress}
+        style={[styles.resultCard, {
+          backgroundColor: theme.bg.elevated,
+          borderColor: selected ? meta.color : meta.color + '44',
+        }]}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: selected }}
+      >
+        <View style={styles.resultHeader}>
+          <View style={[styles.resultIconWrap, { backgroundColor: meta.color + '1F' }]}>
+            <Feather name={meta.icon} size={20} color={meta.color} />
+          </View>
+          <Text style={[styles.resultModule, { color: meta.color }]}>{moduleLabel[result.module]}</Text>
+          <View style={[styles.resultCheck, {
+            borderColor: meta.color,
+            backgroundColor: selected ? meta.color : 'transparent',
+          }]}>
+            {selected && (
+              <Animated.View entering={ZoomIn.duration(150)}>
+                <Feather name="check" size={12} color="#fff" />
+              </Animated.View>
+            )}
+          </View>
+        </View>
+        {lines.map((line, i) => (
+          <Text key={i} style={[styles.resultLine, { color: i === 0 ? theme.text.primary : theme.text.muted }]}>
+            {line}
+          </Text>
+        ))}
+      </Pressable>
+    </Animated.View>
+  )
+}
+
 export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnalyzeToken = 0 }: Props) {
   const theme = useTheme()
   const router = useRouter()
@@ -57,6 +162,21 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   const [candidates, setCandidates] = useState<UniversalCandidate[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+  const [show, setShow] = useState(false)
+
+  const translateY = useSharedValue(600)
+  const backdropOpacity = useSharedValue(0)
+
+  useEffect(() => {
+    if (visible) {
+      setShow(true)
+      translateY.value = 600
+      backdropOpacity.value = 0
+      translateY.value = withDelay(30, withSpring(0, { damping: 20, stiffness: 200 }))
+      backdropOpacity.value = withDelay(30, withTiming(1, { duration: 250 }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible])
 
   const reset = () => {
     setText('')
@@ -66,9 +186,44 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
     setSaving(false)
   }
 
-  const handleClose = () => { reset(); onClose() }
+  const animateOut = (onDone?: () => void) => {
+    translateY.value = withTiming(650, { duration: 280 })
+    backdropOpacity.value = withTiming(0, { duration: 220 }, (done) => {
+      if (done) {
+        runOnJS(setShow)(false)
+        runOnJS(reset)()
+        runOnJS(onClose)()
+        if (onDone) runOnJS(onDone)()
+      }
+    })
+  }
 
-  const goToForm = (route: string) => { handleClose(); router.push(route as any) }
+  const handleClose = () => animateOut()
+  const goToForm = (route: string) => animateOut(() => router.push(route as any))
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      if (e.translationY > 0) {
+        translateY.value = e.translationY
+        backdropOpacity.value = Math.max(0, 1 - e.translationY / 300)
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationY > 120 || e.velocityY > 700) {
+        runOnJS(handleClose)()
+      } else {
+        translateY.value = withSpring(0, { damping: 18, stiffness: 200 })
+        backdropOpacity.value = withTiming(1, { duration: 200 })
+      }
+    })
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }))
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }))
 
   const quickModules: { route: string; icon: IconName; color: string; label: string }[] = [
     { route: '/new', icon: 'dollar-sign', color: '#4CAF50', label: t.nav_new_transaction },
@@ -156,7 +311,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
           name: entry.title,
           cadence,
           target_per_period: 1,
-          icon: 'check',
+          icon: '✅',
           color: '#4CAF50',
         })
         if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
@@ -189,159 +344,122 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
     )
   }
 
-  const renderSummary = (candidate: UniversalCandidate) => {
-    const result = candidate.entry
-    const meta = MODULE_META[result.module]!
-    const locale = getDateFnsLocale(language)
-
-    let lines: string[] = []
-    if (result.module === 'finance') {
-      const sign = result.direction === 'expense' ? '- ' : '+ '
-      lines = [
-        `${sign}${formatAmount(result.amount_cents, currency, language)}`,
-        result.category_hint,
-        result.merchant || '',
-        result.occurred_at ? format(new Date(result.occurred_at), 'dd/MM/yyyy', { locale }) : '',
-      ].filter(Boolean)
-    } else if (result.module === 'reminder') {
-      lines = [
-        result.title,
-        result.remind_at ? format(new Date(result.remind_at), 'dd/MM/yyyy HH:mm', { locale }) : '',
-        result.recurrence !== 'none' ? result.recurrence : '',
-        result.note || '',
-      ].filter(Boolean)
-    } else if (result.module === 'habits') {
-      lines = [result.title, result.frequency]
-    } else {
-      lines = [result.content?.slice(0, 120) ?? '']
-    }
-
-    const moduleLabel: Record<string, string> = {
-      finance: t.classified_finance,
-      reminder: t.classified_reminder,
-      habits: t.classified_habits,
-      journal: t.classified_journal,
-    }
-
-    return (
-      <Pressable
-        onPress={() => toggleCandidate(candidate.id)}
-        style={[styles.resultCard, { backgroundColor: theme.bg.elevated, borderColor: selectedIds.includes(candidate.id) ? meta.color : meta.color + '44' }]}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: selectedIds.includes(candidate.id) }}
-      >
-        <View style={styles.resultHeader}>
-          <View style={[styles.resultIconWrap, { backgroundColor: meta.color + '1F' }]}>
-            <Feather name={meta.icon} size={20} color={meta.color} />
-          </View>
-          <Text style={[styles.resultModule, { color: meta.color }]}>{moduleLabel[result.module]}</Text>
-          <View style={[styles.resultCheck, { borderColor: meta.color, backgroundColor: selectedIds.includes(candidate.id) ? meta.color : 'transparent' }]}>
-            {selectedIds.includes(candidate.id) && <Feather name="check" size={12} color="#fff" />}
-          </View>
-        </View>
-        {lines.map((line, i) => (
-          <Text key={i} style={[styles.resultLine, { color: i === 0 ? theme.text.primary : theme.text.muted }]}>
-            {line}
-          </Text>
-        ))}
-      </Pressable>
-    )
-  }
-
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheetWrap}>
-        <View style={[styles.sheet, { backgroundColor: theme.bg.elevated }]}>
-          <View style={[styles.handle, { backgroundColor: theme.border.strong }]} />
-
-          <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.universal_add_title}</Text>
-
-          {candidates.length === 0 ? (
-            <>
-              <TextInput
-                value={text}
-                onChangeText={setText}
-                placeholder={t.universal_add_hint}
-                placeholderTextColor={theme.text.muted}
-                multiline
-                numberOfLines={3}
-                style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
-                autoFocus
-              />
-              <Text style={[styles.examples, { color: theme.text.muted }]}>{t.universal_add_examples}</Text>
-              <View style={styles.analyzeRow}>
-                <VoiceButton onResult={(t) => onAnalyze(t)} disabled={analyzing} size={44} module="quick_add" />
-                <Pressable
-                  onPress={() => onAnalyze()}
-                  disabled={analyzing || !text.trim()}
-                  style={[styles.analyzeBtn, { backgroundColor: analyzing || !text.trim() ? theme.text.muted : theme.brand.primary }]}
-                >
-                  {analyzing
-                    ? <ActivityIndicator color="#fff" />
-                    : (
-                      <View style={styles.analyzeBtnContent}>
-                        <Feather name="send" size={16} color="#fff" />
-                        <Text style={styles.analyzeBtnText}>{t.parse_btn}</Text>
-                      </View>
-                    )}
-                </Pressable>
+    <Modal visible={show} transparent animationType="none" onRequestClose={handleClose}>
+      <View style={{ flex: 1 }}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, styles.backdrop, backdropStyle]}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={handleClose} />
+        </Animated.View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.sheetWrap}
+          pointerEvents="box-none"
+        >
+          <Animated.View style={[styles.sheet, { backgroundColor: theme.bg.elevated }, sheetStyle]}>
+            <GestureDetector gesture={panGesture}>
+              <View style={styles.handleArea}>
+                <View style={[styles.handle, { backgroundColor: theme.border.strong }]} />
               </View>
+            </GestureDetector>
 
-              <View style={styles.dividerRow}>
-                <View style={[styles.dividerLine, { backgroundColor: theme.border.subtle }]} />
-                <Text style={[styles.dividerText, { color: theme.text.muted }]}>{t.universal_add_or_create}</Text>
-                <View style={[styles.dividerLine, { backgroundColor: theme.border.subtle }]} />
-              </View>
-              <View style={styles.quickChips}>
-                {quickModules.map((m) => (
+            <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.universal_add_title}</Text>
+
+            {candidates.length === 0 ? (
+              <>
+                <TextInput
+                  value={text}
+                  onChangeText={setText}
+                  placeholder={t.universal_add_hint}
+                  placeholderTextColor={theme.text.muted}
+                  multiline
+                  numberOfLines={3}
+                  style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
+                  autoFocus
+                />
+                <Text style={[styles.examples, { color: theme.text.muted }]}>{t.universal_add_examples}</Text>
+                <View style={styles.analyzeRow}>
+                  <VoiceButton onResult={(voiceText) => onAnalyze(voiceText)} disabled={analyzing} size={44} module="quick_add" />
                   <Pressable
-                    key={m.route}
-                    onPress={() => goToForm(m.route)}
-                    style={[styles.quickChip, { borderColor: m.color + '55', backgroundColor: m.color + '12' }]}
+                    onPress={() => onAnalyze()}
+                    disabled={analyzing || !text.trim()}
+                    style={[styles.analyzeBtn, { backgroundColor: analyzing || !text.trim() ? theme.text.muted : theme.brand.primary }]}
                   >
-                    <Feather name={m.icon} size={16} color={m.color} />
-                    <Text style={[styles.quickChipText, { color: theme.text.primary }]} numberOfLines={1}>{m.label}</Text>
+                    {analyzing
+                      ? <ActivityIndicator color="#fff" />
+                      : (
+                        <View style={styles.analyzeBtnContent}>
+                          <Feather name="send" size={16} color="#fff" />
+                          <Text style={styles.analyzeBtnText}>{t.parse_btn}</Text>
+                        </View>
+                      )}
                   </Pressable>
-                ))}
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={[styles.youSaid, { color: theme.text.muted }]}>{t.ai_confirm_you_said} "{text}"</Text>
-              <ScrollView style={styles.resultsBox} contentContainerStyle={styles.resultsContent}>
-                {candidates.map((candidate) => (
-                  <View key={candidate.id}>{renderSummary(candidate)}</View>
-                ))}
-              </ScrollView>
-              <View style={styles.actionRow}>
-                <Pressable onPress={handleClose} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
-                  <Text style={{ color: theme.text.secondary }}>{t.cancel}</Text>
-                </Pressable>
-                <Pressable onPress={() => { setCandidates([]); setSelectedIds([]) }} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
-                  <Text style={{ color: theme.text.secondary }}>{t.ai_confirm_edit}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={onSave}
-                  disabled={saving || selectedIds.length === 0}
-                  style={[styles.actionBtn, styles.saveBtn, { backgroundColor: theme.brand.primary }]}
-                >
-                  {saving
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={{ color: '#fff', fontWeight: '600' }}>{t.save}</Text>}
-                </Pressable>
-              </View>
-            </>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+                </View>
+
+                <View style={styles.dividerRow}>
+                  <View style={[styles.dividerLine, { backgroundColor: theme.border.subtle }]} />
+                  <Text style={[styles.dividerText, { color: theme.text.muted }]}>{t.universal_add_or_create}</Text>
+                  <View style={[styles.dividerLine, { backgroundColor: theme.border.subtle }]} />
+                </View>
+                <View style={styles.quickChips}>
+                  {quickModules.map((m) => (
+                    <Pressable
+                      key={m.route}
+                      onPress={() => goToForm(m.route)}
+                      style={[styles.quickChip, { borderColor: m.color + '55', backgroundColor: m.color + '12' }]}
+                    >
+                      <Feather name={m.icon} size={16} color={m.color} />
+                      <Text style={[styles.quickChipText, { color: theme.text.primary }]} numberOfLines={1}>{m.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.youSaid, { color: theme.text.muted }]}>{t.ai_confirm_you_said} "{text}"</Text>
+                <ScrollView style={styles.resultsBox} contentContainerStyle={styles.resultsContent}>
+                  {candidates.map((candidate, index) => (
+                    <CandidateCard
+                      key={candidate.id}
+                      candidate={candidate}
+                      selected={selectedIds.includes(candidate.id)}
+                      onToggle={toggleCandidate}
+                      index={index}
+                      language={language}
+                      currency={currency}
+                      t={t}
+                      theme={theme}
+                    />
+                  ))}
+                </ScrollView>
+                <View style={styles.actionRow}>
+                  <Pressable onPress={handleClose} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
+                    <Text style={{ color: theme.text.secondary }}>{t.cancel}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => { setCandidates([]); setSelectedIds([]) }} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
+                    <Text style={{ color: theme.text.secondary }}>{t.ai_confirm_edit}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={onSave}
+                    disabled={saving || selectedIds.length === 0}
+                    style={[styles.actionBtn, styles.saveBtn, { backgroundColor: theme.brand.primary }]}
+                  >
+                    {saving
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={{ color: '#fff', fontWeight: '600' }}>{t.save}</Text>}
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   )
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: '#00000055' },
-  sheetWrap: { justifyContent: 'flex-end' },
+  backdrop: { backgroundColor: '#00000055' },
+  sheetWrap: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
@@ -349,7 +467,13 @@ const styles = StyleSheet.create({
     gap: spacing[4],
     paddingBottom: spacing[8],
   },
-  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: spacing[1] },
+  handleArea: {
+    alignItems: 'center',
+    paddingVertical: spacing[2],
+    marginTop: -spacing[2],
+    marginHorizontal: -spacing[5],
+  },
+  handle: { width: 40, height: 4, borderRadius: 2, marginBottom: spacing[1] },
   sheetTitle: { fontSize: 18, fontWeight: '700' },
   input: {
     borderWidth: 1, borderRadius: radius.md,

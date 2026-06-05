@@ -109,3 +109,58 @@ export async function cancelAllNotifications(): Promise<void> {
     logger.error('notifications', 'cancelAllNotifications failed', { error: String(e) })
   }
 }
+
+const HABITS_CHANNEL = 'habits'
+
+async function ensureHabitsChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return
+  await Notifications.setNotificationChannelAsync(HABITS_CHANNEL, {
+    name: 'Habits',
+    importance: Notifications.AndroidImportance.DEFAULT,
+    sound: 'default',
+  })
+}
+
+export async function scheduleHabitNotifications(
+  habitId: string,
+  habitName: string,
+  times: string[],
+  body: string
+): Promise<void> {
+  if (times.length === 0) return
+  try {
+    const granted = await requestNotificationPermission()
+    if (!granted) return
+    await ensureHabitsChannel()
+    for (const time of times) {
+      const [hourStr, minuteStr] = time.split(':')
+      const hour = parseInt(hourStr ?? '0', 10)
+      const minute = parseInt(minuteStr ?? '0', 10)
+      if (isNaN(hour) || isNaN(minute)) continue
+      await Notifications.scheduleNotificationAsync({
+        content: { title: habitName, body, data: { habitId } },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour,
+          minute,
+          channelId: HABITS_CHANNEL,
+        },
+      })
+    }
+  } catch (e) {
+    logger.error('notifications', 'scheduleHabitNotifications failed', { error: String(e) })
+  }
+}
+
+export async function cancelHabitNotifications(habitId: string): Promise<void> {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync()
+    await Promise.all(
+      scheduled
+        .filter((n) => n.content.data?.habitId === habitId)
+        .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier))
+    )
+  } catch (e) {
+    logger.error('notifications', 'cancelHabitNotifications failed', { error: String(e) })
+  }
+}

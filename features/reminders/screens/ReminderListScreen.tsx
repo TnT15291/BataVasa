@@ -8,11 +8,14 @@ import { useRouter } from 'expo-router'
 import { addDays, endOfDay, format, startOfDay } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
+import { MODULE_COLORS } from '@design/moduleColors'
+import * as Haptics from 'expo-haptics'
+import { FAB } from '@components/FAB'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { getProviderKey } from '@services/ai/openai'
-import { parseReminderEntry, type ParsedReminder } from '@services/ai/reminderParser'
+import { parseReminderEntry, type ParsedReminder } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Reminder } from '../types'
@@ -93,7 +96,7 @@ function ReminderRow({ reminder, onPress, onToggle, onSkip }: {
         }]}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isDone }}
-        hitSlop={8}
+        hitSlop={12}
       >
         {isDone && <Feather name="check" size={12} color="#fff" />}
       </Pressable>
@@ -254,7 +257,9 @@ export function ReminderListScreen() {
   const activeCount = reminders.length - completedCount
 
   const toggleDone = (r: Reminder) => {
-    updateReminder({ id: r.id, completed: r.completed === 1 ? 0 : 1 })
+    const completing = r.completed !== 1
+    updateReminder({ id: r.id, completed: completing ? 1 : 0 })
+    void Haptics.impactAsync(completing ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light)
   }
 
   const skip = (r: Reminder) => {
@@ -288,7 +293,7 @@ export function ReminderListScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.hero, { backgroundColor: '#2196F314', borderColor: '#2196F344' }]}>
+        <View style={[styles.hero, { backgroundColor: MODULE_COLORS.tasks + '14', borderColor: MODULE_COLORS.tasks + '44' }]}>
           <View style={styles.heroTop}>
             <View style={styles.heroText}>
               <Text style={[styles.heroKicker, { color: theme.text.muted }]}>{t.nav_reminders}</Text>
@@ -301,8 +306,8 @@ export function ReminderListScreen() {
                   : t.reminder_add_hint}
               </Text>
             </View>
-            <View style={[styles.heroIcon, { backgroundColor: '#2196F31F' }]}>
-              <Feather name="bell" size={28} color="#2196F3" />
+            <View style={[styles.heroIcon, { backgroundColor: MODULE_COLORS.tasks + '1F' }]}>
+              <Feather name="bell" size={28} color={MODULE_COLORS.tasks} />
             </View>
           </View>
           <View style={styles.statGrid}>
@@ -376,19 +381,18 @@ export function ReminderListScreen() {
         onPress={() => router.push('/reminders-report')}
         accessibilityRole="button"
         accessibilityLabel={t.reminders_report_title}
-        style={[styles.reportBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+        style={[styles.reportBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle, bottom: spacing[5] }]}
       >
         <Feather name="bar-chart-2" size={20} color={theme.text.secondary} />
       </Pressable>
 
-      <Pressable
+      <FAB
         onPress={() => router.push('/reminder')}
-        accessibilityRole="button"
         accessibilityLabel={t.new_reminder}
-        style={[styles.fab, { backgroundColor: theme.brand.primary }]}
+        style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
       >
         <Feather name="plus" size={28} color="#fff" />
-      </Pressable>
+      </FAB>
 
       <Modal visible={!!parsedReminder} transparent animationType="slide" onRequestClose={() => setParsedReminder(null)}>
         <Pressable style={styles.backdrop} onPress={() => setParsedReminder(null)} />
@@ -433,7 +437,7 @@ export function ReminderListScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing[4], gap: spacing[3], paddingBottom: 96 },
+  content: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
   hero: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -443,11 +447,11 @@ const styles = StyleSheet.create({
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   heroText: { flex: 1, gap: spacing[1] },
   heroKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroTitle: { fontSize: 22, fontWeight: '800' },
+  heroTitle: { fontSize: 20, fontWeight: '800' },
   heroSubtitle: { fontSize: 13, lineHeight: 18 },
   heroIcon: {
-    width: 62,
-    height: 62,
+    width: 56,
+    height: 56,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -471,7 +475,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   filterBtn: { flex: 1, alignItems: 'center', borderRadius: radius.sm, paddingVertical: spacing[2] },
-  filterText: { fontSize: 11, fontWeight: '800' },
+  filterText: { fontSize: 13, fontWeight: '800' },
   group: { gap: spacing[2] },
   groupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   groupHeader: { fontSize: 15, fontWeight: '800' },
@@ -523,13 +527,13 @@ const styles = StyleSheet.create({
   emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
   emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   reportBtn: {
-    position: 'absolute', left: spacing[6], bottom: spacing[8],
+    position: 'absolute', left: spacing[6],
     width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1,
     elevation: 3, shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
   },
   fab: {
-    position: 'absolute', right: spacing[6], bottom: spacing[8],
+    position: 'absolute', right: spacing[6],
     width: 56, height: 56, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center',
     elevation: 4, shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },

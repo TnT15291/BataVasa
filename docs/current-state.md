@@ -1,6 +1,6 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-05-24.
+> Single source of truth for project status. Last updated: 2026-05-28.
 
 ## Overall
 
@@ -10,7 +10,7 @@
 | Closed beta | Ready |
 | Public launch | Blocked by verification, tests, and store submission work |
 
-**Production score: 6/10.** Architecture and UX are strong enough for closed beta. Public launch should wait until Auth/Sync are verified end to end, test coverage is raised, and store assets/screenshots are complete.
+**Production score: 6.5/10.** Architecture and UX are strong enough for closed beta. Public launch should wait until Auth/Sync are verified end to end, test coverage is raised, and fresh store screenshots are captured after the latest UI polish pass.
 
 ## What Is Built
 
@@ -39,6 +39,8 @@
   - Reports/home/finance summaries convert to display currency when FX rates are available.
 - Smart entry remains on the add/edit form. Quick entry was removed from the finance list screen.
 - Finance review queue now has a dedicated filter on the transaction list.
+- Finance transaction rows surface sign/category mismatches as review states instead of presenting an income category as a normal expense.
+- Finance reports avoid labeling income categories as normal expense categories in category breakdowns.
 - Merchant/category rules are stored in `finance_rule`, learned from manual/reviewed transactions, and applied to future smart/voice/OCR/import transactions.
 - Recurring bill/subscription candidates are detected from repeated merchant/category/amount patterns and can prefill a monthly reminder.
 
@@ -62,6 +64,7 @@
 - AI habit insight service.
 - 7-day heatmap in reports.
 - Skip/rest days are separated from completions in reports, shown in heatmap/history, and excluded from completion rate.
+- Habit report export includes deleted habit definitions so historical skip logs can still display meaningful names. Missing historical names fall back to `deleted_habit`, not a UUID.
 - Reports use calendar date selection.
 
 ### Journals
@@ -76,12 +79,16 @@
 
 ### Home And Cross-Module
 
-- Daily Digest home with summary hero, module cards, today panel, and analysis entry.
+- Daily Digest home with compact summary hero, unified Today Timeline read model, module cards, analysis entry, assistant entry, and safe-area-aware FAB.
 - Universal Add Sheet opens from the `+` button only. The direct quick-entry box was removed from the home screen.
 - Universal Add uses candidate-based parsing: AI can propose multiple module entries, the app validates them, and the user selects which candidates to save. Money + reflection can save as Finance + Journal after confirmation.
 - Smart Entry lives inside add/edit forms for modules, not in list/dashboard screens.
 - Voice input remains available in form/add flows and force-confirms before save where applicable.
 - Voice microphone privacy prompt is shown only from voice buttons and can be dismissed permanently with "Do not show again".
+- Assistant screen includes quick prompts for common personal-data questions.
+- Journal list keeps only the primary create FAB floating; reflection and report actions live in the content action row.
+- Report and AI output uses `components/InsightText.tsx` to render concise markdown as section cards instead of raw markdown text.
+- Main-screen FABs and report footers use safe-area bottom spacing.
 
 ## Key Files
 
@@ -95,6 +102,7 @@
 | Auth | `store/authStore.ts`, `services/supabase.ts`, `services/identity.ts` |
 | Settings | `store/settingsStore.ts` |
 | AI | `services/ai/` |
+| AI insight rendering | `components/InsightText.tsx` |
 | FX conversion | `services/fx.ts`, `services/ai/aiLanguage.ts` |
 | i18n | `services/i18n/translations/` |
 | Store listing | `docs/store-listing.md` |
@@ -141,6 +149,7 @@ Current test infrastructure is ready, but global coverage is still below the pub
 Repo-side assets and copy are mostly ready. Manual store work remains:
 
 - Capture production screenshots on device/emulator.
+- Capture fresh screenshots after the 2026-05-28 UI polish pass; do not use old screenshots with raw AI markdown, notification warnings, or crowded bottom actions.
 - Finalize App Store Connect and Play Console metadata from `docs/store-listing.md`.
 - Confirm support URL and privacy policy URL in `app.json`.
 - Run a production build and smoke test before upload.
@@ -154,10 +163,9 @@ Work in this order:
    - Verify Auth and Sync end to end on device/emulator.
    - Run smoke test for all 4 modules.
 2. **B5 coverage push**
-   - Add DB query tests for Habits and Journals.
-   - Add Sync queue/worker tests.
-   - Add Settings/Core migration tests.
-   - Add AI insight builder tests.
+   - Continue raising global coverage toward the 70% public-launch target.
+   - Prioritize high-risk remaining gaps in stores, service error paths, reports, and UI workflows.
+   - Keep `services/` and `database/` coverage as the hardening focus.
 3. **H18 store readiness**
    - Capture production screenshots.
    - Finalize App Store / Play Console metadata.
@@ -172,11 +180,18 @@ Work in this order:
    - **DONE MVP:** Habit custom schedule with selected weekdays.
    - **DONE MVP:** Finance recurring bills/subscriptions detection with reminder prefill.
    - Remaining: reminder calendar, habit strength score, and journal tags.
-5. **Differentiators after stability**
+5. **UI polish follow-up**
+   - **DONE:** AI/report markdown is rendered as section cards via `InsightText`.
+   - **DONE:** Assistant quick prompts added.
+   - **DONE:** Journal floating actions simplified.
+   - **DONE:** Home/module hero density reduced and FAB safe-area spacing added.
+   - **DONE:** Finance sign/category mismatch is surfaced as a review state.
+   - Remaining: capture updated screenshots and do a visual QA pass on a real device.
+6. **Differentiators after stability**
    - **M36 Cross-module behavioral patterns**: correlate Finance, Habits, and Journals, e.g. spending changes on low-mood days or habit completion patterns.
    - **M38 Global search**: one search across transactions, reminders, habits, and journals.
    - **M37 Proactive weekly insights**: background weekly summary notification via `expo-task-manager`.
-6. **Later launch/business work**
+7. **Later launch/business work**
    - **M21 Backup/restore**: user-facing recovery flow built on top of Auth and Sync.
    - **M19 Duplicate detection**: reduce false positives in finance.
    - **L4 Monetization/API key model** — **DECIDED: phased hybrid** (revisit before public launch, not a beta blocker).
@@ -323,6 +338,8 @@ These are the features that make BataVasa meaningfully different from single-pur
 - Create and edit screens are shared via route params.
 - Latest local migration is v12 for reminder inbox and habit selected-day schedules.
 - `enqueue()` is try/catch wrapped for test compatibility.
+- Cross-module timeline/life stream is a presentation/read-model layer over domain tables, not a unified `life_events` source-of-truth table.
+- Reminders/notifications are treated as a capability attached to tasks/habits where appropriate; the current Reminders UI is task-oriented.
 
 ## Test Commands
 
@@ -336,6 +353,16 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-05-28 UI polish pass:
+  - Added `components/InsightText.tsx` and applied it to Finance Insights, Finance Reports, and Cross-Module Analysis.
+  - Updated AI prompts to request concise, non-judgmental markdown sections.
+  - Suppressed Expo Notifications dev LogBox warnings so UI tests are not obscured.
+  - Added Assistant quick prompts across all 6 languages.
+  - Moved Journal reflection/report actions into an in-content row; only the create FAB floats.
+  - Reduced Home/Finance/Habits/Reminders/Journals card density and made FABs safe-area-aware.
+  - Finance transaction rows and finance category breakdown now surface sign/category mismatches as review states.
+  - Habit report history no longer exposes UUIDs and can resolve deleted habit names from exported habit definitions.
+  - Verification on 2026-05-28: `npx tsc --noEmit` passed; targeted tests passed with 57 tests across 6 suites.
 - Removed quick entry from Home. Add now starts from the `+` button.
 - Removed quick entry from Finance list. Add transaction now starts from `+`.
 - Smart Entry remains inside module add/edit forms.

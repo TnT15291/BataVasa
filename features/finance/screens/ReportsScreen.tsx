@@ -39,6 +39,8 @@ import { getProviderKey } from '@services/ai/openai'
 import { track } from '@services/analytics'
 import { convertMinorAmount, getRates } from '@services/fx'
 import { formatAmount } from '../services'
+import { InsightText } from '@/components/InsightText'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 type Period = ReportType
 type ChartBucket = { key: string; label: string; from: Date; to: Date; income: number; expense: number }
@@ -79,7 +81,9 @@ function CategoryBreakdownCard({
       {breakdown.map((item) => {
         const pct = Math.round((item.amount / totalExpense) * 100)
         const color = item.cat?.color ?? theme.text.muted
-        const name = item.cat ? translateCategoryName(item.cat, t) : t.category_others
+        const name = item.cat
+          ? item.cat.kind === 'income' ? `${t.expense} (${t.review_queue})` : translateCategoryName(item.cat, t)
+          : t.category_others
         return (
           <View key={item.cat?.id ?? 'others'} style={styles.catRow}>
             <View style={[styles.catIconWrap, { backgroundColor: color + '20' }]}>
@@ -153,6 +157,7 @@ function NavRow({
 export function ReportsScreen() {
   useFinanceBootstrap()
   const theme = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { t } = useTranslation()
   const allTxs = useTransactions()
@@ -282,6 +287,7 @@ export function ReportsScreen() {
     }
     return { count: rangeTxs.length, income, expense }
   }, [rangeTxs, amountInReportCurrency])
+  const hasRangeData = summary.count > 0
 
   const prevSummary = useMemo(() => {
     if (period === 'custom') return null
@@ -544,8 +550,8 @@ export function ReportsScreen() {
             contentContainerStyle={styles.columnChart}
           >
             {chartBuckets.map((bucket) => {
-              const incomeHeight = Math.max(2, (bucket.income / chartMax) * 100)
-              const expenseHeight = Math.max(2, (bucket.expense / chartMax) * 100)
+              const incomeHeight = bucket.income === 0 ? 0 : Math.max(6, (bucket.income / chartMax) * 100)
+              const expenseHeight = bucket.expense === 0 ? 0 : Math.max(6, (bucket.expense / chartMax) * 100)
               return (
                 <View key={bucket.key} style={styles.columnItem}>
                   <View style={styles.columnBars}>
@@ -594,13 +600,13 @@ export function ReportsScreen() {
         {report ? (
           <>
             <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.reportText, { color: theme.text.primary }]}>{report}</Text>
+              <InsightText text={report} />
             </View>
             <Pressable onPress={shareReport} style={[styles.shareBtn, { borderColor: theme.border.strong }]}>
               <Text style={[styles.shareText, { color: theme.text.secondary }]}>📤 {t.copy}</Text>
             </Pressable>
           </>
-        ) : !loading ? (
+        ) : !loading && (!hasRangeData || (keyChecked && !hasApiKey)) ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>{keyChecked && !hasApiKey ? '🔑' : '📊'}</Text>
             <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>
@@ -614,7 +620,7 @@ export function ReportsScreen() {
       </ScrollView>
 
       {/* Generate button */}
-      <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
+      <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated, paddingBottom: spacing[4] + insets.bottom }]}>
         {keyChecked && !hasApiKey ? (
           <Pressable
             onPress={() => router.push('/ai-settings')}
@@ -722,16 +728,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing[1],
   },
-  columnItem: { alignItems: 'center', gap: spacing[1], minWidth: 22 },
-  columnBars: { height: 132, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 2 },
+  columnItem: { alignItems: 'center', gap: spacing[1], minWidth: 28 },
+  columnBars: { height: 132, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 3 },
   columnTrack: {
-    width: 6,
+    width: 10,
     height: '100%',
-    borderRadius: radius.full,
+    borderRadius: radius.sm,
     overflow: 'hidden',
     justifyContent: 'flex-end',
   },
-  columnBar: { width: '100%', borderRadius: radius.full },
+  columnBar: { width: '100%', borderRadius: radius.sm },
   columnLabel: { fontSize: 10, maxWidth: 34, textAlign: 'center' },
   filterRow: { flexDirection: 'row', gap: spacing[2] },
   filterPill: {
@@ -763,7 +769,6 @@ const styles = StyleSheet.create({
   catBarTrack: { height: 4, borderRadius: radius.full, overflow: 'hidden' },
   catBarFill: { height: '100%', borderRadius: radius.full },
   catPct: { fontSize: 11, fontWeight: '700', width: 32, textAlign: 'right' },
-  reportText: { fontSize: 14, lineHeight: 22 },
   shareBtn: {
     paddingVertical: spacing[3],
     borderRadius: radius.md,

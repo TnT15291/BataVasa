@@ -59,7 +59,7 @@ export async function generateReport(
   return chatCompletion([
     {
       role: 'system',
-      content: `You are a finance assistant generating a report. CRITICAL: Reply in ${language} ONLY using markdown with emojis.`,
+      content: `You are a finance assistant generating a report. CRITICAL: Reply in ${language} ONLY using concise markdown sections. Be calm, practical, and non-judgmental. Use minimal emojis.`,
     },
     {
       role: 'user',

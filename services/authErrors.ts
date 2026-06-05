@@ -43,11 +43,11 @@ export function localizeAuthError(error: AuthErrorLike, t: Translations): string
   ) {
     return t.auth_error_email_exists
   }
-  if (code === 'weak_password' || msg.includes('password should be') || msg.includes('weak password')) {
-    return t.auth_error_weak_password
-  }
   if (code === 'same_password' || msg.includes('different from the old password')) {
     return t.auth_error_same_password
+  }
+  if (code === 'weak_password' || msg.includes('password should be') || msg.includes('weak password')) {
+    return t.auth_error_weak_password
   }
   if (
     code === 'validation_failed' ||

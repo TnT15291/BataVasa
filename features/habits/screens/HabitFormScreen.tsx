@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   View, Text, TextInput, Pressable, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView,
+  ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView, Modal,
 } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import { Feather } from '@expo/vector-icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useTheme } from '@design/useTheme'
@@ -11,9 +12,10 @@ import { useTranslation } from '@services/i18n'
 import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
-import { parseHabitLog } from '@services/ai/habitParser'
+import { parseHabitLog } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { useSettingsStore } from '@store/settingsStore'
+import { requestNotificationPermission } from '@services/notifications'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
 import type { Cadence } from '../types'
 
@@ -49,6 +51,9 @@ export function HabitFormScreen() {
   const [cadence, setCadence] = useState<Cadence>('daily')
   const [scheduleDays, setScheduleDays] = useState<number[]>([1, 2, 3, 4, 5])
   const [target, setTarget] = useState('1')
+  const [notificationTimes, setNotificationTimes] = useState<string[]>([])
+  const [showTimePicker, setShowTimePicker] = useState(false)
+  const [pickerDate, setPickerDate] = useState(new Date())
   const [submitting, setSubmitting] = useState(false)
   const [prefilled, setPrefilled] = useState(false)
   const [smartText, setSmartText] = useState('')
@@ -65,6 +70,7 @@ export function HabitFormScreen() {
       .map((v) => Number(v))
       .filter((v) => Number.isInteger(v) && v >= 0 && v <= 6))
     setTarget(String(editingHabit.target_per_period))
+    setNotificationTimes(editingHabit.notification_times ? JSON.parse(editingHabit.notification_times) : [])
     setPrefilled(true)
   }, [editingHabit, prefilled])
 
@@ -95,6 +101,18 @@ export function HabitFormScreen() {
       : [...days, day].sort((a, b) => a - b))
   }
 
+  const confirmTimePicker = (date: Date) => {
+    const h = String(date.getHours()).padStart(2, '0')
+    const m = String(date.getMinutes()).padStart(2, '0')
+    const timeStr = `${h}:${m}`
+    setNotificationTimes((prev) => prev.includes(timeStr) ? prev : [...prev, timeStr].sort())
+    setShowTimePicker(false)
+  }
+
+  const removeNotificationTime = (time: string) => {
+    setNotificationTimes((prev) => prev.filter((v) => v !== time))
+  }
+
   const onSave = async () => {
     const trimmed = name.trim()
     if (!trimmed) {
@@ -110,9 +128,10 @@ export function HabitFormScreen() {
     const schedule_days = cadence === 'custom'
       ? (scheduleDays.length > 0 ? scheduleDays.join(',') : WEEKDAY_VALUES.join(','))
       : null
+    const notification_times = notificationTimes.length > 0 ? JSON.stringify(notificationTimes) : null
     const res = isEditing
-      ? await updateHabit({ id: editingId!, name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days })
-      : await createHabit({ name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days })
+      ? await updateHabit({ id: editingId!, name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days, notification_times })
+      : await createHabit({ name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days, notification_times })
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
     void hapticSaveSuccess()
@@ -301,6 +320,71 @@ export function HabitFormScreen() {
         </Pressable>
       </View>
 
+      {/* Notifications */}
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_notifications.toUpperCase()}</Text>
+      {notificationTimes.length === 0 ? (
+        <Text style={[styles.emptyNote, { color: theme.text.muted }]}>{t.habit_no_notifications}</Text>
+      ) : (
+        <View style={styles.timeChipRow}>
+          {notificationTimes.map((time) => (
+            <View key={time} style={[styles.timeChip, { backgroundColor: theme.bg.elevated, borderColor: theme.border.strong }]}>
+              <Feather name="clock" size={13} color={theme.text.secondary} style={{ marginRight: 4 }} />
+              <Text style={[styles.timeChipText, { color: theme.text.primary }]}>{time}</Text>
+              <Pressable onPress={() => removeNotificationTime(time)} hitSlop={8} style={{ marginLeft: 6 }}>
+                <Feather name="x" size={13} color={theme.text.muted} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+      {notificationTimes.length < 5 ? (
+        <Pressable
+          onPress={async () => {
+            const granted = await requestNotificationPermission()
+            if (!granted) {
+              Alert.alert(t.habit_notification_permission_title, t.habit_notification_permission_msg)
+              return
+            }
+            setPickerDate(new Date())
+            setShowTimePicker(true)
+          }}
+          style={[styles.addTimeBtn, { borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
+        >
+          <Feather name="plus" size={14} color={theme.brand.primary} />
+          <Text style={[styles.addTimeBtnText, { color: theme.brand.primary }]}>{t.habit_add_notification}</Text>
+        </Pressable>
+      ) : null}
+
+      {showTimePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={pickerDate}
+          mode="time"
+          display="default"
+          onChange={(_, date) => { setShowTimePicker(false); if (date) confirmTimePicker(date) }}
+        />
+      )}
+      {showTimePicker && Platform.OS === 'ios' && (
+        <Modal transparent animationType="fade" onRequestClose={() => setShowTimePicker(false)}>
+          <Pressable style={styles.modalOverlay} onPress={() => setShowTimePicker(false)}>
+            <Pressable style={[styles.modalSheet, { backgroundColor: theme.bg.elevated }]}>
+              <DateTimePicker
+                value={pickerDate}
+                mode="time"
+                display="spinner"
+                onChange={(_, date) => { if (date) setPickerDate(date) }}
+                style={{ width: '100%' }}
+              />
+              <Pressable
+                onPress={() => confirmTimePicker(pickerDate)}
+                style={[styles.modalConfirm, { backgroundColor: theme.brand.primary }]}
+              >
+                <Text style={styles.modalConfirmText}>{t.save}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
       {/* Save */}
       <Pressable
         onPress={onSave}
@@ -363,8 +447,8 @@ const styles = StyleSheet.create({
   iconBtn: { width: 44, height: 44, borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   colorBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 3 },
-  cadenceRow: { flexDirection: 'row', gap: spacing[2] },
-  cadenceBtn: { flex: 1, paddingVertical: spacing[3], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
+  cadenceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  cadenceBtn: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
   weekdayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   weekdayBtn: { minWidth: 48, alignItems: 'center', borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   weekdayText: { fontSize: 12, fontWeight: '800' },
@@ -376,4 +460,14 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   deleteBtn: { alignItems: 'center', paddingVertical: spacing[3] },
   deleteBtnText: { fontSize: 15 },
+  emptyNote: { fontSize: 13, fontStyle: 'italic' },
+  timeChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  timeChip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  timeChipText: { fontSize: 13, fontWeight: '600' },
+  addTimeBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], alignSelf: 'flex-start', borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  addTimeBtnText: { fontSize: 13, fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing[4], gap: spacing[3] },
+  modalConfirm: { paddingVertical: spacing[3], borderRadius: radius.md, alignItems: 'center' },
+  modalConfirmText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 })

@@ -1,24 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import { format, startOfDay, endOfDay } from 'date-fns'
+import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
+import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation, type Translations } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { shouldWarnAboutWebSQLitePersistence } from '@services/webPersistence'
-import { useFinanceBootstrap, useTransactions } from '@features/finance/hooks/useFinance'
-import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
-import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
-import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJournals'
-import { useFinanceStore } from '@store/financeStore'
-import { useRemindersStore } from '@store/remindersStore'
-import { useHabitsStore } from '@store/habitsStore'
-import { useJournalsStore } from '@store/journalsStore'
 import { formatAmount } from '@features/finance/services'
-import { convertMinorAmount, getRates } from '@services/fx'
+import { useDailyDigest } from '../hooks/useDailyDigest'
+import type { DailyTimelineItem } from '../hooks/useDailyDigest'
+import { CircularProgress } from '@components/CircularProgress'
+import { FAB } from '@components/FAB'
 import { UniversalAddSheet } from '../components/UniversalAddSheet'
 import { OnboardingModal } from '../components/OnboardingModal'
 
@@ -89,82 +85,87 @@ function SummaryChip({ icon, label, value, color }: SummaryChipProps) {
   )
 }
 
+function TimelineRow({ item, onPress }: { item: DailyTimelineItem; onPress: () => void }) {
+  const theme = useTheme()
+  const { t } = useTranslation()
+  const language = useSettingsStore((s) => s.language)
+  const locale = getDateFnsLocale(language)
+  const meta: Record<DailyTimelineItem['kind'], { icon: IconName; color: string; label: string }> = {
+    finance: { icon: 'dollar-sign', color: theme.finance.expense, label: t.nav_finance },
+    task: { icon: 'check-square', color: MODULE_COLORS.tasks, label: t.nav_reminders },
+    habit: { icon: 'check-circle', color: MODULE_COLORS.habits, label: t.habits },
+    journal: { icon: 'book-open', color: MODULE_COLORS.journal, label: t.nav_journal },
+  }
+  const m = meta[item.kind]
+  const amountText = item.amount !== undefined && item.currency
+    ? `${item.amount < 0 ? '- ' : '+ '}${formatAmount(item.amount, item.currency, language)}`
+    : null
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={item.title}
+      style={({ pressed }) => [
+        styles.timelineRow,
+        { backgroundColor: pressed ? theme.bg.secondary : 'transparent', borderColor: theme.border.subtle },
+      ]}
+    >
+      <Text style={[styles.timelineTime, { color: theme.text.muted }]}>
+        {format(item.occurredAt, 'HH:mm', { locale })}
+      </Text>
+      <View style={[styles.timelineIcon, { backgroundColor: m.color + '1F' }]}>
+        {item.emoji
+          ? <Text style={styles.timelineEmoji}>{item.emoji}</Text>
+          : <Feather name={m.icon} size={14} color={m.color} />
+        }
+      </View>
+      <View style={styles.timelineBody}>
+        <View style={styles.timelineTitleRow}>
+          <Text style={[styles.timelineTitle, { color: theme.text.primary }]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          {item.status === 'done' ? <Feather name="check" size={13} color={theme.semantic.success} /> : null}
+        </View>
+        <Text style={[styles.timelineMeta, { color: theme.text.muted }]} numberOfLines={1}>
+          {[m.label, item.subtitle].filter(Boolean).join(' · ')}
+        </Text>
+      </View>
+      {amountText ? (
+        <Text style={[styles.timelineAmount, { color: item.amount! < 0 ? theme.finance.expense : theme.finance.income }]}>
+          {amountText}
+        </Text>
+      ) : (
+        <Feather name="chevron-right" size={16} color={theme.text.muted} />
+      )}
+    </Pressable>
+  )
+}
+
 export function DailyDigestScreen() {
-  useFinanceBootstrap()
-  useRemindersBootstrap()
-  useHabitsBootstrap()
-  useJournalsBootstrap()
   const theme = useTheme()
   const router = useRouter()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
-  const currency = useSettingsStore((s) => s.currency)
-  const displayCurrency = useSettingsStore((s) => s.displayCurrency)
-  const txs = useTransactions()
-  const reminders = useReminders()
-  const habits = useHabits()
-  const journals = useJournals()
-  const loadCategories = useFinanceStore((s) => s.loadCategories)
-  const loadTransactions = useFinanceStore((s) => s.loadTransactions)
-  const loadReminders = useRemindersStore((s) => s.loadReminders)
-  const loadHabits = useHabitsStore((s) => s.loadHabits)
-  const loadJournals = useJournalsStore((s) => s.loadJournals)
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding)
   const [showAdd, setShowAdd] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const [fxRates, setFxRates] = useState<Record<string, number> | null>(null)
+
+  const {
+    todayExpense,
+    todayExpenseCurrency,
+    nextReminder,
+    nextFutureReminder,
+    habitsDoneCount,
+    habitsTotal,
+    habitProgress,
+    todayJournalCount,
+    timelineItems,
+    refreshing,
+    onRefresh,
+  } = useDailyDigest()
 
   const locale = getDateFnsLocale(language)
   const now = new Date()
   const dateStr = format(now, 'EEEE, dd MMMM', { locale })
-
-  useEffect(() => {
-    getRates(displayCurrency).then(setFxRates)
-  }, [displayCurrency])
-
-  const todayExpense = useMemo(() => {
-    const from = startOfDay(now)
-    const to = endOfDay(now)
-    return txs
-      .filter((tx) => tx.amount_cents < 0)
-      .filter((tx) => { const d = new Date(tx.occurred_at); return d >= from && d <= to })
-      .reduce((sum, tx) => {
-        if (tx.currency === displayCurrency) return sum + Math.abs(tx.amount_cents)
-        if (fxRates) {
-          const converted = convertMinorAmount(tx.amount_cents, tx.currency, displayCurrency, fxRates)
-          return sum + (converted === null ? 0 : Math.abs(converted))
-        }
-        if (tx.currency === currency) return sum + Math.abs(tx.amount_cents)
-        return sum
-      }, 0)
-  }, [txs, currency, displayCurrency, fxRates, now])
-
-  const todayExpenseCurrency = fxRates ? displayCurrency : currency
-
-  const todayJournals = useMemo(() => {
-    const from = startOfDay(now)
-    const to = endOfDay(now)
-    return journals.filter((j) => {
-      const d = new Date(j.occurred_at)
-      return d >= from && d <= to
-    }).length
-  }, [journals, now])
-
-  const nextReminder = useMemo(() => {
-    const from = startOfDay(now)
-    const to = endOfDay(now)
-    return reminders
-      .filter((r) => r.completed === 0)
-      .filter((r) => { const d = new Date(r.remind_at); return d >= from && d <= to })
-      .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())[0] ?? null
-  }, [reminders, now])
-
-  const nextFutureReminder = useMemo(() => {
-    if (nextReminder) return null
-    return reminders
-      .filter((r) => r.completed === 0 && new Date(r.remind_at) > now)
-      .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())[0] ?? null
-  }, [reminders, nextReminder, now])
 
   const financeSubtitle = todayExpense > 0
     ? `${t.today_spent} ${formatAmount(todayExpense, todayExpenseCurrency, language)}`
@@ -178,29 +179,10 @@ export function DailyDigestScreen() {
 
   const reminderHint = !nextReminder && !nextFutureReminder ? t.reminder_add_hint : undefined
 
-  const habitsDoneCount = habits.filter((h) => h.todayCount >= h.target_per_period).length
-  const habitsTotal = habits.length
-  const nextHabit = habits.find((h) => h.todayCount < h.target_per_period) ?? null
-  const habitProgress = habitsTotal === 0 ? 0 : Math.round((habitsDoneCount / habitsTotal) * 100)
   const habitsSubtitle = habitsTotal === 0
     ? t.habits_card_subtitle
     : t.habits_done_today.replace('{{done}}', String(habitsDoneCount)).replace('{{total}}', String(habitsTotal))
-  const journalSubtitle = todayJournals > 0 ? `${todayJournals} ${t.today}` : t.journal_card_subtitle
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    try {
-      await Promise.all([
-        loadCategories(),
-        loadTransactions(),
-        loadReminders(),
-        loadHabits(),
-        loadJournals(),
-      ])
-    } finally {
-      setRefreshing(false)
-    }
-  }, [loadCategories, loadTransactions, loadReminders, loadHabits, loadJournals])
+  const journalSubtitle = todayJournalCount > 0 ? `${todayJournalCount} ${t.today}` : t.journal_card_subtitle
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
@@ -221,75 +203,79 @@ export function DailyDigestScreen() {
               <Text style={[styles.greeting, { color: theme.text.muted }]}>{greeting(t)}</Text>
               <Text style={[styles.dateStr, { color: theme.text.primary }]}>{dateStr}</Text>
             </View>
-            <View style={[styles.progressDial, { borderColor: theme.brand.primary }]}>
+            <CircularProgress
+              progress={habitProgress}
+              size={64}
+              strokeWidth={3}
+              color={theme.brand.primary}
+              trackColor={theme.border.subtle}
+            >
               <Text style={[styles.progressValue, { color: theme.text.primary }]}>{habitProgress}%</Text>
               <Text style={[styles.progressLabel, { color: theme.text.muted }]}>{t.habits}</Text>
-            </View>
+            </CircularProgress>
           </View>
 
           <View style={styles.heroMetric}>
             <View style={styles.heroMetricText}>
               <Text style={[styles.heroMetricLabel, { color: theme.text.muted }]}>{t.today_spent}</Text>
-              <Text style={[styles.heroMetricValue, { color: theme.finance.expense }]} numberOfLines={1} adjustsFontSizeToFit>
+              <Text style={[styles.heroMetricValue, { color: todayExpense > 0 ? theme.finance.expense : theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
                 {formatAmount(todayExpense, todayExpenseCurrency, language)}
               </Text>
             </View>
-            <View style={[styles.heroMetricIcon, { backgroundColor: theme.finance.expense + '1F' }]}>
-              <Feather name="trending-down" size={22} color={theme.finance.expense} />
+            <View style={[styles.heroMetricIcon, { backgroundColor: (todayExpense > 0 ? theme.finance.expense : theme.semantic.success) + '1F' }]}>
+              <Feather name={todayExpense > 0 ? 'trending-down' : 'check-circle'} size={22} color={todayExpense > 0 ? theme.finance.expense : theme.semantic.success} />
             </View>
           </View>
 
           <View style={styles.summaryStrip}>
             <SummaryChip
-              icon="bell"
+              icon="check-square"
               label={t.nav_reminders}
               value={nextReminder ? format(new Date(nextReminder.remind_at), 'HH:mm', { locale }) : '-'}
-              color="#2196F3"
+              color={MODULE_COLORS.tasks}
             />
             <SummaryChip
               icon="check-circle"
               label={t.habits}
               value={habitsTotal === 0 ? '-' : `${habitsDoneCount}/${habitsTotal}`}
-              color="#FF9800"
+              color={MODULE_COLORS.habits}
             />
             <SummaryChip
               icon="book-open"
               label={t.nav_journal}
-              value={todayJournals > 0 ? String(todayJournals) : '-'}
-              color="#9C27B0"
+              value={todayJournalCount > 0 ? String(todayJournalCount) : '-'}
+              color={MODULE_COLORS.journal}
             />
           </View>
         </View>
 
-        {(nextReminder || nextHabit) ? (
-          <View style={[styles.todayPanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>{t.today}</Text>
-            {nextReminder ? (
-              <Pressable onPress={() => router.push('/reminders')} style={styles.actionItem}>
-                <Feather name="bell" size={18} color="#2196F3" />
-                <View style={styles.actionText}>
-                  <Text style={[styles.actionTitle, { color: theme.text.primary }]} numberOfLines={1}>{nextReminder.title}</Text>
-                  <Text style={[styles.actionSubtitle, { color: theme.text.muted }]}>
-                    {format(new Date(nextReminder.remind_at), 'HH:mm', { locale })}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={theme.text.muted} />
-              </Pressable>
-            ) : null}
-            {nextHabit ? (
-              <Pressable onPress={() => router.push('/habits')} style={styles.actionItem}>
-                <Feather name="check-circle" size={18} color="#FF9800" />
-                <View style={styles.actionText}>
-                  <Text style={[styles.actionTitle, { color: theme.text.primary }]} numberOfLines={1}>{nextHabit.name}</Text>
-                  <Text style={[styles.actionSubtitle, { color: theme.text.muted }]}>
-                    {nextHabit.todayCount}/{nextHabit.target_per_period}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={theme.text.muted} />
-              </Pressable>
-            ) : null}
+        <View style={[styles.timelinePanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={styles.timelineHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>{t.today_timeline}</Text>
+            <Text style={[styles.timelineCount, { color: theme.text.muted }]}>{timelineItems.length}</Text>
           </View>
-        ) : null}
+          {timelineItems.length > 0 ? (
+            <View style={styles.timelineList}>
+              {timelineItems.map((item) => (
+                <TimelineRow key={item.id} item={item} onPress={() => router.push(item.route as any)} />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.timelineEmpty}>
+              <View style={[styles.timelineEmptyIcon, { backgroundColor: theme.brand.primary + '14' }]}>
+                <Feather name="clock" size={22} color={theme.brand.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={[styles.timelineEmptyText, { color: theme.text.primary }]}>
+                  {t.today_timeline_empty}
+                </Text>
+                <Text style={[styles.timelineEmptyHint, { color: theme.text.muted }]}>
+                  {t.tap_to_add}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
 
         <View style={styles.moduleGrid}>
           <ModuleCard
@@ -302,11 +288,11 @@ export function DailyDigestScreen() {
           />
 
           <ModuleCard
-            icon="bell"
+            icon="check-square"
             title={t.nav_reminders}
             subtitle={reminderSubtitle}
             hint={reminderHint}
-            accentColor="#2196F3"
+            accentColor={MODULE_COLORS.tasks}
             onPress={() => router.push('/reminders')}
           />
 
@@ -314,7 +300,7 @@ export function DailyDigestScreen() {
             icon="book-open"
             title={t.nav_journal}
             subtitle={journalSubtitle}
-            accentColor="#9C27B0"
+            accentColor={MODULE_COLORS.journal}
             onPress={() => router.push('/journals')}
           />
 
@@ -322,7 +308,7 @@ export function DailyDigestScreen() {
             icon="check-circle"
             title={t.habits}
             subtitle={habitsSubtitle}
-            accentColor="#FF9800"
+            accentColor={MODULE_COLORS.habits}
             onPress={() => router.push('/habits')}
           />
         </View>
@@ -334,13 +320,13 @@ export function DailyDigestScreen() {
           style={({ pressed }) => [
             styles.analysisStrip,
             {
-              backgroundColor: pressed ? theme.bg.secondary : '#607D8B14',
-              borderColor: '#607D8B44',
+              backgroundColor: pressed ? theme.bg.secondary : MODULE_COLORS.analysis + '14',
+              borderColor: MODULE_COLORS.analysis + '44',
             },
           ]}
         >
-          <View style={[styles.analysisIcon, { backgroundColor: '#607D8B1F' }]}>
-            <Feather name="bar-chart-2" size={20} color="#607D8B" />
+          <View style={[styles.analysisIcon, { backgroundColor: MODULE_COLORS.analysis + '1F' }]}>
+            <Feather name="bar-chart-2" size={20} color={MODULE_COLORS.analysis} />
           </View>
           <View style={styles.analysisText}>
             <Text style={[styles.analysisTitle, { color: theme.text.primary }]}>{t.analysis_title}</Text>
@@ -348,18 +334,41 @@ export function DailyDigestScreen() {
               {t.analysis_subtitle}
             </Text>
           </View>
-          <Feather name="arrow-right" size={20} color="#607D8B" />
+          <Feather name="arrow-right" size={20} color={MODULE_COLORS.analysis} />
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push('/chat')}
+          accessibilityRole="button"
+          accessibilityLabel={t.nav_chat}
+          style={({ pressed }) => [
+            styles.analysisStrip,
+            {
+              backgroundColor: pressed ? theme.bg.secondary : theme.brand.primary + '12',
+              borderColor: theme.brand.primary + '44',
+            },
+          ]}
+        >
+          <View style={[styles.analysisIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
+            <Feather name="message-circle" size={20} color={theme.brand.primary} />
+          </View>
+          <View style={styles.analysisText}>
+            <Text style={[styles.analysisTitle, { color: theme.text.primary }]}>{t.nav_chat}</Text>
+            <Text style={[styles.analysisSubtitle, { color: theme.text.muted }]} numberOfLines={1}>
+              {t.assistant_subtitle}
+            </Text>
+          </View>
+          <Feather name="arrow-right" size={20} color={theme.brand.primary} />
         </Pressable>
       </ScrollView>
 
-      <Pressable
+      <FAB
         onPress={() => setShowAdd(true)}
-        accessibilityRole="button"
         accessibilityLabel={t.universal_add_title}
-        style={[styles.fab, { backgroundColor: theme.brand.primary }]}
+        style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
       >
         <Feather name="plus" size={28} color="#fff" />
-      </Pressable>
+      </FAB>
 
       <UniversalAddSheet
         visible={showAdd}
@@ -373,26 +382,18 @@ export function DailyDigestScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing[4], gap: spacing[3], paddingBottom: 100 },
+  content: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
   hero: {
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing[5],
-    gap: spacing[4],
+    padding: spacing[4],
+    gap: spacing[3],
     overflow: 'hidden',
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   heroText: { flex: 1, gap: 2 },
-  progressDial: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.full,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressValue: { fontSize: 16, fontWeight: '800' },
-  progressLabel: { fontSize: 10, fontWeight: '700' },
+  progressValue: { fontSize: 16, fontWeight: '700' },
+  progressLabel: { fontSize: 10, fontWeight: '500' },
   heroMetric: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -400,10 +401,10 @@ const styles = StyleSheet.create({
   },
   heroMetricText: { flex: 1 },
   heroMetricLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroMetricValue: { fontSize: 30, fontWeight: '800', marginTop: 2 },
+  heroMetricValue: { fontSize: 26, fontWeight: '800', marginTop: 2 },
   heroMetricIcon: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -411,7 +412,7 @@ const styles = StyleSheet.create({
   summaryStrip: { flexDirection: 'row', gap: spacing[2] },
   summaryChip: {
     flex: 1,
-    minHeight: 74,
+    minHeight: 66,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[2],
@@ -424,19 +425,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  summaryValue: { fontSize: 15, fontWeight: '800' },
-  summaryLabel: { fontSize: 10, fontWeight: '700' },
-  todayPanel: {
+  summaryValue: { fontSize: 15, fontWeight: '700' },
+  summaryLabel: { fontSize: 10, fontWeight: '500' },
+  timelinePanel: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[4],
     gap: spacing[2],
   },
-  sectionTitle: { fontSize: 15, fontWeight: '700' },
-  actionItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], minHeight: 44 },
-  actionText: { flex: 1 },
-  actionTitle: { fontSize: 15, fontWeight: '600' },
-  actionSubtitle: { fontSize: 12, marginTop: 2 },
+  timelineHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timelineCount: { fontSize: 12, fontWeight: '600' },
+  timelineList: { gap: spacing[1] },
+  timelineRow: {
+    minHeight: 54,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  timelineTime: { width: 42, fontSize: 12, fontWeight: '700' },
+  timelineEmoji: { fontSize: 14 },
+  timelineIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineBody: { flex: 1, gap: 2 },
+  timelineTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  timelineTitle: { flex: 1, fontSize: 14, fontWeight: '700' },
+  timelineMeta: { fontSize: 11 },
+  timelineAmount: { fontSize: 13, fontWeight: '700' },
+  timelineEmpty: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  timelineEmptyIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  timelineEmptyText: { fontSize: 13, fontWeight: '600' },
+  timelineEmptyHint: { fontSize: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '600' },
   persistenceBanner: {
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -446,29 +474,31 @@ const styles = StyleSheet.create({
   persistenceTitle: { fontSize: 14, fontWeight: '700' },
   persistenceText: { fontSize: 13, lineHeight: 18 },
   greeting: { fontSize: 14, fontWeight: '500' },
-  dateStr: { fontSize: 24, fontWeight: '800' },
+  dateStr: { fontSize: 22, fontWeight: '700' },
   moduleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
   card: {
-    width: '48%',
-    minHeight: 146,
+    flexBasis: '48%',
+    flexGrow: 1,
+    flexShrink: 0,
+    minHeight: 126,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[3],
   },
   cardContent: { flex: 1, gap: spacing[2] },
   cardIconWrap: {
-    width: 42,
-    height: 42,
+    width: 38,
+    height: 38,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
-  cardSubtitle: { fontSize: 13, lineHeight: 18 },
+  cardTitle: { fontSize: 14, fontWeight: '700' },
+  cardSubtitle: { fontSize: 12, lineHeight: 17 },
   cardHint: { fontSize: 12, lineHeight: 16 },
   cardChevron: { position: 'absolute', right: spacing[3], top: spacing[3] },
   analysisStrip: {
-    minHeight: 88,
+    minHeight: 76,
     borderRadius: radius.lg,
     borderWidth: 1,
     padding: spacing[4],
@@ -484,10 +514,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   analysisText: { flex: 1, gap: 2 },
-  analysisTitle: { fontSize: 15, fontWeight: '800' },
+  analysisTitle: { fontSize: 15, fontWeight: '700' },
   analysisSubtitle: { fontSize: 13, lineHeight: 18 },
   fab: {
-    position: 'absolute', right: spacing[6], bottom: spacing[8],
+    position: 'absolute', right: spacing[6],
     width: 56, height: 56, borderRadius: radius.full,
     alignItems: 'center', justifyContent: 'center',
     elevation: 6, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },

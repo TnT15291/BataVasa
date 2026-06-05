@@ -17,7 +17,14 @@ type Props = {
 export function TransactionRow({ tx, category, onPress, onLongPress }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
-  const displayName = category ? translateCategoryName(category, t) : '?'
+  const rawCategoryName = category ? translateCategoryName(category, t) : '?'
+  const categoryMismatch = !!category && (
+    (tx.amount_cents < 0 && category.kind === 'income') ||
+    (tx.amount_cents > 0 && category.kind !== 'income')
+  )
+  const displayName = categoryMismatch
+    ? tx.amount_cents < 0 ? t.expense : t.income
+    : rawCategoryName
   const sign = tx.amount_cents < 0 ? '-' : '+'
   const absAmount = Math.abs(tx.amount_cents)
   const a11yLabel = [
@@ -46,15 +53,19 @@ export function TransactionRow({ tx, category, onPress, onLongPress }: Props) {
         <Text style={[styles.title, { color: theme.text.primary }]} numberOfLines={1}>
           {displayName}
         </Text>
-        {tx.merchant || tx.note ? (
+        {categoryMismatch ? (
+          <Text style={[styles.sub, { color: theme.text.muted }]} numberOfLines={1}>
+            {rawCategoryName} · {tx.merchant ?? tx.note ?? t.review_queue}
+          </Text>
+        ) : tx.merchant || tx.note ? (
           <Text style={[styles.sub, { color: theme.text.muted }]} numberOfLines={1}>
             {tx.merchant ?? tx.note}
           </Text>
         ) : null}
-        {tx.needs_review ? (
+        {tx.needs_review || categoryMismatch ? (
           <View style={[styles.reviewPill, { backgroundColor: theme.semantic.warning + '22' }]}>
             <Feather name="alert-circle" size={11} color={theme.semantic.warning} />
-            <Text style={[styles.reviewText, { color: theme.semantic.warning }]}>Review</Text>
+            <Text style={[styles.reviewText, { color: theme.semantic.warning }]}>{t.review_queue}</Text>
           </View>
         ) : null}
       </View>

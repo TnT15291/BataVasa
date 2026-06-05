@@ -5,7 +5,7 @@ import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import * as q from '@db/reminders/queries'
 import { enqueue } from '@db/sync/queue'
-import { scheduleReminderNotification, cancelNotification, cancelReminderNotifications, cancelAllNotifications } from '@services/notifications'
+import { scheduleReminderNotification, cancelReminderNotifications, cancelAllNotifications } from '@services/notifications'
 import { track } from '@services/analytics'
 import {
   CreateReminderInputSchema,
@@ -16,9 +16,6 @@ import {
 } from './types'
 
 const MODULE = 'reminders.service'
-
-// notificationId cache: reminderId → notificationId
-const notifCache = new Map<string, string>()
 
 function addRecurrence(date: Date, recurrence: Reminder['recurrence']): Date {
   const next = new Date(date)
@@ -41,12 +38,7 @@ function nextOccurrence(reminder: Reminder, after = new Date()): string | null {
   return new Date(eventAt.getTime() - advance * 60000).toISOString()
 }
 
-async function cancelCachedNotification(reminderId: string): Promise<void> {
-  const oldNotifId = notifCache.get(reminderId)
-  if (oldNotifId) {
-    await cancelNotification(oldNotifId)
-    notifCache.delete(reminderId)
-  }
+async function cancelPendingNotifications(reminderId: string): Promise<void> {
   await cancelReminderNotifications(reminderId)
 }
 
@@ -84,10 +76,9 @@ export async function createReminder(
     await q.insertReminder(reminder)
 
     if (!reminder.is_inbox) {
-      const notifId = await scheduleReminderNotification(
+      await scheduleReminderNotification(
         reminder.id, reminder.title, reminder.note ?? '', new Date(reminder.remind_at), reminder.priority
       )
-      if (notifId) notifCache.set(reminder.id, notifId)
     }
     void enqueue('reminder', reminder.id, 'upsert')
     track('feature_used', { feature_name: 'reminder_created' })
@@ -129,14 +120,12 @@ export async function updateReminder(
 
     // Re-schedule notification if time changed
     if (data.remind_at !== undefined || data.title !== undefined || data.priority !== undefined || data.is_inbox !== undefined || data.completed !== undefined) {
-      await cancelCachedNotification(data.id)
+      await cancelPendingNotifications(data.id)
       const fresh = await q.getReminder(data.id, getCurrentUserId())
       if (fresh && !fresh.completed && !fresh.is_inbox) {
-        const notifId = await scheduleReminderNotification(
+        await scheduleReminderNotification(
           fresh.id, fresh.title, fresh.note ?? '', new Date(fresh.remind_at), fresh.priority
         )
-        if (notifId) notifCache.set(fresh.id, notifId)
-        else notifCache.delete(fresh.id)
       }
     }
 
@@ -163,15 +152,14 @@ export async function skipReminder(id: string): Promise<Result<Reminder, AppErro
     if (nextRemindAt) patch.remind_at = nextRemindAt
 
     await q.updateReminder(id, patch)
-    await cancelCachedNotification(id)
+    await cancelPendingNotifications(id)
 
     const fresh = await q.getReminder(id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Skipped reminder vanished')
     if (!fresh.completed && !fresh.is_inbox) {
-      const notifId = await scheduleReminderNotification(
+      await scheduleReminderNotification(
         fresh.id, fresh.title, fresh.note ?? '', new Date(fresh.remind_at), fresh.priority
       )
-      if (notifId) notifCache.set(fresh.id, notifId)
     }
 
     void enqueue('reminder', id, 'upsert')
@@ -187,7 +175,7 @@ export async function deleteReminder(id: string): Promise<Result<void, AppError>
     const existing = await q.getReminder(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Reminder not found')
 
-    await cancelCachedNotification(id)
+    await cancelPendingNotifications(id)
 
     await q.softDeleteReminder(id, nowIso())
     void enqueue('reminder', id, 'upsert')
@@ -212,7 +200,6 @@ export async function loadReminders(): Promise<Result<Reminder[], AppError>> {
 export async function wipeAllReminders(): Promise<Result<{ deleted: number }, AppError>> {
   try {
     await cancelAllNotifications()
-    notifCache.clear()
     const deleted = await q.wipeReminders(getCurrentUserId())
     void enqueue('reminder', 'ALL', 'wipe')
     logger.info(MODULE, 'wiped all reminders', { deleted })

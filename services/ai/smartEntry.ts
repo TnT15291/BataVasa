@@ -10,6 +10,24 @@ export type ParsedEntry = {
   note: string
 }
 
+// Returns true if the text contains 2+ distinct amount tokens (e.g. "15k và 20k").
+// Used to skip single-amount override when a multi-transaction input is detected.
+export function hasMultipleAmounts(text: string): boolean {
+  const t = text.toLowerCase()
+  const patterns = [
+    /(\d+(?:\.\d+)?)\s*(?:triệu|trieu)\b/g,
+    /(\d+(?:\.\d+)?)\s*tr\b/g,
+    /(\d+(?:\.\d+)?)\s*k\b(?!\w)/g,
+    /(\d+(?:\.\d+)?)\s*ng[aà]n\b/g,
+    /(\d+(?:\.\d+)?)\s*ngh[ìi]n\b/g,
+    /(\d+(?:\.\d+)?)\s*m\b(?!in|s|d)/g,
+  ]
+  for (const re of patterns) {
+    if ([...t.matchAll(re)].length >= 2) return true
+  }
+  return false
+}
+
 // Deterministic amount extractor — AI is unreliable at arithmetic.
 // Handles: "50k", "1.5k", "1tr", "2 triệu", "1M", raw "50000".
 // Returns amount in the smallest currency unit appropriate to context.

@@ -39,6 +39,10 @@ qr-expo-url.txt
 # typescript
 *.tsbuildinfo
 
+# python cache
+__pycache__/
+*.pyc
+
 # test coverage
 coverage/
 

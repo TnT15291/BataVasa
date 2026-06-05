@@ -50,6 +50,12 @@ export function usePasswordRecoveryLink() {
         if (!r.ok) logger.error(MODULE, 'enterRecovery failed for recovery link')
         return
       }
+      const code = params.get('code')
+      if (code) {
+        const r = await useAuthStore.getState().enterRecoveryWithCode(code)
+        if (!r.ok) logger.error(MODULE, 'enterRecoveryWithCode failed for recovery link')
+        return
+      }
       if (errorDescription) {
         // Expired or already-used link — surface a localized message on the auth screen.
         logger.warn(MODULE, 'recovery link error', { error: errorDescription })

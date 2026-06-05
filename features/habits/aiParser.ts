@@ -1,6 +1,6 @@
-import { chatCompletion } from './openai'
-import { getAILanguage } from './aiLanguage'
-import type { Habit } from '@features/habits/types'
+import { chatCompletion } from '@services/ai/openai'
+import { getAILanguage } from '@services/ai/aiLanguage'
+import type { Habit } from './types'
 
 export type ParsedHabitLog = {
   matched_habit_id: string | null
@@ -42,9 +42,12 @@ Return JSON:
     if (!json) return null
     const parsed = JSON.parse(json)
     if (!parsed.matched_habit_name || !parsed.occurred_at) return null
+    const matchedHabit = parsed.matched_habit_id
+      ? habits.find((h) => h.id === parsed.matched_habit_id) ?? null
+      : null
     return {
       matched_habit_id: parsed.matched_habit_id ?? null,
-      matched_habit_name: String(parsed.matched_habit_name),
+      matched_habit_name: matchedHabit?.name ?? String(parsed.matched_habit_name),
       occurred_at: String(parsed.occurred_at),
       note: String(parsed.note ?? ''),
     }

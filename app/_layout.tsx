@@ -1,9 +1,11 @@
 import 'react-native-gesture-handler'
+import * as WebBrowser from 'expo-web-browser'
+
+WebBrowser.maybeCompleteAuthSession()
 import * as Sentry from '@sentry/react-native'
 import { useEffect, useRef, useState } from 'react'
-import { AppState, View, Text, ActivityIndicator, Pressable } from 'react-native'
-import { Stack, useRouter } from 'expo-router'
-import { Feather } from '@expo/vector-icons'
+import { AppState, View, Text, ActivityIndicator, LogBox } from 'react-native'
+import { Stack } from 'expo-router'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { runMigrations } from '@db/core/migrate'
@@ -29,20 +31,13 @@ if (SENTRY_DSN) {
   })
 }
 
-function HeaderActions() {
-  const router = useRouter()
-  const theme = useTheme()
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-      <Pressable onPress={() => router.push('/help')} hitSlop={8} style={{ paddingHorizontal: 4 }}>
-        <Feather name="help-circle" size={22} color={theme.text.secondary} />
-      </Pressable>
-      <Pressable onPress={() => router.push('/settings')} hitSlop={8} style={{ paddingHorizontal: 4 }}>
-        <Feather name="settings" size={22} color={theme.text.secondary} />
-      </Pressable>
-    </View>
-  )
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'expo-notifications: Android Push notifications',
+    '`expo-notifications` functionality is not fully supported in Expo Go',
+  ])
 }
+
 
 const LOCK_TIMEOUT_MS = 30_000
 
@@ -130,13 +125,7 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: theme.bg.primary },
           }}
         >
-          <Stack.Screen
-            name="index"
-            options={{
-              title: 'BataVasa',
-              headerRight: () => <HeaderActions />,
-            }}
-          />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="new"
             options={{ title: t.nav_new_transaction, presentation: 'modal' }}
@@ -153,12 +142,8 @@ export default function RootLayout() {
           <Stack.Screen name="chat" options={{ title: t.nav_chat }} />
           <Stack.Screen name="categories" options={{ title: t.nav_categories }} />
           <Stack.Screen name="category" options={{ title: t.new_category }} />
-          <Stack.Screen name="reminders" options={{ title: t.nav_reminders }} />
           <Stack.Screen name="reminder" options={{ title: t.new_reminder }} />
-          <Stack.Screen name="finance" options={{ title: t.nav_finance }} />
-          <Stack.Screen name="journals" options={{ title: t.journals }} />
           <Stack.Screen name="journal" options={{ title: t.new_journal }} />
-          <Stack.Screen name="habits" options={{ title: t.habits }} />
           <Stack.Screen name="habit" options={{ title: t.new_habit }} />
           <Stack.Screen name="display-currency" options={{ title: t.display_currency }} />
           <Stack.Screen name="analysis" options={{ title: t.analysis_title }} />

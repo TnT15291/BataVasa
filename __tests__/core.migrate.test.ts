@@ -89,4 +89,20 @@ describe('core migrations', () => {
     expect(mockGetDb).toHaveBeenCalledTimes(1)
     expect(mockDb.getFirstAsync).toHaveBeenCalledTimes(1)
   })
+
+  it('re-throws non-duplicate-column errors from addColumnSafe', async () => {
+    const { runMigrations } = loadMigrations()
+    mockDb.getFirstAsync.mockResolvedValueOnce({ user_version: 10 })
+    mockDb.execAsync.mockImplementation(async (sql: string) => {
+      if (sql.includes('is_inbox')) throw new Error('database is locked')
+    })
+    await expect(runMigrations()).rejects.toThrow('database is locked')
+  })
+
+  it('defaults user_version to 0 when PRAGMA returns null', async () => {
+    const { runMigrations } = loadMigrations()
+    mockDb.getFirstAsync.mockResolvedValueOnce(null)
+    await runMigrations()
+    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 1')
+  })
 })

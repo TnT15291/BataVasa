@@ -90,6 +90,21 @@ export type TranscribeResult =
   | { ok: true; text: string }
   | { ok: false; reason: 'no_speech' | 'error' }
 
+// Domain-specific prompt in the target language helps Whisper calibrate tone marks
+// (critical for Vietnamese/Chinese/Japanese) and reduces wrong-diacritic outputs.
+function getWhisperPrompt(language: string): string {
+  const lang = language.slice(0, 2)
+  const prompts: Record<string, string> = {
+    vi: 'Ghi chú tài chính, thói quen, nhật ký hàng ngày. Số tiền, tên người, địa điểm, cảm xúc.',
+    en: 'Personal notes about finance, habits, journals. Amounts, names, places, emotions.',
+    ja: '財務、習慣、日記のメモ。金額、名前、場所、感情。',
+    ko: '재정, 습관, 일기 메모. 금액, 이름, 장소, 감정.',
+    fr: 'Notes personnelles sur les finances, habitudes, journaux. Montants, noms, lieux.',
+    zh: '财务、习惯、日记记录。金额、姓名、地点、情绪。',
+  }
+  return prompts[lang] ?? prompts['en']!
+}
+
 // Tries OpenAI Whisper first, falls back to Groq Whisper (both are OpenAI-compatible)
 export async function transcribeAudio(uri: string, language: string): Promise<TranscribeResult> {
   const openaiKey = await getSecure('openai_api_key')
@@ -105,7 +120,11 @@ export async function transcribeAudio(uri: string, language: string): Promise<Tr
   const formData = new FormData()
   formData.append('file', { uri, type: 'audio/m4a', name: 'audio.m4a' } as any)
   formData.append('model', model)
-  formData.append('language', language.slice(0, 2)) // 'vi' → 'vi', already correct
+  formData.append('language', language.slice(0, 2))
+  // A same-language domain prompt improves tone-mark accuracy for tonal languages
+  // (Vietnamese especially) and reduces Whisper's tendency to hallucinate wrong
+  // diacritics when the audio is lightly accented.
+  formData.append('prompt', getWhisperPrompt(language))
   // verbose_json exposes per-segment no_speech_prob; temperature 0 disables the
   // decoder's temperature-fallback, which is the main driver of hallucinations.
   formData.append('response_format', 'verbose_json')

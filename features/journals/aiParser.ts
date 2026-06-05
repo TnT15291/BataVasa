@@ -1,5 +1,5 @@
-import { chatCompletion } from './openai'
-import { getAILanguage } from './aiLanguage'
+import { chatCompletion } from '@services/ai/openai'
+import { getAILanguage } from '@services/ai/aiLanguage'
 
 export type ParsedJournal = {
   content: string

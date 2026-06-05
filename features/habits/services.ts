@@ -6,6 +6,8 @@ import { nowIso } from '@db/core/db'
 import * as q from '@db/habits/queries'
 import { enqueue } from '@db/sync/queue'
 import { track } from '@services/analytics'
+import { scheduleHabitNotifications, cancelHabitNotifications } from '@services/notifications'
+import { getTranslations } from '@services/i18n'
 import {
   CreateHabitInputSchema,
   UpdateHabitInputSchema,
@@ -84,6 +86,7 @@ export async function createHabit(
       cadence: data.cadence,
       target_per_period: data.target_per_period,
       schedule_days: data.cadence === 'custom' ? data.schedule_days ?? null : null,
+      notification_times: data.notification_times ?? null,
       location_lat: data.location_lat ?? null,
       location_lng: data.location_lng ?? null,
       location_label: data.location_label ?? null,
@@ -93,6 +96,10 @@ export async function createHabit(
       synced_at: null,
     }
     await q.insertHabit(habit)
+    if (habit.notification_times) {
+      const times: string[] = JSON.parse(habit.notification_times)
+      void scheduleHabitNotifications(habit.id, habit.name, times, getTranslations().habit_notification_body)
+    }
     void enqueue('habit', habit.id, 'upsert')
     track('feature_used', { feature_name: 'habit_created' })
     logger.info(MODULE, 'habit created', { id: habit.id })
@@ -124,8 +131,21 @@ export async function updateHabit(
     if (data.schedule_days !== undefined || data.cadence !== undefined) {
       patch.schedule_days = (data.cadence ?? existing.cadence) === 'custom' ? data.schedule_days ?? existing.schedule_days ?? null : null
     }
+    if (data.notification_times !== undefined) patch.notification_times = data.notification_times ?? null
 
     await q.updateHabit(data.id, patch)
+
+    if (data.notification_times !== undefined) {
+      await cancelHabitNotifications(data.id)
+      const newTimes: string[] = data.notification_times ? JSON.parse(data.notification_times) : []
+      const habitName = data.name ?? existing.name
+      void scheduleHabitNotifications(data.id, habitName, newTimes, getTranslations().habit_notification_body)
+    } else if (data.name !== undefined && existing.notification_times) {
+      await cancelHabitNotifications(data.id)
+      const times: string[] = JSON.parse(existing.notification_times)
+      void scheduleHabitNotifications(data.id, data.name, times, getTranslations().habit_notification_body)
+    }
+
     void enqueue('habit', data.id, 'upsert')
     const fresh = await q.getHabit(data.id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Updated habit vanished')
@@ -141,6 +161,7 @@ export async function deleteHabit(id: string): Promise<Result<void, AppError>> {
     const existing = await q.getHabit(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Habit not found')
     await q.softDeleteHabit(id, nowIso())
+    void cancelHabitNotifications(id)
     void enqueue('habit', id, 'upsert')
     logger.info(MODULE, 'habit deleted', { id })
     return ok(undefined)
@@ -162,6 +183,10 @@ export async function loadHabits(): Promise<Result<Habit[], AppError>> {
 
 export async function wipeAllHabits(): Promise<Result<{ deleted: number }, AppError>> {
   try {
+    const habits = await q.listHabits(getCurrentUserId())
+    for (const habit of habits) {
+      if (habit.notification_times) void cancelHabitNotifications(habit.id)
+    }
     const deleted = await q.wipeHabits(getCurrentUserId())
     void enqueue('habit', 'ALL', 'wipe')
     void enqueue('habit_log', 'ALL', 'wipe')
@@ -301,16 +326,31 @@ export async function getHabitStreak(habitId: string): Promise<number> {
 export async function getTodayLogCount(habitId: string): Promise<number> {
   try {
     const dateStr = getLocalDateString()
-    return q.countLogsForDate(habitId, dateStr)
+    return await q.countLogsForDate(habitId, dateStr)
   } catch {
     return 0
+  }
+}
+
+export async function rescheduleAllHabitNotifications(): Promise<void> {
+  try {
+    const habits = await q.listHabits(getCurrentUserId())
+    const body = getTranslations().habit_notification_body
+    for (const habit of habits) {
+      if (!habit.notification_times) continue
+      await cancelHabitNotifications(habit.id)
+      const times: string[] = JSON.parse(habit.notification_times)
+      void scheduleHabitNotifications(habit.id, habit.name, times, body)
+    }
+  } catch (e) {
+    logger.error(MODULE, 'rescheduleAllHabitNotifications failed', { error: String(e) })
   }
 }
 
 export async function getCurrentPeriodLogCount(habit: Pick<Habit, 'id' | 'cadence'>): Promise<number> {
   try {
     const range = getHabitPeriodRange(habit)
-    return q.countLogsInRange(habit.id, range.from.toISOString(), range.to.toISOString())
+    return await q.countLogsInRange(habit.id, range.from.toISOString(), range.to.toISOString())
   } catch {
     return 0
   }

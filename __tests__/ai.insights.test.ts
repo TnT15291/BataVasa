@@ -102,16 +102,18 @@ beforeEach(() => {
 })
 
 describe('AI insight builders', () => {
-  it('builds a finance prompt with category, mood, and totals context', async () => {
+  it('builds a finance prompt with category, merchant, mood, and trend context', async () => {
     mockedChatCompletion.mockResolvedValueOnce('finance insight')
 
     await expect(generateFinanceInsights([baseTx as any], [baseCategory as any], 'this week')).resolves.toBe('finance insight')
 
     const messages = mockedChatCompletion.mock.calls[0][0]
     expect(messages[0].content).toContain('Vietnamese ONLY')
-    expect(messages[1].content).toContain('Analyze my spending for the this week')
-    expect(messages[1].content).toContain('Food: 125000 VND')
-    expect(messages[1].content).toContain('Mood when spending: happy: 1')
+    expect(messages[1].content).toContain('this week')
+    expect(messages[1].content).toContain('OVERVIEW')
+    expect(messages[1].content).toContain('TOP CATEGORIES')
+    expect(messages[1].content).toContain('DAY-OF-WEEK')
+    expect(messages[1].content).toContain('MOOD WHEN SPENDING')
   })
 
   it('rejects finance and cross-module insight generation without data', async () => {
@@ -144,7 +146,21 @@ describe('AI insight builders', () => {
       consistency_summary: 'Steady overall.',
       strongest_habit: 'Walk stands out.',
     })
-    expect(mockedChatCompletion.mock.calls[0][1]).toMatchObject({ temperature: 0.4, max_tokens: 350 })
+    expect(mockedChatCompletion.mock.calls[0][1]).toMatchObject({ temperature: 0.4, max_tokens: 450 })
+  })
+
+  it('habit prompt includes last-14-days timeline and day pattern', async () => {
+    mockedChatCompletion.mockResolvedValueOnce(JSON.stringify({
+      consistency_summary: 'x', strongest_habit: 'x', needs_attention: 'x', encouragement: 'x', tip: 'x',
+    }))
+    await generateHabitInsight(
+      [baseHabit as any],
+      [baseHabitLog as any, baseHabitLog as any, baseHabitLog as any]
+    )
+    const prompt = mockedChatCompletion.mock.calls[0][0][1].content
+    expect(prompt).toContain('Last 14 days')
+    expect(prompt).toContain('completion:')
+    expect(prompt).toContain('streak:')
   })
 
   it('returns parsed journal reflection JSON and handles invalid model output', async () => {
@@ -177,9 +193,70 @@ describe('AI insight builders', () => {
     })).resolves.toBe('cross insight')
 
     const messages = mockedChatCompletion.mock.calls[0][0]
-    expect(messages[0].content).toContain('Finance, Habits, and Journal')
     expect(messages[1].content).toContain('FINANCE (last 30 days)')
-    expect(messages[1].content).toContain('HABITS:')
-    expect(messages[1].content).toContain('JOURNALS (1 entries, last 30 days)')
+    expect(messages[1].content).toContain('HABITS')
+    expect(messages[1].content).toContain('JOURNALS')
+  })
+
+  it('includes income transactions in finance summary', async () => {
+    mockedChatCompletion.mockResolvedValueOnce('ok')
+    const incomeTx = { ...baseTx, amount_cents: 5000000 }
+    await generateCrossModuleInsights({
+      transactions: [incomeTx as any],
+      categories: [baseCategory as any],
+      habits: [],
+      journals: [],
+    })
+    const prompt = mockedChatCompletion.mock.calls[0][0][1].content
+    expect(prompt).toContain('Income:')
+  })
+
+  it('shows N/A avg mood when all journals have null mood', async () => {
+    mockedChatCompletion.mockResolvedValueOnce('ok')
+    const noMoodJournal = { ...baseJournal, mood: null }
+    await generateCrossModuleInsights({
+      transactions: [],
+      categories: [],
+      habits: [{ ...baseHabit, todayCount: 0, streak: 0 } as any],
+      journals: [noMoodJournal as any],
+    })
+    const prompt = mockedChatCompletion.mock.calls[0][0][1].content
+    expect(prompt).toContain('N/A')
+  })
+
+  it('omits FINANCE section when no recent transactions', async () => {
+    mockedChatCompletion.mockResolvedValueOnce('ok')
+    await generateCrossModuleInsights({
+      transactions: [],
+      categories: [],
+      habits: [{ ...baseHabit, todayCount: 1, streak: 3 } as any],
+      journals: [],
+    })
+    const prompt = mockedChatCompletion.mock.calls[0][0][1].content
+    expect(prompt).not.toContain('FINANCE')
+  })
+
+  it('omits HABITS section when habits array is empty', async () => {
+    mockedChatCompletion.mockResolvedValueOnce('ok')
+    await generateCrossModuleInsights({
+      transactions: [baseTx as any],
+      categories: [baseCategory as any],
+      habits: [],
+      journals: [],
+    })
+    const prompt = mockedChatCompletion.mock.calls[0][0][1].content
+    expect(prompt).not.toContain('HABITS:')
+  })
+
+  it('omits JOURNALS section when no recent journals', async () => {
+    mockedChatCompletion.mockResolvedValueOnce('ok')
+    await generateCrossModuleInsights({
+      transactions: [baseTx as any],
+      categories: [baseCategory as any],
+      habits: [],
+      journals: [],
+    })
+    const prompt = mockedChatCompletion.mock.calls[0][0][1].content
+    expect(prompt).not.toContain('JOURNALS')
   })
 })

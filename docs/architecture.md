@@ -1,331 +1,174 @@
 # Architecture
 
+> Current implementation guide. `docs/current-state.md` remains the project status
+> source of truth; this file describes how the code is organized.
+
 ## System Overview
 
-```
-┌─────────────────────────────────────────┐
-│  React Native (Expo) UI                 │
-├─────────────────────────────────────────┤
-│  Hooks (React state, business glue)     │
-├─────────────────────────────────────────┤
-│  Services (pure business logic)         │
-├─────────────────────────────────────────┤
-│  Database (SQLite) ↔ Sync ↔ Supabase    │
-│  AI Services (OpenAI)                   │
-└─────────────────────────────────────────┘
+```text
+Expo Router app routes
+  -> feature screens/components/hooks
+  -> feature application services
+  -> SQLite queries + sync queue
+  -> Supabase table mirror, when auth and sync are enabled
+
+Cross-cutting services:
+  auth, settings, AI, sync, i18n, design, logging, analytics, notifications
 ```
 
-## Design Principles
+SQLite is the source of truth for UI reads and writes. Supabase is a cloud mirror
+driven by `sync_queue`; UI code should not write to Supabase directly.
 
-- **Feature-modular** — each domain (finance, habits, journals) is self-contained
-- **Offline-first** — SQLite is source of truth, Supabase is mirror
-- **Separation of concerns** — UI never imports DB directly
+## Module Taxonomy
 
-## Module Map
+Use "module" carefully. BataVasa has three different kinds of modules.
 
-Each module follows the same shape:
+### Domain Modules
 
-```
-features/<module>/
-  screens/             ← React Native screens
-  components/          ← module-specific components
-  hooks/               ← state + glue hooks
+These own user data and must provide CRUD, export, wipe, sync registration, tests,
+and i18n coverage.
 
-store/<module>Store.ts ← Zustand/Redux store
+| Domain | UI | Store | DB | Services |
+|---|---|---|---|---|
+| Finance | `features/finance/`, `app/finance.tsx` | `store/financeStore.ts` | `database/finance/` | `features/finance/services.ts`, `services/fx.ts` |
+| Reminders | `features/reminders/`, `app/reminders.tsx` | `store/remindersStore.ts` | `database/reminders/` | `features/reminders/services.ts`, `services/notifications.ts` |
+| Habits | `features/habits/`, `app/habits.tsx` | `store/habitsStore.ts` | `database/habits/` | `features/habits/services.ts` |
+| Journals | `features/journals/`, `app/journals.tsx` | `store/journalsStore.ts` | `database/journals/` | `features/journals/services.ts` |
 
-database/<module>/
-  schema.ts            ← SQLite table defs
-  queries.ts           ← typed query functions
-  sync.ts              ← Supabase mirror logic
+### Cross-Module Surfaces
 
-ai/<module>Insight.ts  ← AI analysis for this module
-```
+These read from or dispatch to multiple domain modules. They should not own domain
+tables.
 
-### Current Modules
+| Surface | Files | Role |
+|---|---|---|
+| Home / Daily Digest | `features/home/` | Summary, onboarding, Universal Add |
+| Today Timeline | `features/home/hooks/useDailyDigest.ts` | Presentation read model that merges same-day domain records |
+| Analysis | `features/analysis/` | Cross-module reports and patterns |
+| Assistant | `features/assistant/` | AI chat/assistant UI with quick prompts |
+| Reports routes | `app/*-report.tsx`, module report screens | Domain reports exposed through routes |
 
-| Module | Status | UI | Store | DB | AI |
-|---|---|---|---|---|---|
-| **Finance** | ✅ Built | `features/finance/screens/` | `store/financeStore.ts` | `database/finance/` | `services/ai/financeInsight.ts` |
-| **Reminders** | ✅ Built | `features/reminders/screens/` | `store/remindersStore.ts` | `database/reminders/` | _(none — pure CRUD)_ |
-| **Journals** | ✅ Built | `features/journals/screens/` | `store/journalsStore.ts` | `database/journals/` | _(planned — Journal Reflection)_ |
-| **Habits** | ⬜ Planned | — | — | — | _(planned)_ |
-| **Home (Daily Digest)** | ✅ Built | `features/home/screens/DailyDigestScreen.tsx` | _(reads from all module stores)_ | — | — |
+### Platform Modules
+
+These are app infrastructure, not product domains.
+
+| Platform area | Files |
+|---|---|
+| Auth | `features/auth/`, `store/authStore.ts`, `services/supabase.ts`, `services/identity.ts` |
+| Settings | `features/settings/`, `store/settingsStore.ts`, `database/settings/` |
+| Sync | `database/sync/`, `services/sync.ts` |
+| AI | `services/ai/` |
+| i18n | `services/i18n/` |
+| Design system | `design/`, `docs/design-system.md` |
+| Logging/analytics | `services/logger.ts`, `services/analytics.ts` |
+
+## Layering Rules
+
+The current service files under `features/<domain>/services.ts` are application
+services, not pure domain services. They are allowed to:
+
+- validate inputs with the domain type schemas;
+- call `database/<domain>/queries.ts`;
+- attach `user_id` via `services/identity.ts`;
+- enqueue sync operations through `database/sync/queue.ts`;
+- schedule side effects such as notifications;
+- emit analytics events through the allow-listed analytics wrapper.
+
+Feature screens should call stores/hooks/services. They should not import database
+queries directly.
+
+Database query modules should remain storage-focused: SQL, row mapping, pagination,
+export/wipe helpers, and no UI concerns.
+
+## Domain Contract
+
+Each domain module should expose:
+
+- CRUD service functions for its primary records;
+- `exportAll...()` for data management;
+- `wipeAll...()` for hard local wipe plus `sync_queue` wipe operation;
+- query-layer pagination for unbounded lists;
+- sync table mapping in `services/sync.ts`;
+- i18n keys in all six translation files for user-facing text;
+- focused tests for services, queries, migrations, sync behavior, and AI builders
+  where applicable.
 
 ## Data Flow
 
-### Manual entry (form)
-
-1. User opens form → fills fields → tap Save
-2. UI calls a hook (`useFinanceCreate()`)
-3. Hook calls service (`financeService.create()`)
-4. Service validates (zod) → writes to SQLite (sync) → queues Supabase sync (async)
-5. AI insights regenerated via `ai/<module>Insight.ts` on schedule or event
-
-### AI-parsed entry (Universal Add Sheet)
-
-1. User taps **+** FAB on home screen → `UniversalAddSheet` opens (`features/home/components/UniversalAddSheet.tsx`)
-2. User types free text (voice planned for V2)
-3. Text goes through **deterministic pre-parser** (`services/ai/smartEntry.ts:extractAmount`) for amount extraction
-4. Pre-parsed text → `services/ai/universalEntry.ts:parseUniversalCandidates()` → AI intent classifier → returns one or more typed candidates
-5. Prompt includes: language directive, current local datetime, user timezone offset (so "18h00" → `18:00+07:00` not `18:00Z`)
-6. **Confirmation sheet** shown inline with selectable candidate cards (module icon, parsed fields, Save/Edit/Cancel)
-7. On Save → saves every selected candidate through the appropriate module store action (`createTransaction` / `createReminder` / …)
-8. `settingsStore.aiAutoConfirm` toggle (default `true`) controls whether sheet is shown; voice always confirms
-
-## Cross-Module Rules
-
-All 5 rules defined in `CLAUDE.md`. Implementation specifics below.
-
-### Rule 1 — Cloud sync + Wipe
-
-**Per-module sync toggle**
-
-- Stored in `settingsStore.moduleSync[<module>]: boolean`, default `true`
-- When `false`: writes still go to SQLite + `sync_queue`, but the sync worker skips `<module>_*` tables
-- UI: Settings → `<Module> data` sub-screen → toggle
-
-**"Delete all data" action**
-
-Every module exports from `features/<module>/services.ts`:
-```ts
-export async function wipeAllData(): Promise<Result<{ deleted: number }, AppError>>
-```
-
-Behavior:
-1. Hard delete from SQLite (`DELETE FROM <module>_*` — not soft)
-2. Insert tombstone op into `sync_queue` so Supabase cleans up on next sync
-3. Clear in-memory store state
-4. Return count for confirmation toast
-
-UI: `features/settings/screens/<Module>DataScreen.tsx` → destructive button with double-confirm
-
-### Rule 2 — Language applies everywhere (including AI)
-
-- UI strings: `services/i18n/translations/<lang>.ts` — 6 locales
-- AI: every prompt builder MUST start with:
-  ```ts
-  const language = getAILanguage()  // returns "Vietnamese", "English", ...
-  const systemPrompt = `Respond in ${language}. ${rest...}`
-  ```
-- Adding new translation keys: update **all 6** files in same commit. Missing keys default to `en` at runtime (graceful) but flag as warning in `__DEV__`
-
-### Rule 3 — Universal "Add Activity"
-
-**Implemented:** `features/home/components/UniversalAddSheet.tsx` — bottom sheet Modal on DailyDigestScreen.
-
-**Intent classifier:** `services/ai/universalEntry.ts:parseUniversalCandidates(text)`
-
-```ts
-export type UniversalEntry =
-  | { module: 'finance';  amount_cents, direction, category_hint, merchant, note, occurred_at }
-  | { module: 'reminder'; title, remind_at, recurrence, note }
-  | { module: 'habits';   title, frequency }
-  | { module: 'journal';  content }
-```
-
-- AI classifies via `chatCompletion()` (multi-provider) at `temperature: 0.1`
-- Universal Add uses `parseUniversalCandidates(text)` for UI flows. `parseUniversalEntry(text)` is compatibility-only and returns the highest-confidence candidate.
-- The classifier returns candidates, not a single forced module: `{ id, entry, confidence, reason, selectedByDefault }[]`.
-- If the text has multiple clear intents, return multiple candidates. Example: money event + feeling/reflection => finance + journal.
-- If the text is ambiguous between modules, return multiple candidates and let the confirmation sheet ask the user through selectable cards.
-- Each module candidate MUST pass module guards before saving:
-  - Finance requires an amount and direction.
-  - Reminder requires a future datetime or reminder/schedule intent.
-  - Habit requires recurrence/cadence or a repeated behavior goal.
-  - Journal requires reflection, feeling, memory, or narrative content.
-- Adding a future module MUST extend the candidate type, prompt rules, guard rules, summary card, and save dispatch together. Do not add a module that can only be selected by prompt text.
-- `extractAmount()` runs deterministically before AI call; enforced if AI result diverges ≥10×
-- All datetimes include user timezone offset in prompt and post-processed via `fixReminderTimezone()` to prevent UTC-vs-local bugs
-- Selected candidates save directly from the sheet through module store actions.
-
-**Voice:** planned for V2 — will wrap `expo-speech-recognition` behind `services/voice.ts`
-
-### Rule 4 — Backdated entries
-
-**Schema**
-
-Every module's main table has:
-- `occurred_at TEXT NOT NULL` — user-meaningful event time (editable)
-- `created_at TEXT NOT NULL` — system insert time (immutable)
-
-Already enforced in `finance_transaction`, `habit_log`, `journal_entry`, `reminder`.
-
-**Date pre-parser** — shared at `services/dateParser.ts`:
-
-```ts
-export function parseDate(text: string, now = new Date()): Date | null
-```
-
-Handles (Vietnamese + English):
-| Phrase | Resolves to |
-|---|---|
-| `hôm nay`, `today`, `bữa nay` | start of today |
-| `hôm qua`, `yesterday` | start of yesterday |
-| `hôm kia`, `day before yesterday` | -2 days |
-| `tuần trước`, `last week` | -7 days |
-| `tháng trước`, `last month` | -1 month |
-| `ngày 13/2`, `13/2`, `13 tháng 2` | this/last year's Feb 13 |
-| `ngày 13/2/2023`, `13/2/2023`, `2023-02-13` | absolute |
-| `sáng nay`, `this morning` | today 08:00 |
-| `tối qua`, `last night` | yesterday 20:00 |
-
-Returns `null` if no match → caller defaults to `now`.
-
-**Date picker UI**
-
-Every module's create/edit screen exposes a **date row** (tappable → opens `@react-native-community/datetimepicker`). Default = now, but pre-filled from `parseDate(text)` if AI route.
-
-**AI prompts**
-
-System prompt MUST include:
-```
-Today is ${new Date().toISOString().slice(0, 10)} (${dayName}).
-User's relative dates ("tomorrow", "hôm qua") should resolve against this.
-```
-
-### Rule 5 — AI parse → confirm before save
-
-**Implemented** inside `features/home/components/UniversalAddSheet.tsx` as the Step 2 UI after `parseUniversalCandidates()` returns.
-
-Layout (Step 2):
-```
-┌─ Bạn nói: ─────────────────────────┐
-│ "hôm qua tôi nhậu hết 500k"        │
-├─────────────────────────────────────┤
-│ 💰 Tài chính                        │
-│ - 500.000 ₫ · Ăn uống · hôm qua    │
-├─────────────────────────────────────┤
-│ [ Cancel ]  [ Edit ]  [ Save ✓ ]    │
-└─────────────────────────────────────┘
-```
-
-**Settings:**
-- `settingsStore.aiAutoConfirm: boolean` (default `true` = step 2 shown)
-- "Edit" → resets to Step 1 (text input) with same text pre-filled
-- "Save" → calls module store actions for every selected candidate (no navigation)
-
-**Universal candidate rule (mandatory for every current and future module):**
-- AI proposes candidates; app validates candidates; user confirms when there is ambiguity or multiple intents.
-- Never silently force ambiguous text into one module.
-- Never silently save duplicate modules unless separate intents are clear and shown as selected candidate cards.
-- Dual/multi-entry examples:
-  - `Hôm nay thấy vui vì làm ra 2 triệu` → Finance income + Journal reflection.
-  - `Nhắc tôi tập gym mỗi ngày lúc 7h và theo dõi thành thói quen` → Reminder + Habit.
-  - `Đã trả 500k tiền gym tháng này` → Finance only.
-
-**Voice exception:** even if `aiAutoConfirm === false`, voice inputs ALWAYS show the sheet (speech-to-text errors are common). _Voice planned V2._
-
-### Rule 7 — CRUD completeness
-
-Every entry-type table (`finance_transaction`, `habit_log`, `journal_entry`, `reminder`, …) MUST have a complete UI lifecycle.
-
-**Service signatures (mandatory):**
-```ts
-async function getX(id: string): Promise<Result<X, AppError>>
-async function createX(input: CreateXInput): Promise<Result<X, AppError>>
-async function updateX(input: UpdateXInput): Promise<Result<X, AppError>>
-async function deleteX(id: string): Promise<Result<void, AppError>>
-```
-
-**Screen pattern:** one screen for create + edit. The route accepts an optional `id` param:
-- `/<module>/new` → blank create form
-- `/<module>/new?id=abc` → same screen, pre-filled from `getX(abc)`, calls `update` on save, shows Delete button
-
-**List interaction:**
-- Primary tap → opens detail/edit screen
-- Long-press → soft-delete (with toast undo for 5s, then commit)
-- Swipe gesture optional
-
-**Why one screen, not two:** cuts code by ~50%, single source of truth for validation + layout, the only diff is mode flag.
-
-### Rule 8 — Error boundaries + observability
-
-Reliability is a feature. No silent failures, no white screens.
-
-**Required setup:**
-- Sentry init in `app/_layout.tsx` BEFORE any provider mount
-- Top-level `Stack` provides one `<ErrorBoundary>` for the whole app
-- Per-screen `<ErrorBoundary>` for risky areas (AI fetch, image processing, sync drain)
-- Boundary fallback: themed message + retry + report button → opens bug-report mailto / GitHub issue prefilled with breadcrumbs
-
-**Service-layer contract:**
-- Every async returning `Result.err` MUST surface to user (toast / alert / sheet)
-- Logger `warn`/`error` levels auto-forward to Sentry
-- PII scrub list in `services/logger.ts` is the ONLY source of truth — extend it when adding new sensitive fields
-
-**Analytics:**
-- `services/analytics.ts` wraps PostHog (or chosen provider)
-- Allow-list events in `docs/ops.md` — never track amounts, content, exact locations
-- Performance tracing: cold-start, screen transitions, sync round-trip, AI call latency
-
-### Rule 6 — Location (optional, GPS-default, clear-to-empty)
-
-**Schema** — every entry table adds 3 nullable columns:
-```sql
-location_lat   REAL    -- WGS84 latitude
-location_lng   REAL    -- WGS84 longitude
-location_label TEXT    -- reverse-geocoded or user-typed
-```
-
-All three are independently nullable: a user may type a label without GPS, or have GPS without geocoding.
-
-**Service** — `services/location.ts` (cross-platform wrapper):
-```ts
-export async function getCurrentLocation(): Promise<{ lat: number; lng: number; label: string | null } | null>
-export async function reverseGeocode(lat: number, lng: number): Promise<string | null>
-export async function requestLocationPermission(): Promise<boolean>
-```
-
-Implementation:
-- Native: `expo-location` — `requestForegroundPermissionsAsync()` + `getCurrentPositionAsync()` + `reverseGeocodeAsync()`
-- Web: `navigator.geolocation.getCurrentPosition()` (no built-in reverse geocode — return `null` label)
-- ALL paths handle permission denial / unavailable hardware by returning `null` (never throw to UI)
-
-**Settings** — `settingsStore.locationAccess: boolean` (default `false`)
-- Settings → Privacy → "Allow location" toggle
-- When user toggles ON for the first time, immediately request OS-level permission
-- When OFF, skip GPS entirely (don't prompt OS, don't fetch)
-
-**UI pattern** — `<LocationRow>` shared component:
-```tsx
-<LocationRow
-  value={locationLabel}                    // string | null
-  onChange={setLocationLabel}
-  autoFetch={settings.locationAccess}      // fetch current location on mount if true
-/>
-```
-
-Behavior:
-- On mount: if `autoFetch === true` && `value === null` → call `getCurrentLocation()` → set `value` to returned label
-- Tappable → opens text input for manual edit
-- "Clear" (×) button → sets `value` to empty string (treated as null at save)
-- At save: empty string → `null` for all three columns (respect user intent — don't persist GPS the user cleared)
-
-**Privacy:**
-- `services/logger.ts` PII scrub list includes `location_lat`, `location_lng`, `location_label`
-- Never include raw coords in AI prompts; pass `location_label` only, OR round coords to 0.01° (~1km) if needed
-- Wipe operation (Rule 1) MUST null out location columns alongside other deletes
-
-## Cross-cutting Concerns
-
-### State Management
-
-- **Zustand** for module stores — one store per feature (`financeStore`, `habitStore`, …)
-- Stores hold **derived/cached state only** — SQLite remains source of truth
-- Store actions call services, never DB directly
-- Persist UI preferences (theme, last-viewed tab) via `zustand/middleware/persist` → AsyncStorage
-- Never persist domain data in Zustand — it lives in SQLite
-
-### Error Handling
-
-- **Boundary:** `<ErrorBoundary>` wraps each tab navigator → fallback screen + "report" button
-- **Service layer:** all services return `Result<T, AppError>` (discriminated union, no thrown errors across module boundaries)
-- **Sync errors:** never bubble to UI — logged + retried (see `docs/sync-offline.md`)
-- **AI failures:** degrade gracefully — show last cached insight + "couldn't refresh" hint
-
-### Logging
-
-- **Dev:** `console.log` allowed, gated by `__DEV__`
-- **Prod:** Sentry breadcrumbs only; never `console.log` PII
-- Use `services/logger.ts` wrapper — strips PII, tags by module
-- Levels: `debug` (dev only) · `info` · `warn` · `error` (auto-reports to Sentry)
+### Timeline / Life Stream
+
+BataVasa does not use a unified `life_events` table as the source of truth. The
+timeline/life-stream concept is implemented as a read model:
+
+1. Domain tables keep their own invariants and constraints.
+2. `features/home/hooks/useDailyDigest.ts` reads Finance, Reminders, Habits, and
+   Journals.
+3. It maps those records into `DailyTimelineItem` values.
+4. The Home screen sorts and renders them as today's timeline.
+
+This preserves typed domain storage while still giving the UI and AI surfaces a
+unified life-stream presentation.
+
+### Manual Entry
+
+1. User edits a form screen.
+2. Screen/store calls a domain application service.
+3. Service validates and writes to SQLite.
+4. Service enqueues `sync_queue` with `operation = 'upsert'`.
+5. Store reloads or updates cached state.
+6. Sync worker drains to Supabase when signed in and module sync is enabled.
+
+### Delete
+
+Normal deletes are soft deletes: set `deleted_at`, enqueue `upsert`, and let the
+cloud mirror receive the tombstone row.
+
+Module wipe is a hard local delete: delete matching local rows, enqueue
+`operation = 'wipe'` for each affected table, then clear in-memory state.
+
+### Universal Add
+
+Universal Add lives in `features/home/components/UniversalAddSheet.tsx`.
+
+1. Text is parsed by `services/ai/universalEntry.ts`.
+2. The parser returns one or more candidates across Finance, Reminder, Habit, and
+   Journal.
+3. The sheet shows selectable candidate cards.
+4. Selected candidates dispatch to the relevant domain store actions.
+
+Ambiguous or multi-intent text must not be forced silently into a single module.
+Voice input must always confirm before saving.
+
+## Sync Model
+
+The implemented sync model is direct Supabase table mirroring, not a custom REST
+API.
+
+- Queue table: `sync_queue`
+- Operations: `upsert`, `wipe`
+- Worker: `services/sync.ts`
+- Table-to-module toggle map: `TABLE_MODULE` in `services/sync.ts`
+- Supabase schema/RLS: `docs/supabase-setup.sql`
+
+There is currently no implemented `/sync/push` or `/sync/pull` endpoint.
+
+## Cross-Cutting Rules
+
+- SQLite remains the local source of truth.
+- Supabase writes happen through the sync queue.
+- Stores hold cached/derived state, not durable domain data.
+- Settings and auth are platform modules.
+- Domain modules own their DB schema and application services.
+- Cross-module surfaces may coordinate modules, but should not create new domain
+  storage unless a new domain is explicitly introduced.
+- AI/report text should be rendered through `components/InsightText.tsx` when the
+  response is markdown-like section text. Do not show raw markdown directly in
+  product UI.
+- Main-screen floating actions should be safe-area aware. Keep one primary
+  create FAB floating; move secondary actions such as report/analysis into the
+  content or header.
+- Finance UI must surface sign/category mismatches as review states. A negative
+  transaction attached to an income category should not be presented as a normal
+  income-category row.
+- Any future domain must be added to: route map, feature folder, store, database,
+  sync table map, data management UI, i18n, tests, and Universal Add if applicable.

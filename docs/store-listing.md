@@ -48,6 +48,10 @@ Capture these screens on at least one iPhone and one Android phone size:
 7. Habits list/report
 8. Settings Data Management / Privacy
 
+Use fresh captures from the 2026-05-28 UI polish build. Do not use older
+screenshots that show raw AI markdown, Expo notification warnings, crowded
+Journal bottom actions, or sign/category mismatch rows that look normal.
+
 Recommended minimum device frames:
 
 - iOS: 6.7-inch portrait and 6.5-inch portrait

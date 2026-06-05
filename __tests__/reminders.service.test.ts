@@ -38,7 +38,7 @@ import {
   wipeAllReminders,
   exportAllReminders,
 } from '../features/reminders/services'
-import { cancelAllNotifications, cancelNotification, scheduleReminderNotification } from '../services/notifications'
+import { cancelAllNotifications, cancelReminderNotifications, scheduleReminderNotification } from '../services/notifications'
 import type { Reminder } from '../features/reminders/types'
 
 const mockQ = q as jest.Mocked<typeof q>
@@ -153,17 +153,13 @@ describe('reminders service', () => {
     if (!deleted.ok) expect(deleted.error.code).toBe('NOT_FOUND')
   })
 
-  it('deletes existing reminder and cancels cached notification when present', async () => {
-    mockQ.insertReminder.mockResolvedValue(undefined)
-    ;(scheduleReminderNotification as jest.Mock).mockResolvedValue('notif-1')
-    await createReminder({ title: 'Dentist', remind_at: '2026-01-02T09:00:00.000Z', advance_minutes: 0, recurrence: 'none' })
-
+  it('deletes existing reminder and cancels pending OS notifications', async () => {
     mockQ.getReminder.mockResolvedValue(baseReminder)
     mockQ.softDeleteReminder.mockResolvedValue(undefined)
     const result = await deleteReminder(reminderId)
 
     expect(result.ok).toBe(true)
-    expect(cancelNotification).toHaveBeenCalledWith('notif-1')
+    expect(cancelReminderNotifications).toHaveBeenCalledWith(reminderId)
     expect(mockQ.softDeleteReminder).toHaveBeenCalledWith(reminderId, expect.any(String))
   })
 
@@ -186,6 +182,132 @@ describe('reminders service', () => {
   it('maps query exceptions to DB_ERROR', async () => {
     mockQ.listReminders.mockRejectedValue(new Error('db locked'))
     const result = await loadReminders()
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+})
+
+describe('reminders service — error paths and branches', () => {
+  it('createReminder returns DB_ERROR on insert failure', async () => {
+    mockQ.insertReminder.mockRejectedValue(new Error('disk full'))
+    const result = await createReminder({ title: 'Test', remind_at: '2026-06-01T09:00:00.000Z', advance_minutes: 0, recurrence: 'none' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('createReminder skips notification for inbox item', async () => {
+    mockQ.insertReminder.mockResolvedValue(undefined)
+    const result = await createReminder({ title: 'Buy milk', is_inbox: 1, advance_minutes: 0, recurrence: 'none' })
+    expect(result.ok).toBe(true)
+    expect(scheduleReminderNotification).not.toHaveBeenCalled()
+  })
+
+  it('updateReminder returns VALIDATION_FAILED for empty id', async () => {
+    const result = await updateReminder({ id: '' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED')
+  })
+
+  it('updateReminder returns DB_ERROR on throw', async () => {
+    mockQ.getReminder.mockResolvedValue(baseReminder)
+    mockQ.updateReminder.mockRejectedValue(new Error('fail'))
+    const result = await updateReminder({ id: reminderId, title: 'X' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('updateReminder returns INTERNAL when fresh vanishes after update', async () => {
+    mockQ.getReminder
+      .mockResolvedValueOnce(baseReminder)
+      .mockResolvedValueOnce(null)  // after notification re-schedule check
+      .mockResolvedValueOnce(null)  // final fetch
+    mockQ.updateReminder.mockResolvedValue(undefined)
+    const result = await updateReminder({ id: reminderId, title: 'Ghost' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('INTERNAL')
+  })
+
+  it('updateReminder does not reschedule when non-time fields updated', async () => {
+    mockQ.getReminder
+      .mockResolvedValueOnce(baseReminder)
+      .mockResolvedValueOnce(baseReminder)
+    mockQ.updateReminder.mockResolvedValue(undefined)
+    await updateReminder({ id: reminderId, note: 'Updated note' })
+    expect(scheduleReminderNotification).not.toHaveBeenCalled()
+  })
+
+  it('skipReminder returns NOT_FOUND for missing reminder', async () => {
+    mockQ.getReminder.mockResolvedValue(null)
+    const result = await skipReminder(reminderId)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('NOT_FOUND')
+  })
+
+  it('skipReminder with weekly recurrence advances by 7 days', async () => {
+    const weeklyReminder = { ...baseReminder, recurrence: 'weekly' as const, remind_at: '2099-01-01T09:00:00.000Z' }
+    mockQ.getReminder
+      .mockResolvedValueOnce(weeklyReminder)
+      .mockResolvedValueOnce({ ...weeklyReminder, remind_at: '2099-01-08T09:00:00.000Z' })
+    mockQ.updateReminder.mockResolvedValue(undefined)
+    const result = await skipReminder(reminderId)
+    expect(result.ok).toBe(true)
+    expect(mockQ.updateReminder).toHaveBeenCalledWith(reminderId, expect.objectContaining({ completed: 0 }))
+  })
+
+  it('skipReminder with monthly recurrence advances by 1 month', async () => {
+    const monthlyReminder = { ...baseReminder, recurrence: 'monthly' as const, remind_at: '2099-01-15T09:00:00.000Z' }
+    mockQ.getReminder
+      .mockResolvedValueOnce(monthlyReminder)
+      .mockResolvedValueOnce({ ...monthlyReminder, remind_at: '2099-02-15T09:00:00.000Z' })
+    mockQ.updateReminder.mockResolvedValue(undefined)
+    const result = await skipReminder(reminderId)
+    expect(result.ok).toBe(true)
+    expect(mockQ.updateReminder).toHaveBeenCalledWith(reminderId, expect.objectContaining({ completed: 0 }))
+  })
+
+  it('skipReminder does not reschedule when fresh is completed', async () => {
+    mockQ.getReminder
+      .mockResolvedValueOnce(baseReminder)
+      .mockResolvedValueOnce({ ...baseReminder, completed: 1 })
+    mockQ.updateReminder.mockResolvedValue(undefined)
+    await skipReminder(reminderId)
+    expect(scheduleReminderNotification).not.toHaveBeenCalled()
+  })
+
+  it('skipReminder does not reschedule when fresh is inbox', async () => {
+    mockQ.getReminder
+      .mockResolvedValueOnce(baseReminder)
+      .mockResolvedValueOnce({ ...baseReminder, is_inbox: 1 })
+    mockQ.updateReminder.mockResolvedValue(undefined)
+    await skipReminder(reminderId)
+    expect(scheduleReminderNotification).not.toHaveBeenCalled()
+  })
+
+  it('skipReminder returns DB_ERROR on throw', async () => {
+    mockQ.getReminder.mockRejectedValue(new Error('fail'))
+    const result = await skipReminder(reminderId)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('deleteReminder returns DB_ERROR on throw', async () => {
+    mockQ.getReminder.mockResolvedValue(baseReminder)
+    mockQ.softDeleteReminder.mockRejectedValue(new Error('fail'))
+    const result = await deleteReminder(reminderId)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('wipeAllReminders returns DB_ERROR on throw', async () => {
+    mockQ.wipeReminders.mockRejectedValue(new Error('fail'))
+    const result = await wipeAllReminders()
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+
+  it('exportAllReminders returns DB_ERROR on throw', async () => {
+    mockQ.exportRemindersData.mockRejectedValue(new Error('fail'))
+    const result = await exportAllReminders()
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
   })

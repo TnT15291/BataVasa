@@ -46,6 +46,7 @@ System defaults seeded on first launch. Users can disable, rename, add custom �
 ## Business Rules
 
 - **Amount:** non-zero integer cents. Sign encodes direction (negative=expense, positive=income). UI may display unsigned + direction badge.
+- **Direction/category consistency:** category kind does not override amount sign. If a negative amount is attached to an income category, treat it as an expense needing review in UI. If a positive amount is attached to a non-income category, treat it as income needing review. Preserve the original category in secondary text so the user can fix it.
 - **Date:** `occurred_at` ≤ now + 24h (allow tz drift). Future-dated → reject with `VALIDATION_FAILED`.
 - **Category required.** No "uncategorized" bucket in domain — UI must prompt.
 - **Currency:** default from user profile; per-transaction override allowed. No FX conversion at write time (store native, convert at report time).
@@ -76,3 +77,4 @@ What the AI/analytics layer should detect:
 - Never silently drop a transaction on sync failure → queue + retry
 - Never round amounts in storage (store as integer cents, format at UI)
 - Never expose raw account data to AI prompts — anonymize first
+- Never present a sign/category mismatch as normal data. It should be visible as a review state in list rows and reports.

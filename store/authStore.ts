@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { AppState } from 'react-native'
 import * as Linking from 'expo-linking'
+import * as WebBrowser from 'expo-web-browser'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '@services/supabase'
 import { logger } from '@services/logger'
@@ -44,9 +45,14 @@ type AuthState = {
   init: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ ok: boolean }>
   signUp: (email: string, password: string) => Promise<{ ok: boolean; needsConfirm?: boolean }>
+  signInWithGoogle: () => Promise<{ ok: boolean }>
   resetPassword: (email: string) => Promise<{ ok: boolean }>
-  // Recovery link → establish the temporary session, then force a new password.
+  // Recovery link (implicit flow) — tokens come directly in the URL hash.
   enterRecovery: (accessToken: string, refreshToken: string) => Promise<{ ok: boolean }>
+  // Recovery link (PKCE flow, supabase-js v2 default) — a one-time code that
+  // must be exchanged for a session; the code verifier was stored by the client
+  // when resetPasswordForEmail() was called.
+  enterRecoveryWithCode: (code: string) => Promise<{ ok: boolean }>
   updatePassword: (newPassword: string) => Promise<{ ok: boolean }>
   exitRecovery: () => Promise<void>
   signOut: () => Promise<void>
@@ -137,6 +143,51 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return { ok: true, needsConfirm: !data.session }
   },
 
+  async signInWithGoogle() {
+    if (!supabase) return { ok: false }
+    set({ busy: true, error: null })
+    try {
+      const redirectTo = Linking.createURL('auth/callback')
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo, skipBrowserRedirect: true },
+      })
+      if (error || !data.url) {
+        set({ busy: false, error: localizeAuthError(error ?? new Error('OAuth URL missing'), getTranslations()) })
+        return { ok: false }
+      }
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+      if (result.type !== 'success') {
+        set({ busy: false })
+        return { ok: false }
+      }
+      // Parse code from redirect URL — works for both query (?code=) and hash (#code=)
+      const hashIndex = result.url.indexOf('#')
+      const queryIndex = result.url.indexOf('?')
+      const paramStr = hashIndex >= 0 ? result.url.slice(hashIndex + 1)
+        : queryIndex >= 0 ? result.url.slice(queryIndex + 1)
+        : ''
+      const params = new URLSearchParams(paramStr)
+      const code = params.get('code')
+      if (!code) {
+        set({ busy: false, error: getTranslations().ai_error })
+        return { ok: false }
+      }
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      if (exchangeError) {
+        set({ busy: false, error: localizeAuthError(exchangeError, getTranslations()) })
+        return { ok: false }
+      }
+      track('auth_login')
+      set({ busy: false })
+      return { ok: true }
+    } catch (e) {
+      logger.error(MODULE, 'signInWithGoogle failed', { error: String(e) })
+      set({ busy: false, error: String(e) })
+      return { ok: false }
+    }
+  },
+
   async resetPassword(email) {
     if (!supabase) return { ok: false }
     set({ busy: true, error: null })
@@ -170,6 +221,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return { ok: false }
     }
     set({ busy: false, recoveryMode: true })
+    return { ok: true }
+  },
+
+  async enterRecoveryWithCode(code) {
+    if (!supabase) return { ok: false }
+    set({ busy: true, error: null })
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (error) {
+      logger.error(MODULE, 'enterRecoveryWithCode failed', { error: error.message })
+      set({ busy: false, error: localizeAuthError(error, getTranslations()) })
+      return { ok: false }
+    }
+    set({ busy: false, recoveryMode: true, session: data.session })
     return { ok: true }
   },
 
