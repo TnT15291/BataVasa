@@ -559,6 +559,10 @@ export const ko: Translations = {
   journal_anniversary_reminder_hint: '이 중요한 이벤트에 대한 높은 우선순위 할 일을 만듭니다.',
   today_timeline: '오늘 타임라인',
   today_timeline_empty: '오늘의 지출, 할 일, 습관, 일기가 여기에 표시됩니다.',
+  home_command_center: 'Command Center',
+  review_inbox_title: 'Review Inbox',
+  review_inbox_empty: 'Nothing needs a decision right now.',
+  review_inbox_count: '{{count}} items need attention',
 
   // Reminder — validation
   reminder_title_required: '할 일 제목을 입력해 주세요',

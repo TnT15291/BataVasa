@@ -578,6 +578,10 @@ export const vi = {
   journal_anniversary_reminder_hint: 'Tạo một công việc ưu tiên cao cho sự kiện quan trọng này.',
   today_timeline: 'Dòng thời gian hôm nay',
   today_timeline_empty: 'Tài chính, công việc, thói quen và nhật ký hôm nay sẽ xuất hiện ở đây.',
+  home_command_center: 'Command Center',
+  review_inbox_title: 'Review Inbox',
+  review_inbox_empty: 'Nothing needs a decision right now.',
+  review_inbox_count: '{{count}} items need attention',
 
   // Reminder — validation
   reminder_title_required: 'Vui lòng nhập tiêu đề công việc',

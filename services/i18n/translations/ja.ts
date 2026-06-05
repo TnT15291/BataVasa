@@ -561,6 +561,10 @@ export const ja: Translations = {
   journal_anniversary_reminder_hint: 'この重要なイベントの高優先度タスクを作成します。',
   today_timeline: '今日のタイムライン',
   today_timeline_empty: '今日の支出、タスク、習慣、日記がここに表示されます。',
+  home_command_center: 'Command Center',
+  review_inbox_title: 'Review Inbox',
+  review_inbox_empty: 'Nothing needs a decision right now.',
+  review_inbox_count: '{{count}} items need attention',
 
   // Reminder — validation
   reminder_title_required: 'タスクのタイトルを入力してください',

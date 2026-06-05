@@ -24,6 +24,15 @@ export type DailyTimelineItem = {
   emoji?: string
 }
 
+export type ReviewInboxItem = {
+  id: string
+  kind: 'finance' | 'task' | 'habit' | 'journal'
+  title: string
+  subtitle: string
+  route: '/finance' | '/reminders' | '/habits' | '/journals'
+  severity: 'high' | 'medium' | 'low'
+}
+
 export type DailyDigestData = {
   // Finance
   todayExpense: number
@@ -40,6 +49,9 @@ export type DailyDigestData = {
   todayJournalCount: number
   // Unified today feed
   timelineItems: DailyTimelineItem[]
+  // Cross-module decisions
+  reviewItems: ReviewInboxItem[]
+  reviewCount: number
   // Refresh
   refreshing: boolean
   onRefresh: () => Promise<void>
@@ -116,6 +128,108 @@ export function useDailyDigest(): DailyDigestData {
   const habitsTotal = habits.length
   const habitProgress = habitsTotal === 0 ? 0 : Math.round((habitsDoneCount / habitsTotal) * 100)
   const nextHabit = habits.find((h) => h.todayCount < h.target_per_period) ?? null
+
+  const reviewItems = useMemo<ReviewInboxItem[]>(() => {
+    const items: ReviewInboxItem[] = []
+
+    const reviewTxs = txs
+      .filter((tx) => tx.needs_review === 1)
+      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
+
+    if (reviewTxs.length > 0) {
+      const first = reviewTxs[0]
+      items.push({
+        id: 'finance-review',
+        kind: 'finance',
+        title: first.merchant || first.note || 'Finance review',
+        subtitle: reviewTxs.length === 1 ? (first.review_reason || '1 transaction needs review') : `${reviewTxs.length} transactions need review`,
+        route: '/finance',
+        severity: 'high',
+      })
+    }
+
+    const openReminders = reminders.filter((r) => r.completed === 0)
+    const overdueReminders = openReminders
+      .filter((r) => (r.is_inbox ?? 0) !== 1 && new Date(r.remind_at) < now)
+      .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())
+    const inboxReminders = openReminders
+      .filter((r) => (r.is_inbox ?? 0) === 1)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const highPriorityToday = openReminders
+      .filter((r) => r.priority === 'high' && (r.is_inbox ?? 0) !== 1)
+      .filter((r) => { const d = new Date(r.remind_at); return d >= todayStart && d <= todayEnd })
+      .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())
+
+    if (overdueReminders.length > 0) {
+      items.push({
+        id: 'task-overdue',
+        kind: 'task',
+        title: overdueReminders[0].title,
+        subtitle: overdueReminders.length === 1 ? 'Overdue task' : `${overdueReminders.length} overdue tasks`,
+        route: '/reminders',
+        severity: 'high',
+      })
+    } else if (highPriorityToday.length > 0) {
+      items.push({
+        id: 'task-priority',
+        kind: 'task',
+        title: highPriorityToday[0].title,
+        subtitle: highPriorityToday.length === 1 ? 'High priority today' : `${highPriorityToday.length} high-priority tasks today`,
+        route: '/reminders',
+        severity: 'medium',
+      })
+    }
+
+    if (inboxReminders.length > 0) {
+      items.push({
+        id: 'task-inbox',
+        kind: 'task',
+        title: inboxReminders[0].title,
+        subtitle: inboxReminders.length === 1 ? 'Needs schedule' : `${inboxReminders.length} tasks need scheduling`,
+        route: '/reminders',
+        severity: 'medium',
+      })
+    }
+
+    const pendingHabits = habits
+      .filter((habit) => habit.dueToday !== false && habit.todayCount < habit.target_per_period)
+      .sort((a, b) => (b.streak ?? 0) - (a.streak ?? 0))
+
+    if (pendingHabits.length > 0) {
+      const first = pendingHabits[0]
+      items.push({
+        id: 'habit-pending',
+        kind: 'habit',
+        title: first.name,
+        subtitle: pendingHabits.length === 1 ? `${first.todayCount}/${first.target_per_period} done today` : `${pendingHabits.length} habits still open`,
+        route: '/habits',
+        severity: 'medium',
+      })
+    }
+
+    const importantJournals = journals
+      .filter((journal) => journal.is_important === 1)
+      .filter((journal) => {
+        const d = new Date(journal.occurred_at)
+        const age = now.getTime() - d.getTime()
+        return age >= 0 && age <= 7 * 24 * 60 * 60 * 1000
+      })
+      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
+
+    if (importantJournals.length > 0) {
+      items.push({
+        id: 'journal-important',
+        kind: 'journal',
+        title: importantJournals[0].content.slice(0, 80).replace(/\n/g, ' '),
+        subtitle: importantJournals.length === 1 ? 'Important journal entry' : `${importantJournals.length} important journal entries`,
+        route: '/journals',
+        severity: 'low',
+      })
+    }
+
+    const score = { high: 0, medium: 1, low: 2 }
+    return items.sort((a, b) => score[a.severity] - score[b.severity]).slice(0, 5)
+  }, [txs, reminders, habits, journals, now, todayStart, todayEnd])
 
   const timelineItems = useMemo<DailyTimelineItem[]>(() => {
     const items: DailyTimelineItem[] = []
@@ -221,6 +335,8 @@ export function useDailyDigest(): DailyDigestData {
     nextHabit,
     todayJournalCount,
     timelineItems,
+    reviewItems,
+    reviewCount: reviewItems.length,
     refreshing,
     onRefresh,
   }

@@ -12,7 +12,7 @@ import { getDateFnsLocale } from '@services/locale'
 import { shouldWarnAboutWebSQLitePersistence } from '@services/webPersistence'
 import { formatAmount } from '@features/finance/services'
 import { useDailyDigest } from '../hooks/useDailyDigest'
-import type { DailyTimelineItem } from '../hooks/useDailyDigest'
+import type { DailyTimelineItem, ReviewInboxItem } from '../hooks/useDailyDigest'
 import { CircularProgress } from '@components/CircularProgress'
 import { FAB } from '@components/FAB'
 import { UniversalAddSheet } from '../components/UniversalAddSheet'
@@ -82,6 +82,48 @@ function SummaryChip({ icon, label, value, color }: SummaryChipProps) {
         {label}
       </Text>
     </View>
+  )
+}
+
+function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () => void }) {
+  const theme = useTheme()
+  const meta: Record<ReviewInboxItem['kind'], { icon: IconName; color: string }> = {
+    finance: { icon: 'alert-circle', color: theme.finance.expense },
+    task: { icon: 'bell', color: MODULE_COLORS.tasks },
+    habit: { icon: 'check-circle', color: MODULE_COLORS.habits },
+    journal: { icon: 'star', color: MODULE_COLORS.journal },
+  }
+  const severityColor = item.severity === 'high'
+    ? theme.semantic.warning
+    : item.severity === 'medium'
+      ? theme.brand.primary
+      : theme.text.muted
+  const m = meta[item.kind]
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={item.title}
+      style={({ pressed }) => [
+        styles.reviewRow,
+        { backgroundColor: pressed ? theme.bg.secondary : 'transparent', borderColor: theme.border.subtle },
+      ]}
+    >
+      <View style={[styles.reviewIcon, { backgroundColor: m.color + '1F' }]}>
+        <Feather name={m.icon} size={15} color={m.color} />
+      </View>
+      <View style={styles.reviewBody}>
+        <Text style={[styles.reviewTitle, { color: theme.text.primary }]} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={[styles.reviewSubtitle, { color: theme.text.muted }]} numberOfLines={1}>
+          {item.subtitle}
+        </Text>
+      </View>
+      <View style={[styles.reviewSeverityDot, { backgroundColor: severityColor }]} />
+      <Feather name="chevron-right" size={16} color={theme.text.muted} />
+    </Pressable>
   )
 }
 
@@ -159,6 +201,8 @@ export function DailyDigestScreen() {
     habitProgress,
     todayJournalCount,
     timelineItems,
+    reviewItems,
+    reviewCount,
     refreshing,
     onRefresh,
   } = useDailyDigest()
@@ -200,6 +244,7 @@ export function DailyDigestScreen() {
         <View style={[styles.hero, { backgroundColor: theme.brand.primary + '12', borderColor: theme.brand.primary + '44' }]}>
           <View style={styles.heroTop}>
             <View style={styles.heroText}>
+              <Text style={[styles.heroKicker, { color: theme.brand.primary }]}>{t.home_command_center}</Text>
               <Text style={[styles.greeting, { color: theme.text.muted }]}>{greeting(t)}</Text>
               <Text style={[styles.dateStr, { color: theme.text.primary }]}>{dateStr}</Text>
             </View>
@@ -247,6 +292,32 @@ export function DailyDigestScreen() {
               color={MODULE_COLORS.journal}
             />
           </View>
+        </View>
+
+        <View style={[styles.reviewPanel, { backgroundColor: theme.bg.elevated, borderColor: reviewCount > 0 ? theme.semantic.warning + '66' : theme.border.subtle }]}>
+          <View style={styles.reviewHeader}>
+            <View style={styles.reviewHeaderText}>
+              <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>{t.review_inbox_title}</Text>
+              <Text style={[styles.reviewHeaderSubtitle, { color: theme.text.muted }]}>
+                {reviewCount > 0
+                  ? t.review_inbox_count.replace('{{count}}', String(reviewCount))
+                  : t.review_inbox_empty}
+              </Text>
+            </View>
+            <View style={[styles.reviewBadge, { backgroundColor: reviewCount > 0 ? theme.semantic.warning + '22' : theme.semantic.success + '1F' }]}>
+              <Feather name={reviewCount > 0 ? 'inbox' : 'check'} size={16} color={reviewCount > 0 ? theme.semantic.warning : theme.semantic.success} />
+              <Text style={[styles.reviewBadgeText, { color: reviewCount > 0 ? theme.semantic.warning : theme.semantic.success }]}>
+                {reviewCount}
+              </Text>
+            </View>
+          </View>
+          {reviewItems.length > 0 ? (
+            <View style={styles.reviewList}>
+              {reviewItems.map((item) => (
+                <ReviewInboxRow key={item.id} item={item} onPress={() => router.push(item.route as any)} />
+              ))}
+            </View>
+          ) : null}
         </View>
 
         <View style={[styles.timelinePanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
@@ -392,6 +463,7 @@ const styles = StyleSheet.create({
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   heroText: { flex: 1, gap: 2 },
+  heroKicker: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   progressValue: { fontSize: 16, fontWeight: '700' },
   progressLabel: { fontSize: 10, fontWeight: '500' },
   heroMetric: {
@@ -427,6 +499,48 @@ const styles = StyleSheet.create({
   },
   summaryValue: { fontSize: 15, fontWeight: '700' },
   summaryLabel: { fontSize: 10, fontWeight: '500' },
+  reviewPanel: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[4],
+    gap: spacing[3],
+  },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  reviewHeaderText: { flex: 1, gap: 3 },
+  reviewHeaderSubtitle: { fontSize: 12, lineHeight: 17 },
+  reviewBadge: {
+    minWidth: 52,
+    height: 34,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  reviewBadgeText: { fontSize: 13, fontWeight: '800' },
+  reviewList: { gap: spacing[1] },
+  reviewRow: {
+    minHeight: 56,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  reviewIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewBody: { flex: 1, gap: 2 },
+  reviewTitle: { fontSize: 14, fontWeight: '700' },
+  reviewSubtitle: { fontSize: 12 },
+  reviewSeverityDot: { width: 8, height: 8, borderRadius: radius.full },
   timelinePanel: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,

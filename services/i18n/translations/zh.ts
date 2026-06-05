@@ -561,6 +561,10 @@ export const zh: Translations = {
   journal_anniversary_reminder_hint: '为这个重要事件创建一个高优先级任务。',
   today_timeline: '今日时间线',
   today_timeline_empty: '今天的财务、任务、习惯和日记会显示在这里。',
+  home_command_center: 'Command Center',
+  review_inbox_title: 'Review Inbox',
+  review_inbox_empty: 'Nothing needs a decision right now.',
+  review_inbox_count: '{{count}} items need attention',
 
   // Reminder — validation
   reminder_title_required: '请输入任务标题',

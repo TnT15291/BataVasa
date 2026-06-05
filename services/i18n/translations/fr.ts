@@ -561,6 +561,10 @@ export const fr: Translations = {
   journal_anniversary_reminder_hint: 'Crée une tâche haute priorité pour cet événement important.',
   today_timeline: "Fil d'aujourd'hui",
   today_timeline_empty: "Vos finances, tâches, habitudes et notes de journal d'aujourd'hui apparaîtront ici.",
+  home_command_center: 'Command Center',
+  review_inbox_title: 'Review Inbox',
+  review_inbox_empty: 'Nothing needs a decision right now.',
+  review_inbox_count: '{{count}} items need attention',
 
   // Reminder — validation
   reminder_title_required: 'Veuillez saisir un titre pour cette tâche',

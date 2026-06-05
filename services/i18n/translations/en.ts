@@ -563,6 +563,10 @@ export const en: Translations = {
   // Home timeline
   today_timeline: 'Today timeline',
   today_timeline_empty: 'Your finance, tasks, habits, and journal entries will appear here today.',
+  home_command_center: 'Command Center',
+  review_inbox_title: 'Review Inbox',
+  review_inbox_empty: 'Nothing needs a decision right now.',
+  review_inbox_count: '{{count}} items need attention',
 
   // Reminder — validation
   reminder_title_required: 'Please enter a title for this task',
