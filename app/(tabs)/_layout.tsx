@@ -147,12 +147,9 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="index"
           options={{
+            href: null,
             title: 'BataVasa',
             headerRight: () => <HeaderRight />,
-            tabBarLabel: t.nav_home,
-            tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon name="home" color={color} focused={focused} />
-            ),
           }}
         />
         <Tabs.Screen
@@ -167,20 +164,6 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="launcher"
-          options={{
-            title: '',
-            tabBarLabel: '',
-            tabBarButton: () => (
-              <LauncherButton
-                onPress={() => router.push('/')}
-                onLongPress={() => setPickerOpen(true)}
-                label={t.module_launcher_title ?? 'Add'}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="habits"
           options={{
             title: t.habits,
@@ -188,6 +171,20 @@ export default function TabsLayout() {
             tabBarActiveTintColor: MODULE_COLORS.habits,
             tabBarIcon: ({ color, focused }) => (
               <AnimatedTabIcon name="check-circle" color={color} focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="launcher"
+          options={{
+            title: 'BataVasa',
+            tabBarLabel: '',
+            tabBarButton: () => (
+              <LauncherButton
+                onPress={() => router.push('/')}
+                onLongPress={() => setPickerOpen(true)}
+                label={t.nav_home}
+              />
             ),
           }}
         />
@@ -205,8 +202,12 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="reminders"
           options={{
-            href: null,
             title: t.nav_reminders,
+            tabBarLabel: t.nav_reminders,
+            tabBarActiveTintColor: MODULE_COLORS.tasks,
+            tabBarIcon: ({ color, focused }) => (
+              <AnimatedTabIcon name="bell" color={color} focused={focused} />
+            ),
           }}
         />
       </Tabs>
