@@ -563,6 +563,13 @@ export const ko: Translations = {
   review_inbox_title: 'Review Inbox',
   review_inbox_empty: 'Nothing needs a decision right now.',
   review_inbox_count: '{{count}} items need attention',
+  review_item_finance: '{{count}} transactions need review',
+  review_item_overdue: '{{count}} overdue tasks',
+  review_item_priority: '{{count}} high-priority tasks today',
+  review_item_schedule: '{{count}} tasks need scheduling',
+  review_item_habit: '{{count}} habits still open',
+  review_item_habit_progress: '{{progress}} done today',
+  review_item_journal: '{{count}} important journal entries',
 
   // Reminder — validation
   reminder_title_required: '할 일 제목을 입력해 주세요',

@@ -27,40 +27,6 @@ function greeting(t: Translations): string {
   return t.greeting_evening
 }
 
-type CardProps = {
-  icon: IconName
-  title: string
-  subtitle: string
-  hint?: string
-  accentColor: string
-  onPress: () => void
-}
-
-function ModuleCard({ icon, title, subtitle, hint, accentColor, onPress }: CardProps) {
-  const theme = useTheme()
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      style={({ pressed }) => [
-        styles.card,
-        { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
-      ]}
-    >
-      <View style={styles.cardContent}>
-        <View style={[styles.cardIconWrap, { backgroundColor: accentColor + '1F' }]}>
-          <Feather name={icon} size={20} color={accentColor} />
-        </View>
-        <Text style={[styles.cardTitle, { color: theme.text.primary }]} numberOfLines={1}>{title}</Text>
-        <Text style={[styles.cardSubtitle, { color: theme.text.muted }]} numberOfLines={2}>{subtitle}</Text>
-        {hint ? <Text style={[styles.cardHint, { color: theme.text.muted }]}>{hint}</Text> : null}
-      </View>
-      <Feather name="chevron-right" size={18} color={theme.text.muted} style={styles.cardChevron} />
-    </Pressable>
-  )
-}
-
 type SummaryChipProps = {
   icon: IconName
   label: string
@@ -87,6 +53,7 @@ function SummaryChip({ icon, label, value, color }: SummaryChipProps) {
 
 function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () => void }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const meta: Record<ReviewInboxItem['kind'], { icon: IconName; color: string }> = {
     finance: { icon: 'alert-circle', color: theme.finance.expense },
     task: { icon: 'bell', color: MODULE_COLORS.tasks },
@@ -99,12 +66,29 @@ function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () 
       ? theme.brand.primary
       : theme.text.muted
   const m = meta[item.kind]
+  const moduleLabels: Record<ReviewInboxItem['kind'], string> = {
+    finance: t.nav_finance,
+    task: t.nav_reminders,
+    habit: t.habits,
+    journal: t.nav_journal,
+  }
+  const subtitle = {
+    financeReview: t.review_item_finance,
+    taskOverdue: t.review_item_overdue,
+    taskPriority: t.review_item_priority,
+    taskSchedule: t.review_item_schedule,
+    habitPending: item.progressText
+      ? t.review_item_habit_progress.replace('{{progress}}', item.progressText)
+      : t.review_item_habit,
+    journalImportant: t.review_item_journal,
+  }[item.subtitleKey].replace('{{count}}', String(item.count))
+  const title = item.title || moduleLabels[item.kind]
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={item.title}
+      accessibilityLabel={title}
       style={({ pressed }) => [
         styles.reviewRow,
         { backgroundColor: pressed ? theme.bg.secondary : 'transparent', borderColor: theme.border.subtle },
@@ -115,10 +99,10 @@ function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () 
       </View>
       <View style={styles.reviewBody}>
         <Text style={[styles.reviewTitle, { color: theme.text.primary }]} numberOfLines={1}>
-          {item.title}
+          {title}
         </Text>
         <Text style={[styles.reviewSubtitle, { color: theme.text.muted }]} numberOfLines={1}>
-          {item.subtitle}
+          {subtitle}
         </Text>
       </View>
       <View style={[styles.reviewSeverityDot, { backgroundColor: severityColor }]} />
@@ -195,7 +179,6 @@ export function DailyDigestScreen() {
     todayExpense,
     todayExpenseCurrency,
     nextReminder,
-    nextFutureReminder,
     habitsDoneCount,
     habitsTotal,
     habitProgress,
@@ -210,23 +193,6 @@ export function DailyDigestScreen() {
   const locale = getDateFnsLocale(language)
   const now = new Date()
   const dateStr = format(now, 'EEEE, dd MMMM', { locale })
-
-  const financeSubtitle = todayExpense > 0
-    ? `${t.today_spent} ${formatAmount(todayExpense, todayExpenseCurrency, language)}`
-    : t.today_no_spending
-
-  const reminderSubtitle = nextReminder
-    ? `${nextReminder.title} - ${format(new Date(nextReminder.remind_at), 'HH:mm', { locale })}`
-    : nextFutureReminder
-      ? `${nextFutureReminder.title} - ${format(new Date(nextFutureReminder.remind_at), 'dd/MM HH:mm', { locale })}`
-      : t.reminder_today_none
-
-  const reminderHint = !nextReminder && !nextFutureReminder ? t.reminder_add_hint : undefined
-
-  const habitsSubtitle = habitsTotal === 0
-    ? t.habits_card_subtitle
-    : t.habits_done_today.replace('{{done}}', String(habitsDoneCount)).replace('{{total}}', String(habitsTotal))
-  const journalSubtitle = todayJournalCount > 0 ? `${todayJournalCount} ${t.today}` : t.journal_card_subtitle
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
@@ -346,42 +312,6 @@ export function DailyDigestScreen() {
               </View>
             </View>
           )}
-        </View>
-
-        <View style={styles.moduleGrid}>
-          <ModuleCard
-            icon="dollar-sign"
-            title={t.nav_finance}
-            subtitle={financeSubtitle}
-            hint={todayExpense === 0 ? t.finance_add_hint : undefined}
-            accentColor={theme.finance.expense}
-            onPress={() => router.push('/finance')}
-          />
-
-          <ModuleCard
-            icon="check-square"
-            title={t.nav_reminders}
-            subtitle={reminderSubtitle}
-            hint={reminderHint}
-            accentColor={MODULE_COLORS.tasks}
-            onPress={() => router.push('/reminders')}
-          />
-
-          <ModuleCard
-            icon="book-open"
-            title={t.nav_journal}
-            subtitle={journalSubtitle}
-            accentColor={MODULE_COLORS.journal}
-            onPress={() => router.push('/journals')}
-          />
-
-          <ModuleCard
-            icon="check-circle"
-            title={t.habits}
-            subtitle={habitsSubtitle}
-            accentColor={MODULE_COLORS.habits}
-            onPress={() => router.push('/habits')}
-          />
         </View>
 
         <Pressable
@@ -589,28 +519,6 @@ const styles = StyleSheet.create({
   persistenceText: { fontSize: 13, lineHeight: 18 },
   greeting: { fontSize: 14, fontWeight: '500' },
   dateStr: { fontSize: 22, fontWeight: '700' },
-  moduleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
-  card: {
-    flexBasis: '48%',
-    flexGrow: 1,
-    flexShrink: 0,
-    minHeight: 126,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing[3],
-  },
-  cardContent: { flex: 1, gap: spacing[2] },
-  cardIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: { fontSize: 14, fontWeight: '700' },
-  cardSubtitle: { fontSize: 12, lineHeight: 17 },
-  cardHint: { fontSize: 12, lineHeight: 16 },
-  cardChevron: { position: 'absolute', right: spacing[3], top: spacing[3] },
   analysisStrip: {
     minHeight: 76,
     borderRadius: radius.lg,

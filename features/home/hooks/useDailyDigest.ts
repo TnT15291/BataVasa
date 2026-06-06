@@ -28,9 +28,11 @@ export type ReviewInboxItem = {
   id: string
   kind: 'finance' | 'task' | 'habit' | 'journal'
   title: string
-  subtitle: string
   route: '/finance' | '/reminders' | '/habits' | '/journals'
   severity: 'high' | 'medium' | 'low'
+  subtitleKey: 'financeReview' | 'taskOverdue' | 'taskPriority' | 'taskSchedule' | 'habitPending' | 'journalImportant'
+  count: number
+  progressText?: string
 }
 
 export type DailyDigestData = {
@@ -141,10 +143,11 @@ export function useDailyDigest(): DailyDigestData {
       items.push({
         id: 'finance-review',
         kind: 'finance',
-        title: first.merchant || first.note || 'Finance review',
-        subtitle: reviewTxs.length === 1 ? (first.review_reason || '1 transaction needs review') : `${reviewTxs.length} transactions need review`,
+        title: first.merchant || first.note || '',
         route: '/finance',
         severity: 'high',
+        subtitleKey: 'financeReview',
+        count: reviewTxs.length,
       })
     }
 
@@ -165,18 +168,20 @@ export function useDailyDigest(): DailyDigestData {
         id: 'task-overdue',
         kind: 'task',
         title: overdueReminders[0].title,
-        subtitle: overdueReminders.length === 1 ? 'Overdue task' : `${overdueReminders.length} overdue tasks`,
         route: '/reminders',
         severity: 'high',
+        subtitleKey: 'taskOverdue',
+        count: overdueReminders.length,
       })
     } else if (highPriorityToday.length > 0) {
       items.push({
         id: 'task-priority',
         kind: 'task',
         title: highPriorityToday[0].title,
-        subtitle: highPriorityToday.length === 1 ? 'High priority today' : `${highPriorityToday.length} high-priority tasks today`,
         route: '/reminders',
         severity: 'medium',
+        subtitleKey: 'taskPriority',
+        count: highPriorityToday.length,
       })
     }
 
@@ -185,9 +190,10 @@ export function useDailyDigest(): DailyDigestData {
         id: 'task-inbox',
         kind: 'task',
         title: inboxReminders[0].title,
-        subtitle: inboxReminders.length === 1 ? 'Needs schedule' : `${inboxReminders.length} tasks need scheduling`,
         route: '/reminders',
         severity: 'medium',
+        subtitleKey: 'taskSchedule',
+        count: inboxReminders.length,
       })
     }
 
@@ -201,9 +207,11 @@ export function useDailyDigest(): DailyDigestData {
         id: 'habit-pending',
         kind: 'habit',
         title: first.name,
-        subtitle: pendingHabits.length === 1 ? `${first.todayCount}/${first.target_per_period} done today` : `${pendingHabits.length} habits still open`,
         route: '/habits',
         severity: 'medium',
+        subtitleKey: 'habitPending',
+        count: pendingHabits.length,
+        progressText: `${first.todayCount}/${first.target_per_period}`,
       })
     }
 
@@ -221,9 +229,10 @@ export function useDailyDigest(): DailyDigestData {
         id: 'journal-important',
         kind: 'journal',
         title: importantJournals[0].content.slice(0, 80).replace(/\n/g, ' '),
-        subtitle: importantJournals.length === 1 ? 'Important journal entry' : `${importantJournals.length} important journal entries`,
         route: '/journals',
         severity: 'low',
+        subtitleKey: 'journalImportant',
+        count: importantJournals.length,
       })
     }
 
