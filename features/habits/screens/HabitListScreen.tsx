@@ -14,6 +14,7 @@ import { rescheduleAllHabitNotifications } from '../services'
 import { MODULE_COLORS } from '@design/moduleColors'
 import { CircularProgress } from '@components/CircularProgress'
 import { FAB } from '@components/FAB'
+import { ScreenTransition } from '@components/ScreenTransition'
 import * as Haptics from 'expo-haptics'
 
 function HabitRow({
@@ -158,7 +159,7 @@ export function HabitListScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+    <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
       {habits.length === 0 ? (
         <View style={styles.empty}>
           <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
@@ -254,7 +255,7 @@ export function HabitListScreen() {
         <Feather name="plus" size={28} color="#fff" />
       </FAB>
 
-    </View>
+    </ScreenTransition>
   )
 }
 

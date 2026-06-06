@@ -1,11 +1,110 @@
 import { Tabs, useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import { useTheme } from '@design/useTheme'
 import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { ModuleLauncherSheet } from '@features/home/components/ModuleLauncherSheet'
+import { ModulePicker } from '@features/home/components/ModulePicker'
+
+type IconName = keyof typeof Feather.glyphMap
+
+// Bounces the icon when its tab becomes active
+function AnimatedTabIcon({ name, color, focused }: { name: IconName; color: string; focused: boolean }) {
+  const scale = useSharedValue(1)
+  const prevFocused = useRef(false)
+
+  useEffect(() => {
+    if (focused && !prevFocused.current) {
+      scale.value = withSequence(
+        withSpring(1.2, { damping: 6, stiffness: 320, reduceMotion: ReduceMotion.System }),
+        withSpring(1, { damping: 12, stiffness: 240, reduceMotion: ReduceMotion.System })
+      )
+    }
+    prevFocused.current = focused
+  }, [focused, scale])
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  return (
+    <Animated.View style={animStyle}>
+      <Feather name={name} size={22} color={color} />
+    </Animated.View>
+  )
+}
+
+// Launcher FAB in center of tab bar
+// Short press → LauncherSheet, Long press → ModulePicker radial
+function LauncherButton({
+  onPress,
+  onLongPress,
+  label,
+}: {
+  onPress: () => void
+  onLongPress: () => void
+  label: string
+}) {
+  const theme = useTheme()
+  const scale = useSharedValue(0.7)
+  const rotation = useSharedValue(0)
+
+  // Pop-in on mount
+  useEffect(() => {
+    scale.value = withSpring(1, { damping: 10, stiffness: 180, reduceMotion: ReduceMotion.System })
+  }, [scale])
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { rotate: `${rotation.value}deg` },
+    ],
+  }))
+
+  const handleLongPress = () => {
+    // Brief rotation feedback on long press
+    rotation.value = withSequence(
+      withSpring(45, { damping: 8, stiffness: 300, reduceMotion: ReduceMotion.System }),
+      withSpring(0, { damping: 10, stiffness: 200, reduceMotion: ReduceMotion.System })
+    )
+    onLongPress()
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={handleLongPress}
+      delayLongPress={250}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+    >
+      {({ pressed }) => (
+        <Animated.View
+          style={[
+            styles.launcherButton,
+            {
+              backgroundColor: pressed ? theme.brand.primary + 'CC' : theme.brand.primary,
+              borderColor: theme.bg.elevated,
+            },
+            animStyle,
+          ]}
+        >
+          <Feather name="grid" size={24} color="#fff" />
+        </Animated.View>
+      )}
+    </Pressable>
+  )
+}
 
 function HeaderRight() {
   const router = useRouter()
@@ -26,6 +125,7 @@ export default function TabsLayout() {
   const theme = useTheme()
   const { t } = useTranslation()
   const [launcherOpen, setLauncherOpen] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
     <>
@@ -52,7 +152,9 @@ export default function TabsLayout() {
             title: 'BataVasa',
             headerRight: () => <HeaderRight />,
             tabBarLabel: t.nav_home,
-            tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
+            tabBarIcon: ({ color, focused }) => (
+              <AnimatedTabIcon name="home" color={color} focused={focused} />
+            ),
           }}
         />
         <Tabs.Screen
@@ -60,31 +162,23 @@ export default function TabsLayout() {
           options={{
             title: t.nav_finance,
             tabBarLabel: t.nav_finance,
-            tabBarIcon: ({ color }) => <Feather name="dollar-sign" size={22} color={color} />,
             tabBarActiveTintColor: theme.finance.expense,
+            tabBarIcon: ({ color, focused }) => (
+              <AnimatedTabIcon name="dollar-sign" color={color} focused={focused} />
+            ),
           }}
         />
         <Tabs.Screen
           name="launcher"
           options={{
-            title: t.module_launcher_title,
+            title: '',
             tabBarLabel: '',
             tabBarButton: () => (
-              <Pressable
+              <LauncherButton
                 onPress={() => setLauncherOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={t.module_launcher_title}
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.launcherButton,
-                  {
-                    backgroundColor: pressed ? theme.brand.primary + 'DD' : theme.brand.primary,
-                    borderColor: theme.bg.elevated,
-                  },
-                ]}
-              >
-                <Feather name="grid" size={24} color="#fff" />
-              </Pressable>
+                onLongPress={() => setPickerOpen(true)}
+                label={t.module_launcher_title ?? 'Add'}
+              />
             ),
           }}
         />
@@ -93,8 +187,10 @@ export default function TabsLayout() {
           options={{
             title: t.habits,
             tabBarLabel: t.nav_habits,
-            tabBarIcon: ({ color }) => <Feather name="check-circle" size={22} color={color} />,
             tabBarActiveTintColor: MODULE_COLORS.habits,
+            tabBarIcon: ({ color, focused }) => (
+              <AnimatedTabIcon name="check-circle" color={color} focused={focused} />
+            ),
           }}
         />
         <Tabs.Screen
@@ -102,8 +198,10 @@ export default function TabsLayout() {
           options={{
             title: t.nav_journal,
             tabBarLabel: t.nav_journal,
-            tabBarIcon: ({ color }) => <Feather name="book-open" size={22} color={color} />,
             tabBarActiveTintColor: MODULE_COLORS.journal,
+            tabBarIcon: ({ color, focused }) => (
+              <AnimatedTabIcon name="book-open" color={color} focused={focused} />
+            ),
           }}
         />
         <Tabs.Screen
@@ -115,6 +213,7 @@ export default function TabsLayout() {
         />
       </Tabs>
       <ModuleLauncherSheet visible={launcherOpen} onClose={() => setLauncherOpen(false)} />
+      <ModulePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} />
     </>
   )
 }

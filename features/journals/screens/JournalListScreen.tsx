@@ -19,6 +19,7 @@ import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/u
 import { generateJournalReflection, type JournalReflection } from '@services/ai/journalInsight'
 import type { Journal } from '../types'
 import { FAB } from '@components/FAB'
+import { ScreenTransition } from '@components/ScreenTransition'
 
 const MOOD_COLORS = ['', '#D96C6C', '#E0A84B', '#8A8A8A', '#6FAE75', '#4FA3D8'] as const
 
@@ -275,7 +276,7 @@ export function JournalListScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+    <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={styles.list}>
         <View style={[styles.hero, { backgroundColor: MODULE_COLORS.journal + '14', borderColor: MODULE_COLORS.journal + '44' }]}>
           <View style={styles.heroTop}>
@@ -406,7 +407,7 @@ export function JournalListScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScreenTransition>
   )
 }
 

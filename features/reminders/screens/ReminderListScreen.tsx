@@ -11,6 +11,7 @@ import { spacing, radius } from '@design/tokens'
 import { MODULE_COLORS } from '@design/moduleColors'
 import * as Haptics from 'expo-haptics'
 import { FAB } from '@components/FAB'
+import { ScreenTransition } from '@components/ScreenTransition'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
@@ -291,7 +292,7 @@ export function ReminderListScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+    <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={[styles.hero, { backgroundColor: MODULE_COLORS.tasks + '14', borderColor: MODULE_COLORS.tasks + '44' }]}>
           <View style={styles.heroTop}>
@@ -432,7 +433,7 @@ export function ReminderListScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScreenTransition>
   )
 }
 

@@ -33,6 +33,7 @@ import { getDateFnsLocale } from '@services/locale'
 import type { Transaction } from '../types'
 import { SkeletonTransactionList } from '@components/SkeletonBox'
 import { FAB } from '@components/FAB'
+import { ScreenTransition } from '@components/ScreenTransition'
 
 type Period = 'today' | 'week' | 'month' | 'all'
 type CurrencyTotals = { income: number; expense: number }
@@ -288,7 +289,7 @@ export function TransactionListScreen() {
   ]
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg.primary }]}>
+    <ScreenTransition style={[styles.container, { backgroundColor: theme.bg.primary }]}>
       <FlashList
         data={activityItems}
         keyExtractor={(item) => item.id}
@@ -525,7 +526,7 @@ export function TransactionListScreen() {
         <Feather name="plus" size={28} color="#fff" />
       </FAB>
 
-    </View>
+    </ScreenTransition>
   )
 }
 

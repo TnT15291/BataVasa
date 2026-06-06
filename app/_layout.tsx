@@ -123,12 +123,47 @@ export default function RootLayout() {
             headerStyle: { backgroundColor: theme.bg.elevated },
             headerTitleStyle: { color: theme.text.primary, fontWeight: '600' },
             contentStyle: { backgroundColor: theme.bg.primary },
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            gestureDirection: 'horizontal',
           }}
         >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none' }} />
           <Stack.Screen
             name="new"
-            options={{ title: t.nav_new_transaction, presentation: 'modal' }}
+            options={{
+              title: t.nav_new_transaction,
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              gestureDirection: 'vertical',
+            }}
+          />
+          <Stack.Screen
+            name="reminder"
+            options={{
+              title: t.new_reminder,
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              gestureDirection: 'vertical',
+            }}
+          />
+          <Stack.Screen
+            name="journal"
+            options={{
+              title: t.new_journal,
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              gestureDirection: 'vertical',
+            }}
+          />
+          <Stack.Screen
+            name="habit"
+            options={{
+              title: t.new_habit,
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              gestureDirection: 'vertical',
+            }}
           />
           <Stack.Screen name="settings" options={{ title: t.nav_settings }} />
           <Stack.Screen name="help" options={{ title: t.help_title }} />
@@ -142,9 +177,6 @@ export default function RootLayout() {
           <Stack.Screen name="chat" options={{ title: t.nav_chat }} />
           <Stack.Screen name="categories" options={{ title: t.nav_categories }} />
           <Stack.Screen name="category" options={{ title: t.new_category }} />
-          <Stack.Screen name="reminder" options={{ title: t.new_reminder }} />
-          <Stack.Screen name="journal" options={{ title: t.new_journal }} />
-          <Stack.Screen name="habit" options={{ title: t.new_habit }} />
           <Stack.Screen name="display-currency" options={{ title: t.display_currency }} />
           <Stack.Screen name="analysis" options={{ title: t.analysis_title }} />
           <Stack.Screen name="habits-report" options={{ title: t.habits_report_title }} />

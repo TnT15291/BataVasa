@@ -17,6 +17,7 @@ import { CircularProgress } from '@components/CircularProgress'
 import { FAB } from '@components/FAB'
 import { UniversalAddSheet } from '../components/UniversalAddSheet'
 import { OnboardingModal } from '../components/OnboardingModal'
+import { ScreenTransition } from '@components/ScreenTransition'
 
 type IconName = keyof typeof Feather.glyphMap
 
@@ -195,7 +196,7 @@ export function DailyDigestScreen() {
   const dateStr = format(now, 'EEEE, dd MMMM', { locale })
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+    <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -378,7 +379,7 @@ export function DailyDigestScreen() {
         autoAnalyzeToken={0}
       />
       <OnboardingModal visible={!hasSeenOnboarding} />
-    </View>
+    </ScreenTransition>
   )
 }
 
