@@ -1,11 +1,16 @@
 const mockDb = {
   runAsync: jest.fn(),
   getFirstAsync: jest.fn(),
+  getAllAsync: jest.fn(),
 }
 
 const mockDelete = jest.fn()
 const mockEq = jest.fn()
 const mockUpsert = jest.fn()
+const mockSelect = jest.fn()
+const mockPullEq = jest.fn()
+const mockOrder = jest.fn()
+const mockLimit = jest.fn()
 const mockFrom = jest.fn()
 const mockAppStateAddEventListener = jest.fn()
 const mockGetPending = jest.fn()
@@ -14,6 +19,11 @@ const mockMarkFailed = jest.fn()
 const mockPurgeFailed = jest.fn()
 const mockAuthGetState = jest.fn()
 const mockSettingsGetState = jest.fn()
+const mockLoadCategories = jest.fn()
+const mockLoadTransactions = jest.fn()
+const mockLoadHabits = jest.fn()
+const mockLoadJournals = jest.fn()
+const mockLoadReminders = jest.fn()
 const mockLogger = {
   info: jest.fn(),
   warn: jest.fn(),
@@ -81,6 +91,29 @@ function loadSync() {
       getState: mockSettingsGetState,
     },
   }))
+  jest.doMock('@store/financeStore', () => ({
+    useFinanceStore: {
+      getState: () => ({
+        loadCategories: mockLoadCategories,
+        loadTransactions: mockLoadTransactions,
+      }),
+    },
+  }))
+  jest.doMock('@store/habitsStore', () => ({
+    useHabitsStore: {
+      getState: () => ({ loadHabits: mockLoadHabits }),
+    },
+  }))
+  jest.doMock('@store/journalsStore', () => ({
+    useJournalsStore: {
+      getState: () => ({ loadJournals: mockLoadJournals }),
+    },
+  }))
+  jest.doMock('@store/remindersStore', () => ({
+    useRemindersStore: {
+      getState: () => ({ loadReminders: mockLoadReminders }),
+    },
+  }))
   return require('../services/sync') as typeof import('../services/sync')
 }
 
@@ -96,12 +129,22 @@ beforeEach(() => {
   mockGetPending.mockResolvedValue([])
   mockPurgeFailed.mockResolvedValue(undefined)
   mockDb.getFirstAsync.mockResolvedValue({ id: 'rem-1', title: 'Call mom' })
+  mockDb.getAllAsync.mockResolvedValue([{ name: 'id' }, { name: 'title' }, { name: 'updated_at' }, { name: 'synced_at' }])
   mockDb.runAsync.mockResolvedValue(undefined)
   mockUpsert.mockResolvedValue({ error: null })
   mockEq.mockResolvedValue({ error: null })
   mockDelete.mockReturnValue({ eq: mockEq })
-  mockFrom.mockReturnValue({ upsert: mockUpsert, delete: mockDelete })
+  mockLimit.mockResolvedValue({ data: [], error: null })
+  mockOrder.mockReturnValue({ limit: mockLimit })
+  mockPullEq.mockReturnValue({ order: mockOrder })
+  mockSelect.mockReturnValue({ eq: mockPullEq })
+  mockFrom.mockReturnValue({ upsert: mockUpsert, delete: mockDelete, select: mockSelect })
   mockAppStateAddEventListener.mockReturnValue({ remove: jest.fn() })
+  mockLoadCategories.mockResolvedValue(undefined)
+  mockLoadTransactions.mockResolvedValue(undefined)
+  mockLoadHabits.mockResolvedValue(undefined)
+  mockLoadJournals.mockResolvedValue(undefined)
+  mockLoadReminders.mockResolvedValue(undefined)
 })
 
 describe('sync worker', () => {
@@ -185,6 +228,32 @@ describe('sync worker', () => {
 
     expect(mockMarkFailed).toHaveBeenCalledWith('q1', 'Error: offline')
     expect(mockLogger.warn).toHaveBeenCalledWith('sync', 'item failed', expect.any(Object))
+  })
+
+  it('pulls remote rows into SQLite and refreshes loaded stores', async () => {
+    const { pullRemoteData } = loadSync()
+    mockDb.getFirstAsync.mockResolvedValueOnce(null)
+    mockLimit
+      .mockResolvedValueOnce({
+        data: [{ id: 'tx-1', amount_cents: -25000, updated_at: '2026-01-02T00:00:00.000Z' }],
+        error: null,
+      })
+      .mockResolvedValue({ data: [], error: null })
+
+    await pullRemoteData()
+
+    expect(mockFrom).toHaveBeenCalledWith('finance_transaction')
+    expect(mockSelect).toHaveBeenCalledWith('*')
+    expect(mockPullEq).toHaveBeenCalledWith('user_id', 'user-1')
+    expect(mockDb.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO finance_transaction'),
+      ['tx-1', '2026-01-02T00:00:00.000Z', '2026-01-01T00:00:00.000Z']
+    )
+    expect(mockLoadCategories).toHaveBeenCalled()
+    expect(mockLoadTransactions).toHaveBeenCalled()
+    expect(mockLoadHabits).toHaveBeenCalled()
+    expect(mockLoadJournals).toHaveBeenCalled()
+    expect(mockLoadReminders).toHaveBeenCalled()
   })
 
   it('starts a worker and unsubscribes from app-state changes', () => {
