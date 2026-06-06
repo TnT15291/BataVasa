@@ -499,6 +499,10 @@ export const zh: Translations = {
 
   // Universal Add quick create
   universal_add_or_create: '或直接创建',
+  module_launcher_title: 'Modules',
+  module_launcher_subtitle: 'Open a module or create a new item.',
+  module_launcher_quick: 'Quick create',
+  module_launcher_modules: 'Modules',
 
   // Help & Tips
   help_title: '帮助与提示',

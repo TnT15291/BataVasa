@@ -499,6 +499,10 @@ export const en: Translations = {
 
   // Universal Add quick create
   universal_add_or_create: 'Or create directly',
+  module_launcher_title: 'Modules',
+  module_launcher_subtitle: 'Open a module or create a new item.',
+  module_launcher_quick: 'Quick create',
+  module_launcher_modules: 'Modules',
 
   // Help & Tips
   help_title: 'Help & Tips',

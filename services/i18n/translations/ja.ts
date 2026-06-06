@@ -499,6 +499,10 @@ export const ja: Translations = {
 
   // Universal Add quick create
   universal_add_or_create: 'または直接作成',
+  module_launcher_title: 'Modules',
+  module_launcher_subtitle: 'Open a module or create a new item.',
+  module_launcher_quick: 'Quick create',
+  module_launcher_modules: 'Modules',
 
   // Help & Tips
   help_title: 'ヘルプとヒント',

@@ -516,6 +516,10 @@ export const vi = {
 
   // Universal Add quick create
   universal_add_or_create: 'Hoặc tạo trực tiếp',
+  module_launcher_title: 'Module',
+  module_launcher_subtitle: 'Mở module hoặc tạo nhanh một mục mới.',
+  module_launcher_quick: 'Tạo nhanh',
+  module_launcher_modules: 'Module',
 
   // Help & Tips
   help_title: 'Trợ giúp & Mẹo',

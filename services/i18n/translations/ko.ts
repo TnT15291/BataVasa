@@ -497,6 +497,10 @@ export const ko: Translations = {
 
   // Universal Add quick create
   universal_add_or_create: '또는 직접 만들기',
+  module_launcher_title: 'Modules',
+  module_launcher_subtitle: 'Open a module or create a new item.',
+  module_launcher_quick: 'Quick create',
+  module_launcher_modules: 'Modules',
 
   // Help & Tips
   help_title: '도움말 및 팁',
