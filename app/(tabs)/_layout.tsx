@@ -12,7 +12,6 @@ import Animated, {
 import { useTheme } from '@design/useTheme'
 import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
-import { ModuleLauncherSheet } from '@features/home/components/ModuleLauncherSheet'
 import { ModulePicker } from '@features/home/components/ModulePicker'
 
 type IconName = keyof typeof Feather.glyphMap
@@ -43,8 +42,7 @@ function AnimatedTabIcon({ name, color, focused }: { name: IconName; color: stri
   )
 }
 
-// Launcher FAB in center of tab bar
-// Short press → LauncherSheet, Long press → ModulePicker radial
+// Center FAB: tap returns to Home, long press opens the module picker.
 function LauncherButton({
   onPress,
   onLongPress,
@@ -122,9 +120,9 @@ function HeaderRight() {
 }
 
 export default function TabsLayout() {
+  const router = useRouter()
   const theme = useTheme()
   const { t } = useTranslation()
-  const [launcherOpen, setLauncherOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
@@ -175,7 +173,7 @@ export default function TabsLayout() {
             tabBarLabel: '',
             tabBarButton: () => (
               <LauncherButton
-                onPress={() => setLauncherOpen(true)}
+                onPress={() => router.push('/')}
                 onLongPress={() => setPickerOpen(true)}
                 label={t.module_launcher_title ?? 'Add'}
               />
@@ -212,7 +210,6 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
-      <ModuleLauncherSheet visible={launcherOpen} onClose={() => setLauncherOpen(false)} />
       <ModulePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} />
     </>
   )
