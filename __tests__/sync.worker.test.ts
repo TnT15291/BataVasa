@@ -129,7 +129,12 @@ beforeEach(() => {
   mockGetPending.mockResolvedValue([])
   mockPurgeFailed.mockResolvedValue(undefined)
   mockDb.getFirstAsync.mockResolvedValue({ id: 'rem-1', title: 'Call mom' })
-  mockDb.getAllAsync.mockResolvedValue([{ name: 'id' }, { name: 'title' }, { name: 'updated_at' }, { name: 'synced_at' }])
+  mockDb.getAllAsync.mockImplementation((sql: string) => {
+    if (sql.startsWith('PRAGMA')) {
+      return Promise.resolve([{ name: 'id' }, { name: 'name' }, { name: 'updated_at' }, { name: 'synced_at' }])
+    }
+    return Promise.resolve([])
+  })
   mockDb.runAsync.mockResolvedValue(undefined)
   mockUpsert.mockResolvedValue({ error: null })
   mockEq.mockResolvedValue({ error: null })
@@ -235,19 +240,19 @@ describe('sync worker', () => {
     mockDb.getFirstAsync.mockResolvedValueOnce(null)
     mockLimit
       .mockResolvedValueOnce({
-        data: [{ id: 'tx-1', amount_cents: -25000, updated_at: '2026-01-02T00:00:00.000Z' }],
+        data: [{ id: 'cat-1', name: 'Food', updated_at: '2026-01-02T00:00:00.000Z' }],
         error: null,
       })
       .mockResolvedValue({ data: [], error: null })
 
     await pullRemoteData()
 
-    expect(mockFrom).toHaveBeenCalledWith('finance_transaction')
+    expect(mockFrom).toHaveBeenCalledWith('finance_category')
     expect(mockSelect).toHaveBeenCalledWith('*')
     expect(mockPullEq).toHaveBeenCalledWith('user_id', 'user-1')
     expect(mockDb.runAsync).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO finance_transaction'),
-      ['tx-1', '2026-01-02T00:00:00.000Z', '2026-01-01T00:00:00.000Z']
+      expect.stringContaining('INSERT INTO finance_category'),
+      ['cat-1', 'Food', '2026-01-02T00:00:00.000Z', '2026-01-01T00:00:00.000Z']
     )
     expect(mockLoadCategories).toHaveBeenCalled()
     expect(mockLoadTransactions).toHaveBeenCalled()

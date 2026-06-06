@@ -14,8 +14,8 @@ const MODULE = 'sync'
 
 // Maps each table to its settingsStore sync-toggle key.
 const TABLE_MODULE: Record<string, keyof SyncToggles> = {
-  finance_transaction: 'syncFinance',
   finance_category:   'syncFinance',
+  finance_transaction: 'syncFinance',
   finance_rule:       'syncFinance',
   habit:              'syncHabits',
   habit_log:          'syncHabits',
@@ -49,6 +49,28 @@ async function markSyncedAt(tableName: string, rowId: string): Promise<void> {
 }
 
 let draining = false
+
+async function pushVisibleFinanceCategories(userId: string): Promise<void> {
+  if (!supabase) return
+
+  const db = await getDb()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM finance_category
+     WHERE deleted_at IS NULL
+       AND (user_id IS NULL OR user_id = ?)`,
+    [userId]
+  )
+  if (rows.length === 0) return
+
+  const now = nowIso()
+  const payloads = rows.map((row) => ({
+    ...row,
+    user_id: userId,
+    synced_at: now,
+  }))
+  const { error } = await supabase.from('finance_category').upsert(payloads, { onConflict: 'id' })
+  if (error) throw error
+}
 
 async function getLocalColumns(tableName: string): Promise<string[]> {
   const db = await getDb()
@@ -165,6 +187,13 @@ export async function drainQueue(): Promise<void> {
     const userId = session.user.id
     const settings = useSettingsStore.getState() as SyncToggles & Record<string, unknown>
     await syncQueue.purgeFailed()
+    if (settings.syncFinance !== false) {
+      try {
+        await pushVisibleFinanceCategories(userId)
+      } catch (e) {
+        logger.warn(MODULE, 'finance category pre-sync failed', { error: String(e) })
+      }
+    }
     const pending = await syncQueue.getPending(50)
 
     for (const item of pending) {
