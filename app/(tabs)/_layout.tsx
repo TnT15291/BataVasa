@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { GestureResponderEvent, Pressable, StyleSheet, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Animated, {
   useSharedValue,
@@ -46,10 +46,14 @@ function AnimatedTabIcon({ name, color, focused }: { name: IconName; color: stri
 function LauncherButton({
   onPress,
   onLongPress,
+  onTouchMove,
+  onTouchEnd,
   label,
 }: {
   onPress: () => void
   onLongPress: () => void
+  onTouchMove: (event: GestureResponderEvent) => void
+  onTouchEnd: () => void
   label: string
 }) {
   const theme = useTheme()
@@ -81,6 +85,9 @@ function LauncherButton({
     <Pressable
       onPress={onPress}
       onLongPress={handleLongPress}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
       delayLongPress={250}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -124,6 +131,22 @@ export default function TabsLayout() {
   const theme = useTheme()
   const { t } = useTranslation()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [touchPoint, setTouchPoint] = useState<{ x: number; y: number } | null>(null)
+  const selectedRouteRef = useRef<string | null>(null)
+
+  const closePicker = () => {
+    setPickerOpen(false)
+    setTouchPoint(null)
+    selectedRouteRef.current = null
+  }
+
+  const finishPicker = () => {
+    const route = selectedRouteRef.current
+    closePicker()
+    if (route) {
+      requestAnimationFrame(() => router.push(route as any))
+    }
+  }
 
   return (
     <>
@@ -183,6 +206,15 @@ export default function TabsLayout() {
               <LauncherButton
                 onPress={() => router.push('/')}
                 onLongPress={() => setPickerOpen(true)}
+                onTouchMove={(event) => {
+                  if (!pickerOpen) return
+                  const { pageX, pageY } = event.nativeEvent
+                  setTouchPoint({ x: pageX, y: pageY })
+                }}
+                onTouchEnd={() => {
+                  if (!pickerOpen) return
+                  finishPicker()
+                }}
                 label={t.nav_home}
               />
             ),
@@ -211,7 +243,12 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
-      <ModulePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} />
+      <ModulePicker
+        visible={pickerOpen}
+        touchPoint={touchPoint}
+        onActiveRouteChange={(route) => { selectedRouteRef.current = route }}
+        onClose={closePicker}
+      />
     </>
   )
 }

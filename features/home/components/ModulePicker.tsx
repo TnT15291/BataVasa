@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Animated, {
   useSharedValue,
@@ -30,11 +30,13 @@ type ItemProps = {
   mod: Module
   visible: boolean
   delay: number
+  active: boolean
+  position: { x: number; y: number }
   onPress: () => void
 }
 
 // Each item manages its own animation so hooks-in-loop is avoided
-function PickerItem({ mod, visible, delay, onPress }: ItemProps) {
+function PickerItem({ mod, visible, delay, active, position, onPress }: ItemProps) {
   const theme = useTheme()
   const scale = useSharedValue(0)
 
@@ -47,13 +49,14 @@ function PickerItem({ mod, visible, delay, onPress }: ItemProps) {
     }
   }, [visible, delay, scale])
 
+  const activeScale = active ? 1.18 : 1
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ translateX: position.x }, { translateY: position.y }, { scale: scale.value * activeScale }],
     opacity: scale.value,
   }))
 
   return (
-    <Animated.View style={animStyle}>
+    <Animated.View style={[styles.itemWrap, animStyle]}>
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
@@ -64,12 +67,12 @@ function PickerItem({ mod, visible, delay, onPress }: ItemProps) {
         ]}
       >
         <View style={[styles.itemCircle, {
-          backgroundColor: mod.color + '20',
-          borderColor: mod.color + '40',
+          backgroundColor: active ? mod.color : mod.color + '20',
+          borderColor: active ? mod.color : mod.color + '40',
         }]}>
-          <Feather name={mod.icon} size={22} color={mod.color} />
+          <Feather name={mod.icon} size={22} color={active ? '#fff' : mod.color} />
         </View>
-        <Text style={[styles.itemLabel, { color: theme.text.secondary }]} numberOfLines={1}>
+        <Text style={[styles.itemLabel, { color: active ? theme.text.primary : theme.text.secondary }]} numberOfLines={1}>
           {mod.label}
         </Text>
       </Pressable>
@@ -79,17 +82,24 @@ function PickerItem({ mod, visible, delay, onPress }: ItemProps) {
 
 type Props = {
   visible: boolean
+  touchPoint?: { x: number; y: number } | null
+  onActiveRouteChange?: (route: string | null) => void
   onClose: () => void
 }
 
-export function ModulePicker({ visible, onClose }: Props) {
+export function ModulePicker({ visible, touchPoint, onActiveRouteChange, onClose }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { width, height } = useWindowDimensions()
+  const [activeRoute, setActiveRoute] = useState<string | null>(null)
 
   const TAB_BAR_H = 62 + insets.bottom
-  const BAR_BOTTOM = TAB_BAR_H + 16
+  const origin = useMemo(() => ({
+    x: width / 2,
+    y: height - TAB_BAR_H + 10,
+  }), [width, height, TAB_BAR_H])
 
   const modules: Module[] = [
     { icon: 'dollar-sign', label: t.nav_finance, color: theme.finance.expense, route: '/finance' },
@@ -98,10 +108,28 @@ export function ModulePicker({ visible, onClose }: Props) {
     { icon: 'bell', label: t.nav_reminders, color: MODULE_COLORS.tasks, route: '/reminders' },
   ]
 
-  // Bar animation
-  const barScale = useSharedValue(0.7)
-  const barOpacity = useSharedValue(0)
-  const barTranslateY = useSharedValue(24)
+  const positions = useMemo(() => {
+    const radius = Math.min(154, Math.max(126, width * 0.36))
+    const angles = [-152, -116, -64, -28]
+    return angles.map((deg) => {
+      const rad = (deg * Math.PI) / 180
+      return {
+        x: Math.cos(rad) * radius,
+        y: Math.sin(rad) * radius,
+      }
+    })
+  }, [width])
+
+  const centers = useMemo(() => positions.map((pos, index) => ({
+    route: modules[index].route,
+    x: origin.x + pos.x,
+    y: origin.y + pos.y,
+  })), [modules, origin, positions])
+
+  // Arc animation
+  const arcScale = useSharedValue(0.7)
+  const arcOpacity = useSharedValue(0)
+  const arcTranslateY = useSharedValue(24)
 
   // Backdrop
   const backdropOpacity = useSharedValue(0)
@@ -110,28 +138,52 @@ export function ModulePicker({ visible, onClose }: Props) {
     const cfg = { reduceMotion: ReduceMotion.System }
     if (visible) {
       backdropOpacity.value = withTiming(1, { duration: 200, ...cfg })
-      barOpacity.value = withTiming(1, { duration: 180, ...cfg })
-      barScale.value = withSpring(1, { damping: 16, stiffness: 240, ...cfg })
-      barTranslateY.value = withSpring(0, { damping: 18, stiffness: 260, ...cfg })
+      arcOpacity.value = withTiming(1, { duration: 180, ...cfg })
+      arcScale.value = withSpring(1, { damping: 16, stiffness: 240, ...cfg })
+      arcTranslateY.value = withSpring(0, { damping: 18, stiffness: 260, ...cfg })
     } else {
       backdropOpacity.value = withTiming(0, { duration: 180, ...cfg })
-      barOpacity.value = withTiming(0, { duration: 150, easing: Easing.in(Easing.quad), ...cfg })
-      barScale.value = withTiming(0.8, { duration: 160, easing: Easing.in(Easing.quad), ...cfg })
-      barTranslateY.value = withTiming(20, { duration: 150, ...cfg })
+      arcOpacity.value = withTiming(0, { duration: 150, easing: Easing.in(Easing.quad), ...cfg })
+      arcScale.value = withTiming(0.8, { duration: 160, easing: Easing.in(Easing.quad), ...cfg })
+      arcTranslateY.value = withTiming(20, { duration: 150, ...cfg })
+      setActiveRoute(null)
     }
-  }, [visible, backdropOpacity, barOpacity, barScale, barTranslateY])
+  }, [visible, backdropOpacity, arcOpacity, arcScale, arcTranslateY])
+
+  useEffect(() => {
+    if (!visible || !touchPoint) {
+      if (!visible) onActiveRouteChange?.(null)
+      return
+    }
+
+    let nearest: string | null = null
+    let best = Number.POSITIVE_INFINITY
+    for (const center of centers) {
+      const dx = touchPoint.x - center.x
+      const dy = touchPoint.y - center.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      if (distance < best) {
+        best = distance
+        nearest = center.route
+      }
+    }
+
+    const next = best <= 76 ? nearest : null
+    setActiveRoute(next)
+    onActiveRouteChange?.(next)
+  }, [centers, onActiveRouteChange, touchPoint, visible])
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
   }))
 
-  // Scale from bottom-center: compensate translateY so it grows upward
-  const barStyle = useAnimatedStyle(() => ({
+  // Scale from bottom-center so modules grow out of the Home button.
+  const arcStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: barTranslateY.value },
-      { scale: barScale.value },
+      { translateY: arcTranslateY.value },
+      { scale: arcScale.value },
     ],
-    opacity: barOpacity.value,
+    opacity: arcOpacity.value,
   }))
 
   const navigate = (route: string) => {
@@ -153,100 +205,75 @@ export function ModulePicker({ visible, onClose }: Props) {
         />
       </Animated.View>
 
-      {/* Pill picker bar */}
       <Animated.View
         pointerEvents={visible ? 'box-none' : 'none'}
         style={[
-          styles.barWrap,
-          { bottom: BAR_BOTTOM },
-          barStyle,
+          styles.arcWrap,
+          { left: origin.x, top: origin.y },
+          arcStyle,
         ]}
       >
-        <View style={[styles.bar, {
-          backgroundColor: theme.bg.elevated,
-          borderColor: theme.border.strong,
-          shadowColor: '#000',
-        }]}>
-          {modules.map((mod, i) => (
-            <PickerItem
-              key={mod.route}
-              mod={mod}
-              visible={visible}
-              delay={i * 55}
-              onPress={() => navigate(mod.route)}
-            />
-          ))}
+        <View style={[styles.originHint, { backgroundColor: theme.brand.primary + '22', borderColor: theme.brand.primary + '55' }]}>
+          <Feather name="home" size={17} color={theme.brand.primary} />
         </View>
-
-        {/* Arrow pointing down toward launcher button */}
-        <View style={[styles.arrow, { borderTopColor: theme.border.strong }]} />
-        <View style={[styles.arrowInner, { borderTopColor: theme.bg.elevated }]} />
+        {modules.map((mod, i) => (
+          <PickerItem
+            key={mod.route}
+            mod={mod}
+            visible={visible}
+            delay={i * 45}
+            active={activeRoute === mod.route}
+            position={positions[i]}
+            onPress={() => navigate(mod.route)}
+          />
+        ))}
       </Animated.View>
     </>
   )
 }
 
-const ITEM_W = 64
-const GAP = 4
-
 const styles = StyleSheet.create({
-  barWrap: {
+  arcWrap: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    width: 1,
+    height: 1,
   },
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: GAP,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[3],
-    borderRadius: 28,
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 12,
-  },
-  item: {
-    width: ITEM_W,
-    alignItems: 'center',
-    gap: spacing[1] + 2,
-  },
-  itemCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  originHint: {
+    position: 'absolute',
+    width: 42,
+    height: 42,
+    left: -21,
+    top: -21,
+    borderRadius: radius.full,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  // Downward-pointing triangle connecting bar to launcher button
-  arrow: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    marginTop: -1,
-  },
-  arrowInner: {
+  itemWrap: {
     position: 'absolute',
-    bottom: 1,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 7,
-    borderRightWidth: 7,
-    borderTopWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
+    left: -38,
+    top: -38,
+  },
+  item: {
+    width: 76,
+    alignItems: 'center',
+    gap: spacing[1] + 2,
+  },
+  itemCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 10,
+  },
+  itemLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 })
