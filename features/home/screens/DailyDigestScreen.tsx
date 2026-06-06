@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   heroText: { flex: 1, gap: 2 },
-  heroKicker: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroKicker: { fontSize: 12, fontWeight: '800' },
   progressValue: { fontSize: 16, fontWeight: '700' },
   progressLabel: { fontSize: 10, fontWeight: '500' },
   heroMetric: {

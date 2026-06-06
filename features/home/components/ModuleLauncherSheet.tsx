@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, lineHeight: 18, marginTop: 2 },
   closeBtn: { width: 36, height: 36, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   section: { gap: spacing[2] },
-  sectionTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionTitle: { fontSize: 12, fontWeight: '800' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   item: {
     width: '31.8%',

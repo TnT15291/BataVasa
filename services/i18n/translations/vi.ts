@@ -516,10 +516,10 @@ export const vi = {
 
   // Universal Add quick create
   universal_add_or_create: 'Hoặc tạo trực tiếp',
-  module_launcher_title: 'Module',
-  module_launcher_subtitle: 'Mở module hoặc tạo nhanh một mục mới.',
+  module_launcher_title: 'Mục khác',
+  module_launcher_subtitle: 'Mở mục khác hoặc tạo nhanh một mục mới.',
   module_launcher_quick: 'Tạo nhanh',
-  module_launcher_modules: 'Module',
+  module_launcher_modules: 'Mục khác',
 
   // Help & Tips
   help_title: 'Trợ giúp & Mẹo',
@@ -582,17 +582,17 @@ export const vi = {
   journal_anniversary_reminder_hint: 'Tạo một công việc ưu tiên cao cho sự kiện quan trọng này.',
   today_timeline: 'Dòng thời gian hôm nay',
   today_timeline_empty: 'Tài chính, công việc, thói quen và nhật ký hôm nay sẽ xuất hiện ở đây.',
-  home_command_center: 'Trung t\u00e2m h\u00f4m nay',
-  review_inbox_title: 'H\u1ed9p c\u1ea7n xem',
-  review_inbox_empty: 'Hi\u1ec7n kh\u00f4ng c\u00f3 g\u00ec c\u1ea7n quy\u1ebft \u0111\u1ecbnh.',
-  review_inbox_count: '{{count}} m\u1ee5c c\u1ea7n ch\u00fa \u00fd',
-  review_item_finance: '{{count}} giao d\u1ecbch c\u1ea7n xem l\u1ea1i',
-  review_item_overdue: '{{count}} c\u00f4ng vi\u1ec7c qu\u00e1 h\u1ea1n',
-  review_item_priority: '{{count}} c\u00f4ng vi\u1ec7c \u01b0u ti\u00ean cao h\u00f4m nay',
-  review_item_schedule: '{{count}} c\u00f4ng vi\u1ec7c c\u1ea7n l\u00ean l\u1ecbch',
-  review_item_habit: '{{count}} th\u00f3i quen c\u00f2n m\u1edf',
-  review_item_habit_progress: 'H\u00f4m nay \u0111\u00e3 xong {{progress}}',
-  review_item_journal: '{{count}} nh\u1eadt k\u00fd quan tr\u1ecdng',
+  home_command_center: 'Trung tâm hôm nay',
+  review_inbox_title: 'Hộp cần xem',
+  review_inbox_empty: 'Hiện không có gì cần quyết định.',
+  review_inbox_count: '{{count}} mục cần chú ý',
+  review_item_finance: '{{count}} giao dịch cần xem lại',
+  review_item_overdue: '{{count}} công việc quá hạn',
+  review_item_priority: '{{count}} công việc ưu tiên cao hôm nay',
+  review_item_schedule: '{{count}} công việc cần lên lịch',
+  review_item_habit: '{{count}} thói quen còn mở',
+  review_item_habit_progress: 'Hôm nay đã xong {{progress}}',
+  review_item_journal: '{{count}} nhật ký quan trọng',
 
   // Reminder — validation
   reminder_title_required: 'Vui lòng nhập tiêu đề công việc',
