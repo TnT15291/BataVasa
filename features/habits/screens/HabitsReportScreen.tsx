@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   View, Text, Pressable, StyleSheet, ScrollView,
-  ActivityIndicator, Share, Platform, Alert,
+  ActivityIndicator, Share, Platform,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import DateTimePicker from '@react-native-community/datetimepicker'
@@ -16,8 +16,6 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
-import { getProviderKey } from '@services/ai/openai'
-import { generateHabitInsight, type HabitInsight } from '@services/ai/habitInsight'
 import { exportAllHabits } from '../services'
 import { track } from '@services/analytics'
 import { useHabitsBootstrap, useHabits } from '../hooks/useHabits'
@@ -75,9 +73,6 @@ export function HabitsReportScreen() {
   const [allLogs, setAllLogs] = useState<HabitLog[]>([])
   const [exportedHabits, setExportedHabits] = useState<Habit[]>([])
   const [loading, setLoading] = useState(true)
-  const [insight, setInsight] = useState<HabitInsight | null>(null)
-  const [generatingInsight, setGeneratingInsight] = useState(false)
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
 
   useEffect(() => {
     exportAllHabits().then((r) => {
@@ -236,31 +231,6 @@ export function HabitsReportScreen() {
     for (const h of habits) map.set(h.id, h)
     return map
   }, [habits, exportedHabits])
-
-  const handleGenerateInsight = async () => {
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
-    if (allLogs.length < 3) { Alert.alert(t.habit_insight_title, t.habit_insight_min_data); return }
-    setGeneratingInsight(true)
-    try {
-      const baseHabits = habits.map(({ id, user_id, name, icon, color, cadence, target_per_period,
-        location_lat, location_lng, location_label, created_at, updated_at, deleted_at, synced_at }) => ({
-        id, user_id, name, icon, color, cadence, target_per_period,
-        location_lat, location_lng, location_label, created_at, updated_at, deleted_at, synced_at,
-      }) as Habit)
-      const result = await generateHabitInsight(baseHabits, allLogs)
-      if (result) {
-        setInsight(result)
-        track('feature_used', { feature_name: 'habit_insight_generated' })
-      } else {
-        Alert.alert(t.ai_error, t.parse_failed)
-      }
-    } catch {
-      Alert.alert(t.ai_error, t.parse_failed)
-    } finally {
-      setGeneratingInsight(false)
-    }
-  }
 
   const exportSummary = async () => {
     if (!stats || !range) return
@@ -458,56 +428,6 @@ export function HabitsReportScreen() {
               </View>
             )}
 
-            {/* AI Habit Insight */}
-            <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-              <View style={styles.cardTitleRow}>
-                <Feather name="cpu" size={14} color={theme.brand.primary} />
-                <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.habit_insight_title}</Text>
-              </View>
-
-              {insight ? (
-                <View style={styles.insightBody}>
-                  {([
-                    { key: t.habit_insight_consistency, val: insight.consistency_summary },
-                    { key: t.habit_insight_strongest, val: insight.strongest_habit },
-                    { key: t.habit_insight_attention, val: insight.needs_attention },
-                    { key: t.habit_insight_encouragement, val: insight.encouragement },
-                    { key: t.habit_insight_tip, val: insight.tip },
-                  ] as { key: string; val: string }[]).map(({ key, val }) => (
-                    <View key={key} style={[styles.insightRow, { borderColor: theme.border.subtle }]}>
-                      <Text style={[styles.insightLabel, { color: theme.brand.primary }]}>{key}</Text>
-                      <Text style={[styles.insightValue, { color: theme.text.primary }]}>{val}</Text>
-                    </View>
-                  ))}
-                  <Pressable
-                    onPress={handleGenerateInsight}
-                    style={[styles.insightRefresh, { borderColor: theme.border.strong }]}
-                  >
-                    <Feather name="refresh-cw" size={13} color={theme.text.muted} />
-                    <Text style={[styles.insightRefreshText, { color: theme.text.muted }]}>{t.habit_insight_generate}</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={handleGenerateInsight}
-                  disabled={generatingInsight}
-                  style={[styles.insightGenBtn, { backgroundColor: theme.brand.primary + (generatingInsight ? '80' : 'FF') }]}
-                >
-                  {generatingInsight ? (
-                    <>
-                      <ActivityIndicator size="small" color="#fff" />
-                      <Text style={styles.insightGenText}>{t.habit_insight_loading}</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Feather name="zap" size={15} color="#fff" />
-                      <Text style={styles.insightGenText}>{t.habit_insight_generate}</Text>
-                    </>
-                  )}
-                </Pressable>
-              )}
-            </View>
-
             <Pressable onPress={exportSummary} style={[styles.exportBtn, { borderColor: theme.border.strong }]}>
               <Text style={[styles.exportText, { color: theme.text.secondary }]}>{t.export_report}</Text>
             </Pressable>
@@ -529,7 +449,7 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: 15, fontWeight: '600', flex: 1, textAlign: 'center' },
   customRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing[2] },
   customField: { flex: 1, gap: spacing[1] },
-  customLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  customLabel: { fontSize: 12, fontWeight: '600' },
   dateInput: {
     borderWidth: 1,
     borderRadius: radius.md,
@@ -542,13 +462,13 @@ const styles = StyleSheet.create({
   dateSep: { fontSize: 18, paddingBottom: spacing[2] },
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
-  statCard: { width: '47%', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
+  statCard: { width: '47%', borderRadius: radius.lg, borderWidth: 1, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
   statValue: { fontSize: 22, fontWeight: '700' },
-  deltaBadge: { fontSize: 11, fontWeight: '700' },
-  statLabel: { fontSize: 11, textAlign: 'center' },
-  card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
+  deltaBadge: { fontSize: 12, fontWeight: '700' },
+  statLabel: { fontSize: 12, textAlign: 'center' },
+  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
-  cardTitle: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardTitle: { fontSize: 12, fontWeight: '600' },
   habitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
   habitIcon: { fontSize: 24, marginTop: 2 },
   habitNameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -558,14 +478,6 @@ const styles = StyleSheet.create({
   heatWeekLabel: { fontSize: 9, fontWeight: '600' },
   heatCell: { borderRadius: 3 },
   skipRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2] },
-  insightBody: { gap: spacing[2] },
-  insightRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2], gap: 2 },
-  insightLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
-  insightValue: { fontSize: 14, lineHeight: 20 },
-  insightRefresh: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], justifyContent: 'center', borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing[2], marginTop: spacing[1] },
-  insightRefreshText: { fontSize: 13 },
-  insightGenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], borderRadius: radius.md, paddingVertical: spacing[3] },
-  insightGenText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
   emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },

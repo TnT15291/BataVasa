@@ -5,15 +5,18 @@ import { useFinanceStore } from '@store/financeStore'
 export function useFinanceBootstrap(): boolean {
   const loadCategories = useFinanceStore((s) => s.loadCategories)
   const loadTransactions = useFinanceStore((s) => s.loadTransactions)
+  const loadPlanItems = useFinanceStore((s) => s.loadPlanItems)
   const catState = useFinanceStore((s) => s.catState)
   const txState = useFinanceStore((s) => s.txState)
+  const planState = useFinanceStore((s) => s.planState)
 
   useEffect(() => {
     if (catState === 'idle') loadCategories()
     if (txState === 'idle') loadTransactions()
-  }, [catState, txState, loadCategories, loadTransactions])
+    if (planState === 'idle') loadPlanItems()
+  }, [catState, txState, planState, loadCategories, loadTransactions, loadPlanItems])
 
-  return catState !== 'ready' || txState !== 'ready'
+  return catState !== 'ready' || txState !== 'ready' || planState !== 'ready'
 }
 
 export function useCategories() {
@@ -22,6 +25,10 @@ export function useCategories() {
 
 export function useTransactions() {
   return useFinanceStore((s) => s.transactions)
+}
+
+export function usePlanItems() {
+  return useFinanceStore((s) => s.planItems)
 }
 
 export function useFinanceActions() {
@@ -33,6 +40,13 @@ export function useFinanceActions() {
   const hasMore = useFinanceStore((s) => s.txHasMore)
   const loadingMore = useFinanceStore((s) => s.txLoadingMore)
   return { create, update, remove, refresh, loadMore, hasMore, loadingMore }
+}
+
+export function usePlanItemActions() {
+  const createPlanItem = useFinanceStore((s) => s.createPlanItem)
+  const updatePlanItem = useFinanceStore((s) => s.updatePlanItem)
+  const deletePlanItem = useFinanceStore((s) => s.deletePlanItem)
+  return { createPlanItem, updatePlanItem, deletePlanItem }
 }
 
 export function useCategoryActions() {

@@ -6,26 +6,30 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Feather } from '@expo/vector-icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
+import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
+import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseHabitLog } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
+import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
 import { useSettingsStore } from '@store/settingsStore'
 import { requestNotificationPermission } from '@services/notifications'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
 import type { Cadence } from '../types'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 const CADENCES: Cadence[] = ['daily', 'weekdays', 'weekly', 'monthly', 'custom']
 const WEEKDAY_VALUES = [1, 2, 3, 4, 5, 6, 0] as const
 
 const PRESET_ICONS = ['✅', '💪', '🏃', '📚', '🧘', '💧', '🥗', '😴', '🎯', '🧹', '💊', '🎸', '✍️', '🌿', '🚴']
 const PRESET_COLORS = [
-  '#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336',
-  '#00BCD4', '#8BC34A', '#FFC107', '#3F51B5', '#E91E63',
+  MODULE_COLORS.habits, MODULE_COLORS.tasks, MODULE_COLORS.journal, MODULE_COLORS.analysis,
+  '#3E7C59', '#A33A32', '#B87521', '#6B7C93', '#8A6E4B', '#2F6F73',
 ]
 
 export function HabitFormScreen() {
@@ -36,6 +40,8 @@ export function HabitFormScreen() {
   const habits = useHabits()
   const { createHabit, updateHabit, deleteHabit } = useHabitActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
+  const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
+  const language = useSettingsStore((s) => s.language)
 
   const params = useLocalSearchParams<{ id?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
@@ -47,7 +53,7 @@ export function HabitFormScreen() {
 
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('✅')
-  const [color, setColor] = useState('#4CAF50')
+  const [color, setColor] = useState<string>(MODULE_COLORS.habits)
   const [cadence, setCadence] = useState<Cadence>('daily')
   const [scheduleDays, setScheduleDays] = useState<number[]>([1, 2, 3, 4, 5])
   const [target, setTarget] = useState('1')
@@ -58,6 +64,12 @@ export function HabitFormScreen() {
   const [prefilled, setPrefilled] = useState(false)
   const [smartText, setSmartText] = useState('')
   const [parsing, setParsing] = useState(false)
+  const [confirmSheet, setConfirmSheet] = useState<{
+    rawInput: string
+    fields: ConfirmField[]
+    payload: { name: string }
+  } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
 
   useEffect(() => {
     if (!editingHabit || prefilled) return
@@ -163,13 +175,57 @@ export function HabitFormScreen() {
     try {
       const parsed = await parseHabitLog(input, habits)
       if (!parsed) { Alert.alert(t.ai_error, t.parse_failed); return }
-      setName(parsed.matched_habit_name)
-      setSmartText('')
+      const isVoice = override !== undefined
+      if (isVoice || aiAutoConfirm) {
+        const fields: ConfirmField[] = [
+          { label: t.new_habit, value: parsed.matched_habit_name },
+          { label: t.date, value: format(new Date(parsed.occurred_at), 'EEE, dd MMM yyyy', { locale: getDateFnsLocale(language) }) },
+        ]
+        if (parsed.note) fields.push({ label: t.note_optional.replace(/\s*\(.+\)/, ''), value: parsed.note })
+        setConfirmSheet({ rawInput: input, fields, payload: { name: parsed.matched_habit_name } })
+      } else {
+        setName(parsed.matched_habit_name)
+        setSmartText('')
+      }
     } catch {
       Alert.alert(t.ai_error, t.parse_failed)
     } finally {
       setParsing(false)
     }
+  }
+
+  const onSheetSave = async () => {
+    if (!confirmSheet) return
+    setConfirmBusy(true)
+    const schedule_days = cadence === 'custom'
+      ? (scheduleDays.length > 0 ? scheduleDays.join(',') : WEEKDAY_VALUES.join(','))
+      : null
+    const notification_times = notificationTimes.length > 0 ? JSON.stringify(notificationTimes) : null
+    const res = await createHabit({
+      name: confirmSheet.payload.name,
+      icon,
+      color,
+      cadence,
+      target_per_period: parseInt(target, 10) || 1,
+      schedule_days,
+      notification_times,
+    })
+    setConfirmBusy(false)
+    if (res.ok) {
+      void hapticSaveSuccess()
+      notifySaved(t, useSettingsStore.getState().syncHabits)
+      setConfirmSheet(null)
+      router.back()
+    } else {
+      Alert.alert(t.could_not_save, res.error ?? '')
+    }
+  }
+
+  const onSheetEdit = () => {
+    if (!confirmSheet) return
+    setName(confirmSheet.payload.name)
+    setSmartText('')
+    setConfirmSheet(null)
   }
 
   return (
@@ -246,9 +302,9 @@ export function HabitFormScreen() {
       {/* Color */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.category_color.toUpperCase()}</Text>
       <View style={styles.colorRow}>
-        {PRESET_COLORS.map((c) => (
+        {PRESET_COLORS.map((c, index) => (
           <Pressable
-            key={c}
+            key={`${c}-${index}`}
             onPress={() => setColor(c)}
             style={[styles.colorBtn, { backgroundColor: c, borderColor: color === c ? theme.text.primary : 'transparent' }]}
           />
@@ -385,7 +441,15 @@ export function HabitFormScreen() {
         </Modal>
       )}
 
-      {/* Save */}
+    </ScrollView>
+
+    <View style={[styles.footer, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      {isEditing && (
+        <Pressable onPress={onDelete} style={styles.deleteBtn}>
+          <Feather name="trash-2" size={16} color={theme.semantic.danger} />
+          <Text style={[styles.deleteBtnText, { color: theme.semantic.danger }]}>{t.delete_habit}</Text>
+        </Pressable>
+      )}
       <Pressable
         onPress={onSave}
         disabled={submitting}
@@ -395,20 +459,27 @@ export function HabitFormScreen() {
           ? <ActivityIndicator color="#fff" />
           : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
       </Pressable>
+    </View>
 
-      {isEditing && (
-        <Pressable onPress={onDelete} style={styles.deleteBtn}>
-          <Text style={[styles.deleteBtnText, { color: theme.text.danger }]}>{t.delete_habit}</Text>
-        </Pressable>
-      )}
-    </ScrollView>
+    {confirmSheet && (
+      <ConfirmEntrySheet
+        visible={!!confirmSheet}
+        rawInput={confirmSheet.rawInput}
+        fields={confirmSheet.fields}
+        onSave={onSheetSave}
+        onEdit={onSheetEdit}
+        onCancel={() => setConfirmSheet(null)}
+        busy={confirmBusy}
+      />
+    )}
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  body: { padding: spacing[4], gap: spacing[3], paddingBottom: spacing[8] },
-  card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
+  body: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
+  footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth, gap: spacing[2] },
+  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   cardIcon: {
     width: 30,
@@ -417,7 +488,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
+  cardTitle: { fontSize: 15, fontWeight: '700' },
   smartInputWrap: {
     minHeight: 88,
     borderRadius: radius.md,
@@ -441,7 +512,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 12, fontWeight: '600' },
   input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   iconBtn: { width: 44, height: 44, borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
@@ -451,14 +522,14 @@ const styles = StyleSheet.create({
   cadenceBtn: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
   weekdayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   weekdayBtn: { minWidth: 48, alignItems: 'center', borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
-  weekdayText: { fontSize: 12, fontWeight: '800' },
+  weekdayText: { fontSize: 12, fontWeight: '700' },
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   targetBtn: { width: 44, height: 44, borderRadius: radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   targetBtnText: { fontSize: 22, fontWeight: '300' },
   targetValue: { fontSize: 24, fontWeight: '700', minWidth: 40, textAlign: 'center' },
-  saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[2] },
+  saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteBtn: { alignItems: 'center', paddingVertical: spacing[3] },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], paddingVertical: spacing[2] },
   deleteBtnText: { fontSize: 15 },
   emptyNote: { fontSize: 13, fontStyle: 'italic' },
   timeChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },

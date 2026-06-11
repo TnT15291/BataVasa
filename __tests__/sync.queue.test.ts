@@ -41,8 +41,8 @@ describe('sync queue', () => {
 
     await expect(getPending(10)).resolves.toBe(rows)
     expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-      expect.stringContaining('WHERE retry_count < ? ORDER BY created_at ASC LIMIT ?'),
-      [3, 10]
+      expect.stringContaining('ORDER BY created_at ASC LIMIT ?'),
+      [10]
     )
   })
 
@@ -77,12 +77,9 @@ describe('sync queue', () => {
     }))
   })
 
-  it('purges failed items over max retry limit', async () => {
+  it('keeps failed items for later retry instead of purging silently', async () => {
     await purgeFailed()
-    expect(mockDb.runAsync).toHaveBeenCalledWith(
-      expect.stringContaining('DELETE FROM sync_queue WHERE retry_count >='),
-      [3]
-    )
+    expect(mockDb.runAsync).not.toHaveBeenCalled()
   })
 
   it('getPending uses default limit of 50 when called without arguments', async () => {
@@ -90,7 +87,7 @@ describe('sync queue', () => {
     await getPending()
     expect(mockDb.getAllAsync).toHaveBeenCalledWith(
       expect.stringContaining('LIMIT ?'),
-      [3, 50]
+      [50]
     )
   })
 })

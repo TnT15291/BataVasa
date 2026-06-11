@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
   hint: { fontSize: 13, marginBottom: spacing[3], marginLeft: spacing[1] },
   list: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   row: {

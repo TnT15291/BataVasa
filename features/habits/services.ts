@@ -355,3 +355,33 @@ export async function getCurrentPeriodLogCount(habit: Pick<Habit, 'id' | 'cadenc
     return 0
   }
 }
+
+export async function getHabit30DayScore(
+  habit: Pick<Habit, 'id' | 'cadence' | 'schedule_days' | 'target_per_period'>
+): Promise<number> {
+  try {
+    const today = new Date()
+    const toDate = getLocalDateString(today)
+    const from = new Date(today)
+    from.setDate(from.getDate() - 29)
+    const fromDate = getLocalDateString(from)
+
+    const logsByDate = await q.listLogCountsByDate(habit.id, fromDate, toDate)
+    const logMap = new Map(logsByDate.map((r) => [r.date, r.count]))
+
+    let expectedDays = 0
+    let completedDays = 0
+    const cur = new Date(from)
+    while (cur <= today) {
+      if (isHabitDueOnDate(habit, cur)) {
+        expectedDays++
+        const dateStr = getLocalDateString(cur)
+        if ((logMap.get(dateStr) ?? 0) >= habit.target_per_period) completedDays++
+      }
+      cur.setDate(cur.getDate() + 1)
+    }
+    return expectedDays > 0 ? Math.round((completedDays / expectedDays) * 100) : 0
+  } catch {
+    return 0
+  }
+}

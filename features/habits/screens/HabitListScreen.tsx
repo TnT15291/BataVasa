@@ -8,6 +8,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
 import { useHabitsStore } from '@store/habitsStore'
 import { rescheduleAllHabitNotifications } from '../services'
@@ -63,7 +64,7 @@ function HabitRow({
         </View>
         <View style={styles.rowMetaRow}>
           {dueToday && habit.streak > 0 ? (
-            <Text style={styles.flameIcon}>🔥</Text>
+            <Feather name="trending-up" size={12} color={habit.color} />
           ) : null}
           <Text style={[styles.rowMeta, { color: theme.text.muted }]}>
             {!dueToday ? t.habit_not_scheduled : done
@@ -102,7 +103,7 @@ export function HabitListScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const habits = useHabits()
-  const { toggleTodayLog, skipToday } = useHabitActions()
+  const { toggleTodayLog, skipToday, deleteHabit } = useHabitActions()
   const language = useSettingsStore((s) => s.language)
   const isFirstRender = useRef(true)
   useEffect(() => {
@@ -127,12 +128,15 @@ export function HabitListScreen() {
   const doneCount = habits.filter((h) => h.dueToday !== false && h.todayCount >= h.target_per_period).length
   const totalCount = habits.filter((h) => h.dueToday !== false).length
   const progress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0
-  const { pendingHabits, doneHabits, laterHabits, bestStreak } = useMemo(() => {
+  const { pendingHabits, doneHabits, laterHabits, bestStreak, avgStrength } = useMemo(() => {
     const pendingHabits = habits.filter((h) => h.dueToday !== false && h.todayCount < h.target_per_period)
     const doneHabits = habits.filter((h) => h.dueToday !== false && h.todayCount >= h.target_per_period)
     const laterHabits = habits.filter((h) => h.dueToday === false)
     const bestStreak = habits.reduce((max, h) => Math.max(max, h.streak), 0)
-    return { pendingHabits, doneHabits, laterHabits, bestStreak }
+    const avgStrength = habits.length > 0
+      ? Math.round(habits.reduce((s, h) => s + h.strengthScore, 0) / habits.length)
+      : 0
+    return { pendingHabits, doneHabits, laterHabits, bestStreak, avgStrength }
   }, [habits])
 
   const renderGroup = (title: string, items: typeof habits) => {
@@ -145,13 +149,31 @@ export function HabitListScreen() {
         </View>
         <View style={styles.listStack}>
           {items.map((habit) => (
-            <HabitRow
+            <ReanimatedSwipeable
               key={habit.id}
-              habit={habit}
-              onToggle={() => handleToggleWithMilestone(habit.id)}
-              onSkip={() => skipToday(habit.id)}
-              onEdit={() => router.push({ pathname: '/habit', params: { id: habit.id } })}
-            />
+              renderRightActions={(_p, _d, swipeable) => (
+                <Pressable
+                  onPress={() => {
+                    swipeable.close()
+                    Alert.alert(t.delete, t.confirm_delete_item, [
+                      { text: t.cancel, style: 'cancel' },
+                      { text: t.delete, style: 'destructive', onPress: () => deleteHabit(habit.id) },
+                    ])
+                  }}
+                  style={[styles.swipeDelete, { backgroundColor: theme.semantic.danger }]}
+                >
+                  <Feather name="trash-2" size={20} color="#fff" />
+                </Pressable>
+              )}
+              overshootRight={false}
+            >
+              <HabitRow
+                habit={habit}
+                onToggle={() => handleToggleWithMilestone(habit.id)}
+                onSkip={() => skipToday(habit.id)}
+                onEdit={() => router.push({ pathname: '/habit', params: { id: habit.id } })}
+              />
+            </ReanimatedSwipeable>
           ))}
         </View>
       </View>
@@ -227,7 +249,29 @@ export function HabitListScreen() {
                 <Text style={[styles.statValue, { color: theme.text.primary }]}>{bestStreak}</Text>
                 <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_current_streak}</Text>
               </View>
+              <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
+                <Text style={[styles.statValue, { color: avgStrength >= 70 ? theme.semantic.success : avgStrength >= 40 ? theme.brand.primary : theme.semantic.warning }]}>
+                  {avgStrength}%
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.habit_strength_score}</Text>
+              </View>
             </View>
+          </View>
+
+          <View style={styles.analysisRow}>
+            {[
+              { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/habits-report', bg: MODULE_COLORS.habits },
+              { label: t.nav_insights, icon: 'cpu' as const, route: '/habits-insights', bg: theme.brand.primary },
+            ].map((item) => (
+              <Pressable
+                key={item.route}
+                onPress={() => router.push(item.route as any)}
+                style={({ pressed }) => [styles.analysisBtn, { backgroundColor: pressed ? item.bg + 'CC' : item.bg }]}
+              >
+                <Feather name={item.icon} size={17} color="#fff" />
+                <Text style={styles.analysisBtnText} numberOfLines={1}>{item.label}</Text>
+              </Pressable>
+            ))}
           </View>
 
           {renderGroup(t.reminder_upcoming, pendingHabits)}
@@ -235,17 +279,6 @@ export function HabitListScreen() {
           {renderGroup(t.habit_done_today, doneHabits)}
         </ScrollView>
       )}
-
-      {habits.length > 0 ? (
-        <Pressable
-          onPress={() => router.push('/habits-report')}
-          accessibilityRole="button"
-          accessibilityLabel={t.habits_report_title}
-          style={[styles.reportFab, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle, bottom: spacing[5] }]}
-        >
-          <Feather name="bar-chart-2" size={20} color={theme.text.secondary} />
-        </Pressable>
-      ) : null}
 
       <FAB
         onPress={() => router.push('/habit')}
@@ -268,28 +301,28 @@ const styles = StyleSheet.create({
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   heroText: { flex: 1, gap: spacing[1] },
-  heroKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroTitle: { fontSize: 20, lineHeight: 26, fontWeight: '800' },
+  heroKicker: { fontSize: 12, fontWeight: '500' },
+  heroTitle: { fontSize: 20, lineHeight: 26, fontWeight: '700' },
   heroSubtitle: { fontSize: 13, lineHeight: 18 },
-  progressValue: { fontSize: 17, fontWeight: '800' },
-  progressLabel: { fontSize: 10, fontWeight: '700' },
+  progressValue: { fontSize: 17, fontWeight: '700' },
+  progressLabel: { fontSize: 12, fontWeight: '500' },
   progressBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
-  statGrid: { flexDirection: 'row', gap: spacing[2] },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   statChip: {
-    flex: 1,
-    minHeight: 64,
+    width: '48%',
+    minHeight: 60,
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[3],
     justifyContent: 'center',
   },
-  statValue: { fontSize: 20, fontWeight: '800' },
-  statLabel: { fontSize: 11, fontWeight: '700', marginTop: 2 },
+  statValue: { fontSize: 20, fontWeight: '700' },
+  statLabel: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   list: { padding: spacing[4], paddingBottom: 112, gap: spacing[3] },
   group: { gap: spacing[2] },
   groupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  groupTitle: { fontSize: 15, fontWeight: '800' },
+  groupTitle: { fontSize: 15, fontWeight: '700' },
   groupCount: { fontSize: 12, fontWeight: '700' },
   listStack: { gap: spacing[2] },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderRadius: radius.lg, borderWidth: 1.5, overflow: 'hidden' },
@@ -307,20 +340,19 @@ const styles = StyleSheet.create({
   rowNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
   rowName: { fontSize: 16, fontWeight: '500' },
   rowMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  flameIcon: { fontSize: 12, lineHeight: 16 },
   rowMeta: { fontSize: 12 },
   checkCircle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: spacing[3] },
   editBtn: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing[1],
   },
   skipBtn: { borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[2], paddingVertical: 4, marginRight: spacing[2] },
-  skipText: { fontSize: 11, fontWeight: '700' },
+  skipText: { fontSize: 12, fontWeight: '700' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6], gap: spacing[3] },
   emptyIconWrap: {
     width: 72,
@@ -332,7 +364,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyMsg: { fontSize: 14, textAlign: 'center' },
   emptySamples: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing[2], marginTop: spacing[1] },
-  emptySample: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2], fontSize: 12 },
+  emptySample: { borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2], fontSize: 12 },
   emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
   emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   fab: {
@@ -340,14 +372,22 @@ const styles = StyleSheet.create({
     width: 56, height: 56, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center',
     elevation: 6, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
-  reportFab: {
-    position: 'absolute', left: spacing[6],
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
+  analysisRow: { flexDirection: 'row', gap: spacing[2] },
+  analysisBtn: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    elevation: 3, shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+    gap: spacing[2],
+    paddingVertical: spacing[4],
+    borderRadius: radius.md,
+  },
+  analysisBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  swipeDelete: {
+    width: 72,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    marginBottom: spacing[2],
   },
 })

@@ -14,6 +14,7 @@ const mockLimit = jest.fn()
 const mockFrom = jest.fn()
 const mockAppStateAddEventListener = jest.fn()
 const mockGetPending = jest.fn()
+const mockEnqueue = jest.fn()
 const mockMarkSynced = jest.fn()
 const mockMarkFailed = jest.fn()
 const mockPurgeFailed = jest.fn()
@@ -21,6 +22,7 @@ const mockAuthGetState = jest.fn()
 const mockSettingsGetState = jest.fn()
 const mockLoadCategories = jest.fn()
 const mockLoadTransactions = jest.fn()
+const mockLoadPlanItems = jest.fn()
 const mockLoadHabits = jest.fn()
 const mockLoadJournals = jest.fn()
 const mockLoadReminders = jest.fn()
@@ -60,12 +62,14 @@ function loadSync() {
     nowIso: () => '2026-01-01T00:00:00.000Z',
   }))
   jest.doMock('@db/sync/queue', () => ({
+    enqueue: mockEnqueue,
     getPending: mockGetPending,
     markSynced: mockMarkSynced,
     markFailed: mockMarkFailed,
     purgeFailed: mockPurgeFailed,
   }))
   jest.doMock('../database/sync/queue', () => ({
+    enqueue: mockEnqueue,
     getPending: mockGetPending,
     markSynced: mockMarkSynced,
     markFailed: mockMarkFailed,
@@ -96,6 +100,7 @@ function loadSync() {
       getState: () => ({
         loadCategories: mockLoadCategories,
         loadTransactions: mockLoadTransactions,
+        loadPlanItems: mockLoadPlanItems,
       }),
     },
   }))
@@ -127,6 +132,7 @@ beforeEach(() => {
     syncReminders: true,
   })
   mockGetPending.mockResolvedValue([])
+  mockEnqueue.mockResolvedValue(undefined)
   mockPurgeFailed.mockResolvedValue(undefined)
   mockDb.getFirstAsync.mockResolvedValue({ id: 'rem-1', title: 'Call mom' })
   mockDb.getAllAsync.mockImplementation((sql: string) => {
@@ -147,6 +153,7 @@ beforeEach(() => {
   mockAppStateAddEventListener.mockReturnValue({ remove: jest.fn() })
   mockLoadCategories.mockResolvedValue(undefined)
   mockLoadTransactions.mockResolvedValue(undefined)
+  mockLoadPlanItems.mockResolvedValue(undefined)
   mockLoadHabits.mockResolvedValue(undefined)
   mockLoadJournals.mockResolvedValue(undefined)
   mockLoadReminders.mockResolvedValue(undefined)
@@ -181,6 +188,31 @@ describe('sync worker', () => {
       'UPDATE reminder SET synced_at = ? WHERE id = ?',
       ['2026-01-01T00:00:00.000Z', 'rem-1']
     )
+    expect(mockMarkSynced).toHaveBeenCalledWith('q1')
+  })
+
+  it('drops retired fund_id before pushing finance transactions', async () => {
+    const { drainQueue } = loadSync()
+    mockGetPending.mockResolvedValueOnce([{ ...queueItem, table_name: 'finance_transaction', row_id: 'tx-1' }])
+    mockDb.getFirstAsync.mockResolvedValueOnce({ id: 'tx-1', amount_cents: -5000, fund_id: 'old-fund' })
+
+    await drainQueue()
+
+    expect(mockFrom).toHaveBeenCalledWith('finance_transaction')
+    expect(mockUpsert).toHaveBeenCalledWith(
+      { id: 'tx-1', amount_cents: -5000, user_id: 'user-1' },
+      { onConflict: 'id' }
+    )
+  })
+
+  it('marks retired finance_fund queue items as synced without pushing', async () => {
+    const { drainQueue } = loadSync()
+    mockGetPending.mockResolvedValueOnce([{ ...queueItem, table_name: 'finance_fund', row_id: 'fund-1' }])
+
+    await drainQueue()
+
+    expect(mockDb.getFirstAsync).not.toHaveBeenCalledWith('SELECT * FROM finance_fund WHERE id = ?', ['fund-1'])
+    expect(mockFrom).not.toHaveBeenCalledWith('finance_fund')
     expect(mockMarkSynced).toHaveBeenCalledWith('q1')
   })
 
@@ -256,6 +288,7 @@ describe('sync worker', () => {
     )
     expect(mockLoadCategories).toHaveBeenCalled()
     expect(mockLoadTransactions).toHaveBeenCalled()
+    expect(mockLoadPlanItems).toHaveBeenCalled()
     expect(mockLoadHabits).toHaveBeenCalled()
     expect(mockLoadJournals).toHaveBeenCalled()
     expect(mockLoadReminders).toHaveBeenCalled()

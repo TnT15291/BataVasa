@@ -18,7 +18,9 @@ import {
   useFinanceBootstrap,
   useCategories,
   useTransactions,
+  usePlanItems,
   useFinanceActions,
+  usePlanItemActions,
 } from '../hooks/useFinance'
 import { TransactionRow } from '../components/TransactionRow'
 import { AmountText } from '../components/AmountText'
@@ -27,10 +29,10 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getRates, convertMinorAmount, summarizeInCurrency } from '@services/fx'
-import { formatAmount } from '@features/finance/services'
+import { calculateSafeToSpend, formatAmount } from '@features/finance/services'
 import { translateCategoryName } from '../i18n'
 import { getDateFnsLocale } from '@services/locale'
-import type { Transaction } from '../types'
+import type { PlanItem, Transaction } from '../types'
 import { SkeletonTransactionList } from '@components/SkeletonBox'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
@@ -45,6 +47,8 @@ type RecurringCandidate = {
   key: string
   title: string
   categoryName: string
+  kind: 'income' | 'expense'
+  categoryId: string | null
   amount: number
   currency: string
   count: number
@@ -70,7 +74,9 @@ export function TransactionListScreen() {
   const { t } = useTranslation()
   const txs = useTransactions()
   const cats = useCategories()
+  const planItems = usePlanItems()
   const { remove, refresh, loadMore, hasMore, loadingMore } = useFinanceActions()
+  const { createPlanItem, deletePlanItem } = usePlanItemActions()
   const [refreshing, setRefreshing] = useState(false)
   const [activePeriod, setActivePeriod] = useState<Period>('month')
   const [reviewOnly, setReviewOnly] = useState(false)
@@ -167,7 +173,16 @@ export function TransactionListScreen() {
     return periodTxs.filter((tx) => tx.needs_review === 1).length
   }, [txs, ranges, activePeriod])
 
-  const activeSummary = useMemo(() => summarizeInCurrency(filteredTxs, currency, null, currency), [filteredTxs, currency])
+  const activeSummary = useMemo(() => {
+    let income = 0
+    let expense = 0
+    for (const tx of filteredTxs) {
+      if (tx.currency !== currency) continue
+      if (tx.amount_cents > 0) income += tx.amount_cents
+      else expense += Math.abs(tx.amount_cents)
+    }
+    return { income, expense }
+  }, [filteredTxs, currency])
   const activeConverted = displayTotals[activePeriod]
   const overviewIncome = activeConverted?.income ?? activeSummary.income
   const overviewExpense = activeConverted?.expense ?? activeSummary.expense
@@ -177,6 +192,16 @@ export function TransactionListScreen() {
   const chartMax = Math.max(overviewIncome, overviewExpense, 1)
   const incomePct = Math.max(6, (overviewIncome / chartMax) * 100)
   const expensePct = Math.max(6, (overviewExpense / chartMax) * 100)
+
+  const safeToSpend = useMemo(
+    () => calculateSafeToSpend({
+      transactions: txs,
+      categories: cats,
+      planItems,
+      currency,
+    }),
+    [txs, cats, planItems, currency]
+  )
 
   const topCategory = useMemo(() => {
     const spending = new Map<string, number>()
@@ -201,11 +226,11 @@ export function TransactionListScreen() {
   const recurringCandidates = useMemo<RecurringCandidate[]>(() => {
     const groups = new Map<string, Transaction[]>()
     for (const tx of txs) {
-      if (tx.amount_cents >= 0) continue
       const merchant = (tx.merchant ?? '').trim().toLowerCase()
       if (!merchant) continue
+      const kind: RecurringCandidate['kind'] = tx.amount_cents > 0 ? 'income' : 'expense'
       const bucketAmount = Math.round(Math.abs(tx.amount_cents) / 1000)
-      const key = `${merchant}:${tx.category_id}:${tx.currency}:${bucketAmount}`
+      const key = `${kind}:${merchant}:${tx.category_id}:${tx.currency}:${bucketAmount}`
       const list = groups.get(key) ?? []
       list.push(tx)
       groups.set(key, list)
@@ -220,6 +245,8 @@ export function TransactionListScreen() {
           key: `${latest.merchant}-${latest.category_id}-${latest.currency}-${Math.abs(latest.amount_cents)}`,
           title: latest.merchant ?? category?.name ?? 'Recurring bill',
           categoryName: category?.name ?? t.category_others,
+          kind: latest.amount_cents > 0 ? 'income' as const : 'expense' as const,
+          categoryId: latest.category_id,
           amount: Math.abs(latest.amount_cents),
           currency: latest.currency,
           count: list.length,
@@ -230,6 +257,52 @@ export function TransactionListScreen() {
       .sort((a, b) => b.count - a.count || b.lastDate.getTime() - a.lastDate.getTime())
       .slice(0, 3)
   }, [txs, catById])
+
+  const activePlanItems = useMemo(
+    () => planItems.filter((item) => item.active === 1 && !item.deleted_at),
+    [planItems]
+  )
+
+  const plannedTotal = useMemo(() => {
+    let income = 0
+    let expense = 0
+    for (const item of activePlanItems) {
+      if (item.currency !== currency) continue
+      if (item.kind === 'income') income += item.amount_cents
+      else expense += item.amount_cents
+    }
+    return { income, expense }
+  }, [activePlanItems, currency])
+
+  const candidateInPlan = useCallback((candidate: RecurringCandidate) => {
+    const normalized = candidate.title.trim().toLowerCase()
+    return activePlanItems.some((item) =>
+      item.kind === candidate.kind &&
+      item.currency === candidate.currency &&
+      item.amount_cents === candidate.amount &&
+      item.name.trim().toLowerCase() === normalized
+    )
+  }, [activePlanItems])
+
+  const addCandidateToPlan = useCallback(async (candidate: RecurringCandidate) => {
+    const result = await createPlanItem({
+      name: candidate.title,
+      kind: candidate.kind,
+      amount_cents: candidate.amount,
+      currency: candidate.currency,
+      category_id: candidate.categoryId,
+      due_day: Math.min(Math.max(candidate.lastDate.getDate(), 1), 31),
+      status: 'confirmed',
+    })
+    if (!result.ok) Alert.alert(t.ai_error, result.error ?? t.no_transactions)
+  }, [createPlanItem, t])
+
+  const removePlanItem = useCallback((item: PlanItem) => {
+    Alert.alert(t.delete, item.name, [
+      { text: t.cancel, style: 'cancel' },
+      { text: t.delete, style: 'destructive', onPress: () => { void deletePlanItem(item.id) } },
+    ])
+  }, [deletePlanItem, t])
 
   const createBillReminder = (candidate: RecurringCandidate) => {
     router.push({
@@ -260,14 +333,27 @@ export function TransactionListScreen() {
       .flatMap(([key, items]) => {
         const sorted = items.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
         const headerCurrency = fxRates ? displayCurrency : currency
-        const summary = summarizeInCurrency(sorted, headerCurrency, fxRates, currency)
+        let income = 0
+        let expense = 0
+        for (const tx of sorted) {
+          const converted = tx.currency === headerCurrency
+            ? tx.amount_cents
+            : fxRates
+              ? convertMinorAmount(tx.amount_cents, tx.currency, headerCurrency, fxRates)
+              : tx.currency === currency
+                ? tx.amount_cents
+                : null
+          if (converted === null) continue
+          if (converted > 0) income += converted
+          else expense += Math.abs(converted)
+        }
         return [
           {
             type: 'header' as const,
             id: `header-${key}`,
             label: format(new Date(key), 'EEEE, dd MMM', { locale }),
-            income: summary.income,
-            expense: summary.expense,
+            income,
+            expense,
             currency: headerCurrency,
           },
           ...sorted.map((tx) => ({ type: 'tx' as const, id: tx.id, tx })),
@@ -366,6 +452,59 @@ export function TransactionListScreen() {
               })}
             </View>
 
+            <View style={[styles.safePanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+              <View style={styles.safeLine}>
+                <View style={styles.safeTitleRow}>
+                  <Feather name="shield" size={15} color={theme.brand.primary} />
+                  <Text style={[styles.safeLabel, { color: theme.text.secondary }]}>{t.safe_to_spend}</Text>
+                </View>
+                <AmountText cents={safeToSpend.safeToSpend} currency={currency} showSign={false} color={theme.brand.primary} style={styles.safeAmount} />
+              </View>
+              <View style={styles.safeBreakdown}>
+                <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                  {t.safe_income}: {formatAmount(safeToSpend.income, currency, language)}
+                </Text>
+                <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                  {t.safe_planned_income}: {formatAmount(safeToSpend.plannedIncome, currency, language)}
+                </Text>
+                <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                  {t.safe_regular_expense}: {formatAmount(safeToSpend.nonFundExpense, currency, language)}
+                </Text>
+                <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                  {t.safe_planned_expense}: {formatAmount(safeToSpend.plannedExpense, currency, language)}
+                </Text>
+              </View>
+              <Text style={[styles.safeFormula, { color: theme.text.muted }]}>{t.safe_to_spend_formula}</Text>
+            </View>
+
+            <View style={[styles.planCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+              <View style={styles.recurringHeader}>
+                <View style={styles.recurringTitleRow}>
+                  <Feather name="calendar" size={16} color={theme.brand.primary} />
+                  <Text style={[styles.recurringTitle, { color: theme.text.primary }]}>{t.monthly_plan}</Text>
+                </View>
+                <Text style={[styles.recurringMeta, { color: theme.text.muted }]}>
+                  {formatAmount(plannedTotal.income, currency, language)} / {formatAmount(plannedTotal.expense, currency, language)}
+                </Text>
+              </View>
+              {activePlanItems.length > 0 ? activePlanItems.slice(0, 4).map((item) => (
+                <Pressable key={item.id} onLongPress={() => removePlanItem(item)} style={[styles.planRow, { borderColor: theme.border.subtle }]}>
+                  <View style={styles.planIcon}>
+                    <Feather name={item.kind === 'income' ? 'arrow-down-left' : 'arrow-up-right'} size={13} color={item.kind === 'income' ? theme.finance.income : theme.finance.expense} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.recurringName, { color: theme.text.primary }]} numberOfLines={1}>{item.name}</Text>
+                    <Text style={[styles.recurringMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                      {t.plan_due_day.replace('{{day}}', String(item.due_day))}
+                    </Text>
+                  </View>
+                  <AmountText cents={item.amount_cents} currency={item.currency} showSign={false} color={item.kind === 'income' ? theme.finance.income : theme.finance.expense} style={styles.recurringAmount} />
+                </Pressable>
+              )) : (
+                <Text style={[styles.safeFormula, { color: theme.text.muted }]}>{t.monthly_plan_empty}</Text>
+              )}
+            </View>
+
             <Pressable
               onPress={() => setReviewOnly((v) => !v)}
               accessibilityRole="button"
@@ -379,7 +518,9 @@ export function TransactionListScreen() {
               <Text style={[styles.reviewFilterText, { color: reviewOnly ? theme.brand.primary : theme.text.secondary }]}>
                 {t.review_queue}
               </Text>
-              <Text style={[styles.reviewFilterCount, { color: theme.text.muted }]}>{periodReviewCount}</Text>
+              {periodReviewCount > 0 && (
+                <Text style={[styles.reviewFilterCount, { color: reviewOnly ? theme.brand.primary : theme.text.muted }]}>{periodReviewCount}</Text>
+              )}
             </Pressable>
 
             {recurringCandidates.length > 0 ? (
@@ -387,7 +528,7 @@ export function TransactionListScreen() {
                 <View style={styles.recurringHeader}>
                   <View style={styles.recurringTitleRow}>
                     <Feather name="repeat" size={16} color={theme.brand.primary} />
-                    <Text style={[styles.recurringTitle, { color: theme.text.primary }]}>{t.recurring_bills}</Text>
+                    <Text style={[styles.recurringTitle, { color: theme.text.primary }]}>{t.recurring_patterns}</Text>
                   </View>
                   <Text style={[styles.recurringMeta, { color: theme.text.muted }]}>{recurringCandidates.length}</Text>
                 </View>
@@ -399,13 +540,22 @@ export function TransactionListScreen() {
                         {t.recurring_times_next.replace('{{count}}', String(candidate.count)).replace('{{date}}', format(candidate.nextDate, 'dd/MM', { locale }))}
                       </Text>
                     </View>
-                    <AmountText cents={candidate.amount} currency={candidate.currency} showSign={false} color={theme.finance.expense} style={styles.recurringAmount} />
+                    <AmountText cents={candidate.amount} currency={candidate.currency} showSign={false} color={candidate.kind === 'income' ? theme.finance.income : theme.finance.expense} style={styles.recurringAmount} />
                     <Pressable
-                      onPress={() => createBillReminder(candidate)}
-                      style={[styles.recurringBtn, { borderColor: theme.border.strong }]}
+                      onPress={() => addCandidateToPlan(candidate)}
+                      disabled={candidateInPlan(candidate)}
+                      style={[styles.recurringBtn, { borderColor: theme.border.strong, opacity: candidateInPlan(candidate) ? 0.45 : 1 }]}
                     >
-                      <Feather name="bell" size={14} color={theme.brand.primary} />
+                      <Feather name={candidateInPlan(candidate) ? 'check' : 'plus'} size={14} color={theme.brand.primary} />
                     </Pressable>
+                    {candidate.kind === 'expense' ? (
+                      <Pressable
+                        onPress={() => createBillReminder(candidate)}
+                        style={[styles.recurringBtn, { borderColor: theme.border.strong }]}
+                      >
+                        <Feather name="bell" size={14} color={theme.brand.primary} />
+                      </Pressable>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -413,19 +563,16 @@ export function TransactionListScreen() {
 
             <View style={styles.analysisRow}>
               {[
-                { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/reports' },
-                { label: t.nav_insights, icon: 'activity' as const, route: '/insights' },
+                { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/reports', bg: theme.brand.primary },
+                { label: t.nav_insights, icon: 'cpu' as const, route: '/insights', bg: theme.brand.accent },
               ].map((item) => (
                 <Pressable
                   key={item.route}
                   onPress={() => router.push(item.route as any)}
-                  style={({ pressed }) => [
-                    styles.analysisBtn,
-                    { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
-                  ]}
+                  style={({ pressed }) => [styles.analysisBtn, { backgroundColor: pressed ? item.bg + 'CC' : item.bg }]}
                 >
-                  <Feather name={item.icon} size={17} color={theme.brand.primary} />
-                  <Text style={[styles.analysisText, { color: theme.text.secondary }]} numberOfLines={1}>{item.label}</Text>
+                  <Feather name={item.icon} size={17} color="#fff" />
+                  <Text style={styles.analysisBtnText} numberOfLines={1}>{item.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -536,28 +683,41 @@ const styles = StyleSheet.create({
   headerContent: { gap: spacing[3], marginBottom: spacing[3] },
   overviewCard: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
   overviewTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3] },
-  eyebrow: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing[1] },
-  netAmount: { fontSize: 26, fontWeight: '800' },
+  eyebrow: { fontSize: 12, fontWeight: '500', marginBottom: spacing[1] },
+  netAmount: { fontSize: 26, fontWeight: '700' },
   converted: { fontSize: 12, fontWeight: '600' },
   metricRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   metric: { flex: 1, gap: spacing[1] },
   metricDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
-  metricLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  metricLabel: { fontSize: 12, fontWeight: '500' },
   metricValue: { fontSize: 16, fontWeight: '700' },
   chartRows: { gap: spacing[2] },
   chartRow: { gap: spacing[1] },
   chartTrack: { height: 8, borderRadius: radius.full, overflow: 'hidden' },
   chartBar: { height: '100%', borderRadius: radius.full },
   insightLine: { fontSize: 13 },
+  safePanel: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[3],
+    gap: spacing[1],
+  },
+  safeLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
+  safeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], minWidth: 0 },
+  safeLabel: { fontSize: 13, fontWeight: '700' },
+  safeAmount: { fontSize: 17, fontWeight: '700' },
+  safeMeta: { fontSize: 12 },
+  safeBreakdown: { gap: 2, paddingTop: spacing[1] },
+  safeFormula: { fontSize: 11, lineHeight: 15, paddingTop: spacing[1] },
   segmented: {
     flexDirection: 'row',
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: 3,
     gap: 3,
   },
@@ -570,20 +730,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[2],
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     paddingHorizontal: spacing[3],
   },
-  reviewFilterText: { flex: 1, fontSize: 13, fontWeight: '800' },
-  reviewFilterCount: { fontSize: 12, fontWeight: '800' },
+  reviewFilterText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  reviewFilterCount: { fontSize: 12, fontWeight: '600' },
   recurringCard: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
+    padding: spacing[3],
+    gap: spacing[2],
+  },
+  planCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
     padding: spacing[3],
     gap: spacing[2],
   },
   recurringHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   recurringTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  recurringTitle: { fontSize: 14, fontWeight: '800' },
+  recurringTitle: { fontSize: 14, fontWeight: '700' },
   recurringRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -591,14 +757,29 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: spacing[2],
   },
-  recurringName: { fontSize: 13, fontWeight: '800' },
-  recurringMeta: { fontSize: 11 },
-  recurringAmount: { fontSize: 12, fontWeight: '800' },
+  recurringName: { fontSize: 13, fontWeight: '600' },
+  recurringMeta: { fontSize: 12 },
+  recurringAmount: { fontSize: 12, fontWeight: '700' },
   recurringBtn: {
     width: 40,
     height: 40,
     borderRadius: radius.full,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing[2],
+  },
+  planIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -608,11 +789,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
-    paddingVertical: spacing[3],
+    paddingVertical: spacing[4],
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
   },
-  analysisText: { fontSize: 11, fontWeight: '700' },
+  analysisBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -620,7 +800,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
     paddingBottom: spacing[2],
   },
-  dayTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dayTitle: { fontSize: 12, fontWeight: '600' },
   dayTotals: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   dayAmount: { fontSize: 12, fontWeight: '700' },
   empty: { alignItems: 'center', marginTop: spacing[12], gap: spacing[2] },
@@ -641,7 +821,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[6],
     paddingVertical: spacing[2],
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
   swipeDelete: {
     width: 72,

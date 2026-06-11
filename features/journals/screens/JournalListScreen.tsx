@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   View, Text, Pressable, ScrollView, StyleSheet, Modal,
-  ActivityIndicator, Alert, TextInput,
+  Alert, TextInput,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -15,13 +15,19 @@ import { getDateFnsLocale } from '@services/locale'
 import { getProviderKey } from '@services/ai/openai'
 import { parseJournalEntry, type ParsedJournal } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
-import { generateJournalReflection, type JournalReflection } from '@services/ai/journalInsight'
 import type { Journal } from '../types'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
 
 const MOOD_COLORS = ['', '#D96C6C', '#E0A84B', '#8A8A8A', '#6FAE75', '#4FA3D8'] as const
+
+const ACTIVITY_TAGS = [
+  'work', 'family', 'health', 'money', 'sleep',
+  'exercise', 'stress', 'food', 'travel', 'social',
+] as const
+type ActivityTag = typeof ACTIVITY_TAGS[number]
 
 function JournalRow({ journal, onPress }: { journal: Journal; onPress: () => void }) {
   const theme = useTheme()
@@ -70,76 +76,6 @@ function JournalRow({ journal, onPress }: { journal: Journal; onPress: () => voi
   )
 }
 
-function ReflectSheet({
-  visible,
-  reflection,
-  onClose,
-  theme,
-  t,
-}: {
-  visible: boolean
-  reflection: JournalReflection | null
-  onClose: () => void
-  theme: ReturnType<typeof useTheme>
-  t: ReturnType<typeof useTranslation>['t']
-}) {
-  if (!reflection) return null
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: theme.bg.elevated }]}>
-        <View style={[styles.sheetHandle, { backgroundColor: theme.border.subtle }]} />
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
-          <View style={styles.sheetTitleRow}>
-            <Feather name="star" size={20} color={theme.brand.primary} />
-            <Text style={[styles.sheetTitle, { color: theme.brand.primary }]}>{t.journal_ai_reflect}</Text>
-          </View>
-
-          <View style={[styles.sheetCard, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.reflect_mood}</Text>
-            <Text style={[styles.sectionBody, { color: theme.text.primary }]}>{reflection.mood_summary}</Text>
-          </View>
-
-          {reflection.themes.length > 0 && (
-            <View style={[styles.sheetCard, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.reflect_themes}</Text>
-              {reflection.themes.map((themeItem, i) => (
-                <Text key={i} style={[styles.bulletItem, { color: theme.text.primary }]}>
-                  {`- ${themeItem}`}
-                </Text>
-              ))}
-            </View>
-          )}
-
-          {reflection.recurring_questions.length > 0 && (
-            <View style={[styles.sheetCard, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.reflect_questions}</Text>
-              {reflection.recurring_questions.map((q, i) => (
-                <Text key={i} style={[styles.bulletItem, { color: theme.text.primary }]}>
-                  {`- ${q}`}
-                </Text>
-              ))}
-            </View>
-          )}
-
-          <View style={[styles.sheetPrompt, { backgroundColor: theme.brand.primary + '18', borderColor: theme.brand.primary + '40' }]}>
-            <Text style={[styles.sectionLabel, { color: theme.brand.primary }]}>{t.reflect_prompt}</Text>
-            <Text style={[styles.promptText, { color: theme.text.primary }]}>{reflection.gentle_prompt}</Text>
-          </View>
-        </ScrollView>
-
-        <Pressable
-          onPress={onClose}
-          style={[styles.closeBtn, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}
-        >
-          <Text style={[styles.closeBtnText, { color: theme.text.primary }]}>{t.cancel}</Text>
-        </Pressable>
-      </View>
-    </Modal>
-  )
-}
-
 type DateGroup = { dateLabel: string; entries: Journal[] }
 
 export function JournalListScreen() {
@@ -150,16 +86,14 @@ export function JournalListScreen() {
   const language = useSettingsStore((s) => s.language)
   const journals = useJournals()
   const locale = getDateFnsLocale(language)
-  const { createJournal } = useJournalActions()
+  const { createJournal, deleteJournal } = useJournalActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
 
-  const [reflecting, setReflecting] = useState(false)
-  const [reflection, setReflection] = useState<JournalReflection | null>(null)
-  const [sheetVisible, setSheetVisible] = useState(false)
   const [nlText, setNlText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [parsedJournal, setParsedJournal] = useState<ParsedJournal | null>(null)
   const [originalNlText, setOriginalNlText] = useState('')
+  const [activeTag, setActiveTag] = useState<ActivityTag | null>(null)
 
   const handleNlParse = async (override?: string) => {
     const input = (override ?? nlText).trim()
@@ -196,9 +130,29 @@ export function JournalListScreen() {
     router.push({ pathname: '/journal', params: p ? { prefill: JSON.stringify(p) } : {} })
   }
 
+  const tagLabels: Record<ActivityTag, string> = {
+    work: t.tag_work,
+    family: t.tag_family,
+    health: t.tag_health,
+    money: t.tag_money,
+    sleep: t.tag_sleep,
+    exercise: t.tag_exercise,
+    stress: t.tag_stress,
+    food: t.tag_food,
+    travel: t.tag_travel,
+    social: t.tag_social,
+  }
+
+  const filteredJournals = useMemo(
+    () => activeTag
+      ? journals.filter((j) => j.tags?.split(',').includes(activeTag))
+      : journals,
+    [journals, activeTag]
+  )
+
   const groups = useMemo<DateGroup[]>(() => {
     const map = new Map<string, Journal[]>()
-    for (const j of journals) {
+    for (const j of filteredJournals) {
       const key = format(new Date(j.occurred_at), 'yyyy-MM-dd')
       const arr = map.get(key) ?? []
       arr.push(j)
@@ -212,7 +166,7 @@ export function JournalListScreen() {
           (a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()
         ),
       }))
-  }, [journals, locale])
+  }, [filteredJournals, locale])
 
   const journalStats = useMemo(() => {
     const now = new Date()
@@ -234,25 +188,6 @@ export function JournalListScreen() {
     const importantCount = journals.filter((j) => (j.is_important ?? 0) === 1).length
     return { todayCount, weekCount, avgMood, latest, importantCount }
   }, [journals])
-
-  async function handleReflect() {
-    if (journals.length < 3) {
-      Alert.alert(t.journal_ai_reflect, t.reflect_need_more)
-      return
-    }
-    setReflecting(true)
-    try {
-      const result = await generateJournalReflection(journals)
-      if (result) {
-        setReflection(result)
-        setSheetVisible(true)
-      } else {
-        Alert.alert(t.ai_error, t.retry)
-      }
-    } finally {
-      setReflecting(false)
-    }
-  }
 
   if (journals.length === 0) {
     return (
@@ -315,41 +250,73 @@ export function JournalListScreen() {
           </View>
         </View>
 
-        <View style={styles.actionRow}>
-          <Pressable
-            onPress={handleReflect}
-            disabled={reflecting}
-            style={[styles.actionBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.brand.primary }]}
-          >
-            {reflecting ? (
-              <ActivityIndicator size="small" color={theme.brand.primary} />
-            ) : (
-              <Feather name="star" size={16} color={theme.brand.primary} />
-            )}
-            <Text style={[styles.actionText, { color: theme.brand.primary }]} numberOfLines={1}>
-              {t.journal_ai_reflect}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/journals-report')}
-            style={[styles.actionBtn, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
-          >
-            <Feather name="bar-chart-2" size={16} color={theme.text.secondary} />
-            <Text style={[styles.actionText, { color: theme.text.secondary }]} numberOfLines={1}>
-              {t.journals_report_title}
-            </Text>
-          </Pressable>
+        <View style={styles.analysisRow}>
+          {[
+            { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/journals-report', bg: MODULE_COLORS.journal },
+            { label: t.nav_insights, icon: 'cpu' as const, route: '/journals-insights', bg: theme.brand.primary },
+          ].map((item) => (
+            <Pressable
+              key={item.route}
+              onPress={() => router.push(item.route as any)}
+              style={({ pressed }) => [styles.analysisBtn, { backgroundColor: pressed ? item.bg + 'CC' : item.bg }]}
+            >
+              <Feather name={item.icon} size={17} color="#fff" />
+              <Text style={styles.analysisBtnText} numberOfLines={1}>{item.label}</Text>
+            </Pressable>
+          ))}
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tagScroll}
+        >
+          {ACTIVITY_TAGS.map((tag) => {
+            const active = activeTag === tag
+            return (
+              <Pressable
+                key={tag}
+                onPress={() => setActiveTag(active ? null : tag)}
+                style={[styles.tagChip, {
+                  backgroundColor: active ? theme.brand.primary : theme.bg.elevated,
+                  borderColor: active ? theme.brand.primary : theme.border.subtle,
+                }]}
+              >
+                <Text style={[styles.tagChipText, { color: active ? '#fff' : theme.text.secondary }]}>
+                  {tagLabels[tag]}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </ScrollView>
 
         {groups.map((group) => (
           <View key={group.dateLabel} style={styles.group}>
             <Text style={[styles.dateLabel, { color: theme.text.muted }]}>{group.dateLabel}</Text>
             {group.entries.map((j) => (
-              <JournalRow
+              <ReanimatedSwipeable
                 key={j.id}
-                journal={j}
-                onPress={() => router.push({ pathname: '/journal', params: { id: j.id } })}
-              />
+                renderRightActions={(_p, _d, swipeable) => (
+                  <Pressable
+                    onPress={() => {
+                      swipeable.close()
+                      Alert.alert(t.delete, t.confirm_delete_item, [
+                        { text: t.cancel, style: 'cancel' },
+                        { text: t.delete, style: 'destructive', onPress: () => deleteJournal(j.id) },
+                      ])
+                    }}
+                    style={[styles.swipeDelete, { backgroundColor: theme.semantic.danger }]}
+                  >
+                    <Feather name="trash-2" size={20} color="#fff" />
+                  </Pressable>
+                )}
+                overshootRight={false}
+              >
+                <JournalRow
+                  journal={j}
+                  onPress={() => router.push({ pathname: '/journal', params: { id: j.id } })}
+                />
+              </ReanimatedSwipeable>
             ))}
           </View>
         ))}
@@ -362,14 +329,6 @@ export function JournalListScreen() {
       >
         <Feather name="plus" size={28} color="#fff" />
       </FAB>
-
-      <ReflectSheet
-        visible={sheetVisible}
-        reflection={reflection}
-        onClose={() => setSheetVisible(false)}
-        theme={theme}
-        t={t}
-      />
 
       <Modal visible={!!parsedJournal} transparent animationType="slide" onRequestClose={() => setParsedJournal(null)}>
         <Pressable style={styles.backdrop} onPress={() => setParsedJournal(null)} />
@@ -413,6 +372,14 @@ export function JournalListScreen() {
 
 const styles = StyleSheet.create({
   list: { padding: spacing[4], paddingBottom: 120, gap: spacing[3] },
+  tagScroll: { paddingHorizontal: 0, gap: spacing[2], flexDirection: 'row' },
+  tagChip: {
+    borderWidth: 1,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  tagChipText: { fontSize: 12, fontWeight: '600' },
   hero: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -421,8 +388,8 @@ const styles = StyleSheet.create({
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   heroText: { flex: 1, gap: spacing[1] },
-  heroKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroTitle: { fontSize: 19, lineHeight: 25, fontWeight: '800' },
+  heroKicker: { fontSize: 12, fontWeight: '500' },
+  heroTitle: { fontSize: 19, lineHeight: 25, fontWeight: '700' },
   heroSubtitle: { fontSize: 13, lineHeight: 18 },
   heroIcon: {
     width: 56,
@@ -436,30 +403,28 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 64,
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[3],
     justifyContent: 'center',
   },
-  statValue: { fontSize: 20, fontWeight: '800' },
-  statLabel: { fontSize: 11, fontWeight: '700', marginTop: 2 },
-  actionRow: { flexDirection: 'row', gap: spacing[2] },
-  actionBtn: {
+  statValue: { fontSize: 20, fontWeight: '700' },
+  statLabel: { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  analysisRow: { flexDirection: 'row', gap: spacing[2] },
+  analysisBtn: {
     flex: 1,
-    minHeight: 44,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[2],
-    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[4],
+    borderRadius: radius.md,
   },
-  actionText: { fontSize: 12, fontWeight: '800' },
+  analysisBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
   group: { gap: spacing[2] },
-  dateLabel: { fontSize: 15, fontWeight: '800', marginBottom: 2 },
+  dateLabel: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg, borderWidth: 1,
     padding: spacing[3],
     overflow: 'hidden',
   },
@@ -475,7 +440,7 @@ const styles = StyleSheet.create({
   emptyIconWrap: { width: 72, height: 72, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyMsg: { fontSize: 14, textAlign: 'center' },
-  emptyPrompt: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[3], fontSize: 14, marginTop: spacing[1] },
+  emptyPrompt: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[3], fontSize: 14, marginTop: spacing[1] },
   emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
   emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   fab: {
@@ -494,24 +459,6 @@ const styles = StyleSheet.create({
   sheetContent: { paddingHorizontal: spacing[5], paddingBottom: spacing[4], gap: spacing[4] },
   sheetTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], marginBottom: spacing[2] },
   sheetTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: spacing[2] },
-  sheetCard: {
-    borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing[4], gap: spacing[2],
-  },
-  sheetPrompt: {
-    borderRadius: radius.lg, borderWidth: 1,
-    padding: spacing[4], gap: spacing[2],
-  },
-  sectionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
-  sectionBody: { fontSize: 15, lineHeight: 22 },
-  bulletItem: { fontSize: 14, lineHeight: 21 },
-  promptText: { fontSize: 15, lineHeight: 22, fontStyle: 'italic' },
-  closeBtn: {
-    marginHorizontal: spacing[5], marginTop: spacing[2],
-    borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: spacing[3], alignItems: 'center',
-  },
-  closeBtnText: { fontSize: 15, fontWeight: '600' },
   nlInput: {
     minHeight: 42,
     fontSize: 14,
@@ -524,10 +471,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  infoRow: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], gap: spacing[1] },
-  infoLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  infoRow: { borderRadius: radius.md, borderWidth: 1, padding: spacing[3], gap: spacing[1] },
+  infoLabel: { fontSize: 12, fontWeight: '600' },
   infoValue: { fontSize: 15 },
   sheetActions: { flexDirection: 'row', gap: spacing[3], marginTop: spacing[2] },
   sheetBtn: { flex: 1, paddingVertical: spacing[3], borderRadius: radius.md, alignItems: 'center', borderWidth: 1 },
   sheetBtnText: { fontSize: 15, fontWeight: '600' },
+  swipeDelete: {
+    width: 72,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    marginBottom: spacing[2],
+  },
 })

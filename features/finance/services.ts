@@ -11,13 +11,18 @@ import {
   UpdateTransactionInputSchema,
   CreateCategoryInputSchema,
   UpdateCategoryInputSchema,
+  CreatePlanItemInputSchema,
+  UpdatePlanItemInputSchema,
   type CreateTransactionInput,
   type UpdateTransactionInput,
   type CreateCategoryInput,
   type UpdateCategoryInput,
+  type CreatePlanItemInput,
+  type UpdatePlanItemInput,
   type Transaction,
   type TransactionRule,
   type Category,
+  type PlanItem,
 } from './types'
 
 const MODULE = 'finance.service'
@@ -206,18 +211,156 @@ export async function listCategories(): Promise<Result<Category[], AppError>> {
   }
 }
 
+export function calculateSafeToSpend(input: {
+  transactions: Transaction[]
+  categories: Category[]
+  planItems?: PlanItem[]
+  currency: string
+  now?: Date
+}): {
+  income: number
+  plannedIncome: number
+  nonFundExpense: number
+  plannedExpense: number
+  safeToSpend: number
+} {
+  const now = input.now ?? new Date()
+  const month = now.getMonth()
+  const year = now.getFullYear()
+  const today = now.getDate()
+  let income = 0
+  let nonFundExpense = 0
+  let plannedIncome = 0
+  let plannedExpense = 0
+
+  for (const tx of input.transactions) {
+    if (tx.currency !== input.currency) continue
+    const d = new Date(tx.occurred_at)
+    if (d.getMonth() !== month || d.getFullYear() !== year) continue
+    if (tx.amount_cents > 0) {
+      income += tx.amount_cents
+      continue
+    }
+    const abs = Math.abs(tx.amount_cents)
+    nonFundExpense += abs
+  }
+
+  for (const item of input.planItems ?? []) {
+    if (item.currency !== input.currency) continue
+    if (item.active !== 1 || item.deleted_at) continue
+    if (item.due_day < today) continue
+    if (item.kind === 'income') plannedIncome += item.amount_cents
+    else plannedExpense += item.amount_cents
+  }
+
+  return {
+    income,
+    plannedIncome,
+    nonFundExpense,
+    plannedExpense,
+    safeToSpend: Math.max(0, income + plannedIncome - nonFundExpense - plannedExpense),
+  }
+}
+
 export async function wipeAllData(): Promise<Result<{ deleted: number }, AppError>> {
   try {
-    const { transactions, categories, rules } = await q.wipeFinanceData(getCurrentUserId())
-    const total = transactions + categories + rules
+    const { transactions, categories, rules, planItems } = await q.wipeFinanceData(getCurrentUserId())
+    const total = transactions + categories + rules + planItems
     void enqueue('finance_transaction', 'ALL', 'wipe')
     void enqueue('finance_rule', 'ALL', 'wipe')
+    void enqueue('finance_plan_item', 'ALL', 'wipe')
     void enqueue('finance_category', 'ALL', 'wipe')
     logger.info(MODULE, 'wipeAllData succeeded', { count: total })
     return ok({ deleted: total })
   } catch (e) {
     logger.error(MODULE, 'wipeAllData failed', { error: String(e) })
     return appErr('DB_ERROR', 'Failed to wipe finance data', e)
+  }
+}
+
+export async function listPlanItems(): Promise<Result<PlanItem[], AppError>> {
+  try {
+    const rows = await q.listPlanItems(getCurrentUserId())
+    return ok(rows)
+  } catch (e) {
+    logger.error(MODULE, 'listPlanItems failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to load finance plan', e)
+  }
+}
+
+export async function createPlanItem(input: CreatePlanItemInput): Promise<Result<PlanItem, AppError>> {
+  const parsed = CreatePlanItemInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return appErr('VALIDATION_FAILED', parsed.error.issues[0]?.message ?? 'Invalid input', parsed.error)
+  }
+  const data = parsed.data
+  try {
+    const now = nowIso()
+    const item: PlanItem = {
+      id: uuid(),
+      user_id: getCurrentUserId(),
+      name: data.name.trim(),
+      kind: data.kind,
+      amount_cents: data.amount_cents,
+      currency: data.currency,
+      category_id: data.category_id ?? null,
+      due_day: data.due_day,
+      status: data.status,
+      active: data.active ?? 1,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      synced_at: null,
+    }
+    await q.upsertPlanItem(item)
+    void enqueue('finance_plan_item', item.id, 'upsert')
+    logger.info(MODULE, 'plan item created', { id: item.id, kind: item.kind })
+    return ok(item)
+  } catch (e) {
+    logger.error(MODULE, 'createPlanItem failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to create finance plan item', e)
+  }
+}
+
+export async function updatePlanItem(input: UpdatePlanItemInput): Promise<Result<PlanItem, AppError>> {
+  const parsed = UpdatePlanItemInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return appErr('VALIDATION_FAILED', parsed.error.issues[0]?.message ?? 'Invalid input', parsed.error)
+  }
+  const data = parsed.data
+  try {
+    const existing = await q.getPlanItem(data.id, getCurrentUserId())
+    if (!existing) return appErr('NOT_FOUND', 'Finance plan item not found')
+    const patch: Partial<PlanItem> = { updated_at: nowIso() }
+    if (data.name !== undefined) patch.name = data.name.trim()
+    if (data.kind !== undefined) patch.kind = data.kind
+    if (data.amount_cents !== undefined) patch.amount_cents = data.amount_cents
+    if (data.currency !== undefined) patch.currency = data.currency
+    if ('category_id' in data) patch.category_id = data.category_id ?? null
+    if (data.due_day !== undefined) patch.due_day = data.due_day
+    if (data.status !== undefined) patch.status = data.status
+    if (data.active !== undefined) patch.active = data.active
+    await q.updatePlanItem(data.id, patch)
+    void enqueue('finance_plan_item', data.id, 'upsert')
+    const fresh = await q.getPlanItem(data.id, getCurrentUserId())
+    if (!fresh) return appErr('INTERNAL', 'Updated row vanished')
+    return ok(fresh)
+  } catch (e) {
+    logger.error(MODULE, 'updatePlanItem failed', { id: data.id, error: String(e) })
+    return appErr('DB_ERROR', 'Failed to update finance plan item', e)
+  }
+}
+
+export async function deletePlanItem(id: string): Promise<Result<void, AppError>> {
+  try {
+    const existing = await q.getPlanItem(id, getCurrentUserId())
+    if (!existing) return appErr('NOT_FOUND', 'Finance plan item not found')
+    await q.softDeletePlanItem(id, nowIso())
+    void enqueue('finance_plan_item', id, 'upsert')
+    return ok(undefined)
+  } catch (e) {
+    logger.error(MODULE, 'deletePlanItem failed', { id, error: String(e) })
+    return appErr('DB_ERROR', 'Failed to delete finance plan item', e)
   }
 }
 
@@ -303,12 +446,13 @@ export async function deleteCategory(id: string): Promise<Result<void, AppError>
 
 export async function exportAllData(): Promise<Result<string, AppError>> {
   try {
-    const { transactions, categories, rules } = await q.exportFinanceData(getCurrentUserId())
+    const { transactions, categories, rules, planItems } = await q.exportFinanceData(getCurrentUserId())
     const payload = {
       exported_at: new Date().toISOString(),
       version: 1,
       categories,
       rules,
+      planItems,
       transactions,
     }
     return ok(JSON.stringify(payload, null, 2))

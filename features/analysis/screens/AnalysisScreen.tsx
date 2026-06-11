@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { subDays, startOfMonth, subMonths, parseISO } from 'date-fns'
-import { useTheme, type Theme } from '@design/useTheme'
+import { useTheme, getCardStyle, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
@@ -11,7 +12,7 @@ import { generateCrossModuleInsights } from '@services/ai/crossModuleInsight'
 import { useFinanceBootstrap, useTransactions, useCategories } from '@features/finance/hooks/useFinance'
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
 import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJournals'
-import { formatAmount } from '@features/finance/services'
+import { calculateSafeToSpend, formatAmount } from '@features/finance/services'
 import { translateCategoryName } from '@features/finance/i18n'
 import { convertMinorAmount, getRates } from '@services/fx'
 import { InsightText } from '@/components/InsightText'
@@ -23,6 +24,7 @@ export function AnalysisScreen() {
   useJournalsBootstrap()
 
   const theme = useTheme()
+  const cardStyle = getCardStyle(theme)
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { t } = useTranslation()
@@ -119,9 +121,15 @@ export function AnalysisScreen() {
     const avgMood = moodEntries.length > 0
       ? moodEntries.reduce((s, j) => s + (j.mood ?? 0), 0) / moodEntries.length
       : null
+    const safeToSpend = calculateSafeToSpend({
+      transactions,
+      categories,
+      currency,
+      now: today,
+    })
 
-    return { totalExpense, topCat, bestStreak, journalCount: last30Journals.length, avgMood }
-  }, [transactions, categories, habits, journals, amountInReportCurrency])
+    return { totalExpense, topCat, bestStreak, journalCount: last30Journals.length, avgMood, safeToSpend: safeToSpend.safeToSpend }
+  }, [transactions, categories, habits, journals, currency, amountInReportCurrency])
 
   const comparison = useMemo(() => {
     // Compare like-for-like: month-to-date vs the SAME elapsed window last month.
@@ -168,7 +176,7 @@ export function AnalysisScreen() {
       hasFinance: thisExp > 0 || lastExp > 0,
       hasMood: thisAvgMood !== null || lastAvgMood !== null,
     }
-  }, [transactions, journals, amountInReportCurrency])
+  }, [transactions, journals, categories, amountInReportCurrency])
 
   const hasData = moduleCount > 0
   const hasComparison = comparison.hasFinance || comparison.hasMood
@@ -185,7 +193,7 @@ export function AnalysisScreen() {
 
         {/* Highlights — last 30 days summary */}
         {hasData && (
-          <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
             <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.analysis_highlights}</Text>
             <View style={styles.highlightGrid}>
               {transactions.length > 0 && (
@@ -203,6 +211,14 @@ export function AnalysisScreen() {
                     theme={theme}
                   />
                 </>
+              )}
+              {transactions.length > 0 && (
+                <HighlightItem
+                  icon="shield"
+                  label={t.safe_to_spend}
+                  value={formatAmount(highlights.safeToSpend, currency, language)}
+                  theme={theme}
+                />
               )}
               {habits.length > 0 && (
                 <HighlightItem
@@ -230,7 +246,7 @@ export function AnalysisScreen() {
 
         {/* Comparison — this month vs last month */}
         {hasComparison && (
-          <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
             <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.analysis_vs_last_month}</Text>
             {comparison.hasFinance && (
               <CompRow
@@ -255,7 +271,7 @@ export function AnalysisScreen() {
 
         {/* AI Patterns */}
         {result ? (
-          <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardHeaderIcon}>✨</Text>
               <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.analysis_patterns}</Text>
@@ -317,9 +333,14 @@ function Chip({ label, active, theme }: { label: string; active: boolean; theme:
 }
 
 function HighlightItem({ icon, label, value, theme }: { icon: string; label: string; value: string; theme: Theme }) {
+  const featherIcon = icon === 'shield'
   return (
     <View style={styles.highlightItem}>
-      <Text style={styles.highlightIcon}>{icon}</Text>
+      {featherIcon ? (
+        <Feather name={icon as any} size={18} color={theme.brand.primary} />
+      ) : (
+        <Text style={styles.highlightIcon}>{icon}</Text>
+      )}
       <Text style={[styles.highlightLabel, { color: theme.text.muted }]} numberOfLines={1}>{label}</Text>
       <Text style={[styles.highlightValue, { color: theme.text.primary }]} numberOfLines={1}>{value}</Text>
     </View>
@@ -363,15 +384,15 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, fontWeight: '500' },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
-  sectionLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
+  sectionLabel: { fontSize: 12, fontWeight: '600' },
   highlightGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
   highlightItem: { flex: 1, minWidth: '40%', gap: 2 },
   highlightIcon: { fontSize: 18 },
-  highlightLabel: { fontSize: 11, marginTop: 2 },
+  highlightLabel: { fontSize: 12, marginTop: 2 },
   highlightValue: { fontSize: 14, fontWeight: '600' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   cardHeaderIcon: { fontSize: 14 },
@@ -379,7 +400,7 @@ const styles = StyleSheet.create({
   compLabel: { flex: 1, fontSize: 13 },
   compValue: { fontSize: 13, fontWeight: '600' },
   deltaBadge: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
-  deltaText: { fontSize: 11, fontWeight: '600' },
+  deltaText: { fontSize: 12, fontWeight: '600' },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: spacing[6] },
   emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
   emptyTitle: { fontSize: 16, fontWeight: '600', marginBottom: spacing[2], textAlign: 'center' },

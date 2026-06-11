@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     elevation: 6,
     shadowOpacity: 0.18,
     shadowRadius: 10,

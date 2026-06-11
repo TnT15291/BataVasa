@@ -9,6 +9,12 @@ export type CategoryKind = z.infer<typeof CategoryKindSchema>
 export const TransactionSourceSchema = z.enum(['manual', 'ocr', 'voice', 'import'])
 export type TransactionSource = z.infer<typeof TransactionSourceSchema>
 
+export const PlanItemKindSchema = z.enum(['income', 'expense'])
+export type PlanItemKind = z.infer<typeof PlanItemKindSchema>
+
+export const PlanItemStatusSchema = z.enum(['confirmed', 'expected'])
+export type PlanItemStatus = z.infer<typeof PlanItemStatusSchema>
+
 export type Category = {
   id: string
   user_id: string | null
@@ -71,6 +77,40 @@ export type TransactionRule = {
   deleted_at: string | null
   synced_at: string | null
 }
+
+export type PlanItem = {
+  id: string
+  user_id: string | null
+  name: string
+  kind: PlanItemKind
+  amount_cents: number
+  currency: string
+  category_id: string | null
+  due_day: number
+  status: PlanItemStatus
+  active: number
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+  synced_at: string | null
+}
+
+export const CreatePlanItemInputSchema = z.object({
+  name: z.string().min(1).max(120),
+  kind: PlanItemKindSchema,
+  amount_cents: z.number().int().positive(),
+  currency: z.string().min(3).max(3).default('VND'),
+  category_id: z.string().uuid().nullable().optional(),
+  due_day: z.number().int().min(1).max(31),
+  status: PlanItemStatusSchema.default('confirmed'),
+  active: z.number().int().min(0).max(1).optional(),
+})
+export type CreatePlanItemInput = z.infer<typeof CreatePlanItemInputSchema>
+
+export const UpdatePlanItemInputSchema = CreatePlanItemInputSchema.partial().extend({
+  id: z.string().uuid(),
+})
+export type UpdatePlanItemInput = z.infer<typeof UpdatePlanItemInputSchema>
 
 const TransactionInputBaseSchema = z.object({
   amount_cents: z.number().int().refine((n) => n !== 0, 'Amount cannot be zero'),

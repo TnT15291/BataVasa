@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3C8488"/>
+      <stop offset="0.52" stop-color="#2F6F73"/>
+      <stop offset="1" stop-color="#1E4A4E"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="496" r="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#BFF0E6" stop-opacity="0.20"/>
+      <stop offset="0.6" stop-color="#BFF0E6" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#BFF0E6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="amberGlow" cx="702.9" cy="321.1" r="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F3C682" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#F3C682" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hero" x1="0" y1="182" x2="0" y2="842" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E8F0EC"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="225.10000000000002" x2="0" y2="417.1" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F3C682"/>
+      <stop offset="1" stop-color="#D9A15C"/>
+    </linearGradient>
+  </defs>
+  <clipPath id="sq"><rect x="0" y="0" width="1024" height="1024" rx="229.1" ry="229.1"/></clipPath>
+  <g clip-path="url(#sq)">
+    <rect x="0" y="0" width="1024" height="1024" fill="url(#bg)"/>
+    
+  <g transform="translate(512 512) scale(1) translate(-512 -512)">
+    <circle cx="512" cy="496" r="460" fill="url(#glow)"/>
+    <path d="M 768.8 428.6 A 270 270 0 1 1 595.4 255.2" fill="none" stroke="#F7F4EE" stroke-opacity="0.42" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="321.1" cy="702.9" r="13" fill="#F7F4EE" fill-opacity="0.7"/>
+    <path d="M 512 162.2 C 530.81 442.04 574.7 491.01 825.5 512 C 574.7 532.99 530.81 581.96 512 861.8 C 493.19 581.96 449.3 532.99 198.5 512 C 449.3 491.01 493.19 442.04 512 162.2 Z" fill="url(#hero)"/>
+    <circle cx="702.9" cy="321.1" r="160" fill="url(#amberGlow)"/>
+    <path d="M 702.9 220.3 C 708.49 300.94 721.52 315.05 796.02 321.1 C 721.52 327.15 708.49 341.26 702.9 421.9 C 697.31 341.26 684.28 327.15 609.78 321.1 C 684.28 315.05 697.31 300.94 702.9 220.3 Z" fill="url(#accent)"/>
+  </g>
+  </g>
+</svg>

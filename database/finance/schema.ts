@@ -56,11 +56,32 @@ CREATE TABLE IF NOT EXISTS finance_rule (
 );
 `
 
+const CREATE_PLAN_ITEM_SQL = `
+CREATE TABLE IF NOT EXISTS finance_plan_item (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('income','expense')),
+  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+  currency TEXT NOT NULL DEFAULT 'VND',
+  category_id TEXT,
+  due_day INTEGER NOT NULL CHECK (due_day BETWEEN 1 AND 31),
+  status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed','expected')),
+  active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  synced_at TEXT,
+  FOREIGN KEY (category_id) REFERENCES finance_category(id) ON DELETE SET NULL
+);
+`
+
 const INDEXES_SQL = `
 CREATE INDEX IF NOT EXISTS idx_tx_user_occurred ON finance_transaction(user_id, occurred_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_tx_category ON finance_transaction(category_id, occurred_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_cat_user_kind ON finance_category(user_id, kind, sort_order) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_rule_merchant ON finance_rule(merchant_pattern) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_plan_item_user_due ON finance_plan_item(user_id, due_day) WHERE deleted_at IS NULL AND active = 1;
 `
 
 type SystemCategory = { name: string; icon: string; color: string; kind: 'essential' | 'discretionary' | 'income' | 'savings' }
@@ -78,14 +99,16 @@ const SYSTEM_CATEGORIES: SystemCategory[] = [
   { name: 'Salary', icon: 'briefcase', color: '#81C784', kind: 'income' },
   { name: 'Freelance', icon: 'edit', color: '#AED581', kind: 'income' },
   { name: 'Other Income', icon: 'plus-circle', color: '#C5E1A5', kind: 'income' },
-  { name: 'Emergency Fund', icon: 'shield', color: '#64B5F6', kind: 'savings' },
-  { name: 'Investments', icon: 'trending-up', color: '#4FC3F7', kind: 'savings' },
+  { name: 'Emergency Fund', icon: 'shield', color: '#64B5F6', kind: 'discretionary' },
+  { name: 'Learning Fund', icon: 'book-open', color: '#7D5A86', kind: 'discretionary' },
+  { name: 'Investments', icon: 'trending-up', color: '#4FC3F7', kind: 'discretionary' },
 ]
 
 export async function initFinanceSchema(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(CREATE_CATEGORY_SQL)
   await db.execAsync(CREATE_TRANSACTION_SQL)
   await db.execAsync(CREATE_RULE_SQL)
+  await db.execAsync(CREATE_PLAN_ITEM_SQL)
   await db.execAsync(INDEXES_SQL)
   await seedSystemCategories(db)
 }

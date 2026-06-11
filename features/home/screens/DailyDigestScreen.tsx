@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'r
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { format } from 'date-fns'
-import { useTheme } from '@design/useTheme'
+import { useTheme, getCardStyle } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation, type Translations } from '@services/i18n'
@@ -15,6 +15,7 @@ import { useDailyDigest } from '../hooks/useDailyDigest'
 import type { DailyTimelineItem, ReviewInboxItem } from '../hooks/useDailyDigest'
 import { CircularProgress } from '@components/CircularProgress'
 import { FAB } from '@components/FAB'
+import { SkeletonDailyDigest } from '@components/SkeletonBox'
 import { UniversalAddSheet } from '../components/UniversalAddSheet'
 import { OnboardingModal } from '../components/OnboardingModal'
 import { ScreenTransition } from '@components/ScreenTransition'
@@ -28,6 +29,8 @@ function greeting(t: Translations): string {
   return t.greeting_evening
 }
 
+// ─── SummaryChip ──────────────────────────────────────────────────────────────
+
 type SummaryChipProps = {
   icon: IconName
   label: string
@@ -38,19 +41,28 @@ type SummaryChipProps = {
 function SummaryChip({ icon, label, value, color }: SummaryChipProps) {
   const theme = useTheme()
   return (
-    <View style={[styles.summaryChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-      <View style={[styles.summaryIcon, { backgroundColor: color + '1F' }]}>
-        <Feather name={icon} size={15} color={color} />
+    <View
+      style={[
+        styles.summaryChip,
+        { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle },
+      ]}
+    >
+      <View style={[styles.summaryIcon, { backgroundColor: color + '18' }]}>
+        <Feather name={icon} size={14} color={color} />
       </View>
-      <Text style={[styles.summaryValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <Text style={[styles.summaryLabel, { color: theme.text.muted }]} numberOfLines={1}>
-        {label}
-      </Text>
+      <View style={styles.summaryText}>
+        <Text style={[styles.summaryValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
+          {value}
+        </Text>
+        <Text style={[styles.summaryLabel, { color: theme.text.muted }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
     </View>
   )
 }
+
+// ─── ReviewInboxRow ───────────────────────────────────────────────────────────
 
 function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () => void }) {
   const theme = useTheme()
@@ -61,12 +73,13 @@ function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () 
     habit: { icon: 'check-circle', color: MODULE_COLORS.habits },
     journal: { icon: 'star', color: MODULE_COLORS.journal },
   }
-  const severityColor = item.severity === 'high'
-    ? theme.semantic.warning
-    : item.severity === 'medium'
-      ? theme.brand.primary
-      : theme.text.muted
+  const severityMeta: Record<ReviewInboxItem['severity'], { icon: IconName; color: string }> = {
+    high:   { icon: 'alert-circle',   color: theme.semantic.warning },
+    medium: { icon: 'alert-triangle', color: theme.brand.primary },
+    low:    { icon: 'info',           color: theme.text.muted },
+  }
   const m = meta[item.kind]
+  const sv = severityMeta[item.severity]
   const moduleLabels: Record<ReviewInboxItem['kind'], string> = {
     finance: t.nav_finance,
     task: t.nav_reminders,
@@ -89,13 +102,13 @@ function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () 
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityLabel={`${title}: ${subtitle}`}
       style={({ pressed }) => [
         styles.reviewRow,
-        { backgroundColor: pressed ? theme.bg.secondary : 'transparent', borderColor: theme.border.subtle },
+        { backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary },
       ]}
     >
-      <View style={[styles.reviewIcon, { backgroundColor: m.color + '1F' }]}>
+      <View style={[styles.reviewIconWrap, { backgroundColor: m.color + '18' }]}>
         <Feather name={m.icon} size={15} color={m.color} />
       </View>
       <View style={styles.reviewBody}>
@@ -106,11 +119,13 @@ function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () 
           {subtitle}
         </Text>
       </View>
-      <View style={[styles.reviewSeverityDot, { backgroundColor: severityColor }]} />
+      <Feather name={sv.icon} size={14} color={sv.color} />
       <Feather name="chevron-right" size={16} color={theme.text.muted} />
     </Pressable>
   )
 }
+
+// ─── TimelineRow ──────────────────────────────────────────────────────────────
 
 function TimelineRow({ item, onPress }: { item: DailyTimelineItem; onPress: () => void }) {
   const theme = useTheme()
@@ -124,9 +139,11 @@ function TimelineRow({ item, onPress }: { item: DailyTimelineItem; onPress: () =
     journal: { icon: 'book-open', color: MODULE_COLORS.journal, label: t.nav_journal },
   }
   const m = meta[item.kind]
-  const amountText = item.amount !== undefined && item.currency
-    ? `${item.amount < 0 ? '- ' : '+ '}${formatAmount(item.amount, item.currency, language)}`
-    : null
+  const amountText =
+    item.amount !== undefined && item.currency
+      ? `${item.amount < 0 ? '- ' : '+ '}${formatAmount(item.amount, item.currency, language)}`
+      : null
+
   return (
     <Pressable
       onPress={onPress}
@@ -134,31 +151,39 @@ function TimelineRow({ item, onPress }: { item: DailyTimelineItem; onPress: () =
       accessibilityLabel={item.title}
       style={({ pressed }) => [
         styles.timelineRow,
-        { backgroundColor: pressed ? theme.bg.secondary : 'transparent', borderColor: theme.border.subtle },
+        { backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary },
       ]}
     >
       <Text style={[styles.timelineTime, { color: theme.text.muted }]}>
         {format(item.occurredAt, 'HH:mm', { locale })}
       </Text>
-      <View style={[styles.timelineIcon, { backgroundColor: m.color + '1F' }]}>
-        {item.emoji
-          ? <Text style={styles.timelineEmoji}>{item.emoji}</Text>
-          : <Feather name={m.icon} size={14} color={m.color} />
-        }
+      <View style={[styles.timelineIconWrap, { backgroundColor: m.color + '18' }]}>
+        {item.emoji ? (
+          <Text style={styles.timelineEmoji}>{item.emoji}</Text>
+        ) : (
+          <Feather name={m.icon} size={14} color={m.color} />
+        )}
       </View>
       <View style={styles.timelineBody}>
         <View style={styles.timelineTitleRow}>
           <Text style={[styles.timelineTitle, { color: theme.text.primary }]} numberOfLines={1}>
             {item.title}
           </Text>
-          {item.status === 'done' ? <Feather name="check" size={13} color={theme.semantic.success} /> : null}
+          {item.status === 'done' ? (
+            <Feather name="check" size={13} color={theme.semantic.success} />
+          ) : null}
         </View>
         <Text style={[styles.timelineMeta, { color: theme.text.muted }]} numberOfLines={1}>
           {[m.label, item.subtitle].filter(Boolean).join(' · ')}
         </Text>
       </View>
       {amountText ? (
-        <Text style={[styles.timelineAmount, { color: item.amount! < 0 ? theme.finance.expense : theme.finance.income }]}>
+        <Text
+          style={[
+            styles.timelineAmount,
+            { color: item.amount! < 0 ? theme.finance.expense : theme.finance.income },
+          ]}
+        >
           {amountText}
         </Text>
       ) : (
@@ -167,6 +192,49 @@ function TimelineRow({ item, onPress }: { item: DailyTimelineItem; onPress: () =
     </Pressable>
   )
 }
+
+// ─── ActionStrip ──────────────────────────────────────────────────────────────
+
+type ActionStripProps = {
+  icon: IconName
+  iconColor: string
+  title: string
+  subtitle?: string
+  onPress: () => void
+  accessibilityLabel?: string
+}
+
+function ActionStrip({ icon, iconColor, title, subtitle, onPress, accessibilityLabel }: ActionStripProps) {
+  const theme = useTheme()
+  const cardSt = getCardStyle(theme)
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
+      style={({ pressed }) => [
+        styles.actionStrip,
+        cardSt,
+        { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+      ]}
+    >
+      <View style={[styles.actionIconWrap, { backgroundColor: iconColor + '18' }]}>
+        <Feather name={icon} size={20} color={iconColor} />
+      </View>
+      <View style={styles.actionText}>
+        <Text style={[styles.actionTitle, { color: theme.text.primary }]}>{title}</Text>
+        {subtitle ? (
+          <Text style={[styles.actionSubtitle, { color: theme.text.muted }]} numberOfLines={2}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      <Feather name="chevron-right" size={16} color={theme.text.muted} />
+    </Pressable>
+  )
+}
+
+// ─── DailyDigestScreen ────────────────────────────────────────────────────────
 
 export function DailyDigestScreen() {
   const theme = useTheme()
@@ -187,6 +255,7 @@ export function DailyDigestScreen() {
     timelineItems,
     reviewItems,
     reviewCount,
+    isLoading,
     refreshing,
     onRefresh,
   } = useDailyDigest()
@@ -194,26 +263,80 @@ export function DailyDigestScreen() {
   const locale = getDateFnsLocale(language)
   const now = new Date()
   const dateStr = format(now, 'EEEE, dd MMMM', { locale })
+  const cardSt = getCardStyle(theme)
+
+  if (isLoading) {
+    return (
+      <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
+        <SkeletonDailyDigest />
+      </ScreenTransition>
+    )
+  }
 
   return (
     <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { backgroundColor: theme.bg.primary }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {shouldWarnAboutWebSQLitePersistence() ? (
-          <View style={[styles.persistenceBanner, { backgroundColor: theme.bg.elevated, borderColor: theme.semantic.warning }]}>
-            <Text style={[styles.persistenceTitle, { color: theme.text.primary }]}>{t.web_persistence_warning_title}</Text>
-            <Text style={[styles.persistenceText, { color: theme.text.muted }]}>{t.web_persistence_warning_msg}</Text>
+          <View
+            style={[
+              styles.persistenceBanner,
+              cardSt,
+              { backgroundColor: theme.bg.elevated, borderColor: theme.semantic.warning },
+            ]}
+          >
+            <Text style={[styles.persistenceTitle, { color: theme.text.primary }]}>
+              {t.web_persistence_warning_title}
+            </Text>
+            <Text style={[styles.persistenceText, { color: theme.text.muted }]}>
+              {t.web_persistence_warning_msg}
+            </Text>
           </View>
         ) : null}
 
-        <View style={[styles.hero, { backgroundColor: theme.brand.primary + '12', borderColor: theme.brand.primary + '44' }]}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroKicker, { color: theme.brand.primary }]}>{t.home_command_center}</Text>
+        {/* ── Hero ── */}
+        <View
+          style={[
+            styles.hero,
+            cardSt,
+            { backgroundColor: theme.bg.elevated },
+          ]}
+        >
+          <View style={styles.heroHeader}>
+            <View style={styles.heroDateBlock}>
+              <Text style={[styles.commandLabel, { color: theme.brand.primary }]}>
+                {t.home_command_center}
+              </Text>
               <Text style={[styles.greeting, { color: theme.text.muted }]}>{greeting(t)}</Text>
               <Text style={[styles.dateStr, { color: theme.text.primary }]}>{dateStr}</Text>
+              <View
+                style={[
+                  styles.heroStatusPill,
+                  {
+                    backgroundColor: reviewCount > 0
+                      ? theme.semantic.warning + '18'
+                      : theme.semantic.success + '18',
+                  },
+                ]}
+              >
+                <Feather
+                  name={reviewCount > 0 ? 'inbox' : 'check-circle'}
+                  size={12}
+                  color={reviewCount > 0 ? theme.semantic.warning : theme.semantic.success}
+                />
+                <Text
+                  style={[
+                    styles.heroStatusText,
+                    { color: reviewCount > 0 ? theme.semantic.warning : theme.semantic.success },
+                  ]}
+                >
+                  {reviewCount > 0
+                    ? t.review_inbox_count.replace('{{count}}', String(reviewCount))
+                    : t.review_inbox_empty}
+                </Text>
+              </View>
             </View>
             <CircularProgress
               progress={habitProgress}
@@ -227,15 +350,35 @@ export function DailyDigestScreen() {
             </CircularProgress>
           </View>
 
-          <View style={styles.heroMetric}>
+          <View
+            style={[
+              styles.heroMetricBlock,
+              {
+                backgroundColor: theme.bg.secondary,
+                borderColor: theme.border.subtle,
+              },
+            ]}
+          >
             <View style={styles.heroMetricText}>
               <Text style={[styles.heroMetricLabel, { color: theme.text.muted }]}>{t.today_spent}</Text>
-              <Text style={[styles.heroMetricValue, { color: todayExpense > 0 ? theme.finance.expense : theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
+              <Text
+                style={[
+                  styles.heroMetricValue,
+                  { color: todayExpense > 0 ? theme.finance.expense : theme.text.primary },
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+              >
                 {formatAmount(todayExpense, todayExpenseCurrency, language)}
               </Text>
             </View>
-            <View style={[styles.heroMetricIcon, { backgroundColor: (todayExpense > 0 ? theme.finance.expense : theme.semantic.success) + '1F' }]}>
-              <Feather name={todayExpense > 0 ? 'trending-down' : 'check-circle'} size={22} color={todayExpense > 0 ? theme.finance.expense : theme.semantic.success} />
+            <View style={[styles.heroMetricIcon, { backgroundColor: theme.bg.elevated }]}>
+              <Feather
+                name={todayExpense > 0 ? 'trending-up' : 'check-circle'}
+                size={22}
+                color={todayExpense > 0 ? theme.finance.expense : theme.semantic.success}
+              />
             </View>
           </View>
 
@@ -243,65 +386,88 @@ export function DailyDigestScreen() {
             <SummaryChip
               icon="check-square"
               label={t.nav_reminders}
-              value={nextReminder ? format(new Date(nextReminder.remind_at), 'HH:mm', { locale }) : '-'}
+              value={nextReminder ? format(new Date(nextReminder.remind_at), 'HH:mm', { locale }) : '—'}
               color={MODULE_COLORS.tasks}
             />
             <SummaryChip
               icon="check-circle"
               label={t.habits}
-              value={habitsTotal === 0 ? '-' : `${habitsDoneCount}/${habitsTotal}`}
+              value={habitsTotal === 0 ? '—' : `${habitsDoneCount}/${habitsTotal}`}
               color={MODULE_COLORS.habits}
             />
             <SummaryChip
               icon="book-open"
               label={t.nav_journal}
-              value={todayJournalCount > 0 ? String(todayJournalCount) : '-'}
+              value={todayJournalCount > 0 ? String(todayJournalCount) : '—'}
               color={MODULE_COLORS.journal}
             />
           </View>
         </View>
 
-        <View style={[styles.reviewPanel, { backgroundColor: theme.bg.elevated, borderColor: reviewCount > 0 ? theme.semantic.warning + '66' : theme.border.subtle }]}>
-          <View style={styles.reviewHeader}>
-            <View style={styles.reviewHeaderText}>
-              <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>{t.review_inbox_title}</Text>
-              <Text style={[styles.reviewHeaderSubtitle, { color: theme.text.muted }]}>
-                {reviewCount > 0
-                  ? t.review_inbox_count.replace('{{count}}', String(reviewCount))
-                  : t.review_inbox_empty}
+        {/* ── Review panel — only when items exist ── */}
+        {reviewCount > 0 ? (
+          <View
+            style={[
+              styles.reviewPanel,
+              cardSt,
+              {
+                backgroundColor: theme.bg.elevated,
+                borderColor: theme.semantic.warning + '4D',
+              },
+            ]}
+          >
+            <View style={styles.reviewPanelHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>
+                {t.review_inbox_title}
               </Text>
+              <View style={[styles.reviewBadge, { backgroundColor: theme.semantic.warning + '18' }]}>
+                <Feather name="inbox" size={13} color={theme.semantic.warning} />
+                <Text style={[styles.reviewBadgeText, { color: theme.semantic.warning }]}>
+                  {reviewCount}
+                </Text>
+              </View>
             </View>
-            <View style={[styles.reviewBadge, { backgroundColor: reviewCount > 0 ? theme.semantic.warning + '22' : theme.semantic.success + '1F' }]}>
-              <Feather name={reviewCount > 0 ? 'inbox' : 'check'} size={16} color={reviewCount > 0 ? theme.semantic.warning : theme.semantic.success} />
-              <Text style={[styles.reviewBadgeText, { color: reviewCount > 0 ? theme.semantic.warning : theme.semantic.success }]}>
-                {reviewCount}
-              </Text>
-            </View>
-          </View>
-          {reviewItems.length > 0 ? (
             <View style={styles.reviewList}>
               {reviewItems.map((item) => (
-                <ReviewInboxRow key={item.id} item={item} onPress={() => router.push(item.route as any)} />
+                <ReviewInboxRow
+                  key={item.id}
+                  item={item}
+                  onPress={() => router.push(item.route as any)}
+                />
               ))}
             </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
-        <View style={[styles.timelinePanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        {/* ── Timeline ── */}
+        <View style={[styles.timelinePanel, cardSt, { backgroundColor: theme.bg.elevated }]}>
           <View style={styles.timelineHeader}>
             <Text style={[styles.sectionTitle, { color: theme.text.primary }]}>{t.today_timeline}</Text>
-            <Text style={[styles.timelineCount, { color: theme.text.muted }]}>{timelineItems.length}</Text>
+            {timelineItems.length > 0 ? (
+              <Text style={[styles.timelineCount, { color: theme.text.muted }]}>
+                {timelineItems.length}
+              </Text>
+            ) : null}
           </View>
           {timelineItems.length > 0 ? (
             <View style={styles.timelineList}>
               {timelineItems.map((item) => (
-                <TimelineRow key={item.id} item={item} onPress={() => router.push(item.route as any)} />
+                <TimelineRow
+                  key={item.id}
+                  item={item}
+                  onPress={() => router.push(item.route as any)}
+                />
               ))}
             </View>
           ) : (
-            <View style={styles.timelineEmpty}>
-              <View style={[styles.timelineEmptyIcon, { backgroundColor: theme.brand.primary + '14' }]}>
-                <Feather name="clock" size={22} color={theme.brand.primary} />
+            <View
+              style={[
+                styles.timelineEmpty,
+                { backgroundColor: theme.bg.secondary, borderRadius: radius.md },
+              ]}
+            >
+              <View style={[styles.timelineEmptyIcon, { backgroundColor: theme.brand.primary + '18' }]}>
+                <Feather name="clock" size={20} color={theme.brand.primary} />
               </View>
               <View style={{ flex: 1, gap: 3 }}>
                 <Text style={[styles.timelineEmptyText, { color: theme.text.primary }]}>
@@ -315,53 +481,20 @@ export function DailyDigestScreen() {
           )}
         </View>
 
-        <Pressable
+        {/* ── Action strips ── */}
+        <ActionStrip
+          icon="bar-chart-2"
+          iconColor={MODULE_COLORS.analysis}
+          title={t.analysis_title}
+          subtitle={t.analysis_subtitle}
           onPress={() => router.push('/analysis')}
-          accessibilityRole="button"
-          accessibilityLabel={t.analysis_title}
-          style={({ pressed }) => [
-            styles.analysisStrip,
-            {
-              backgroundColor: pressed ? theme.bg.secondary : MODULE_COLORS.analysis + '14',
-              borderColor: MODULE_COLORS.analysis + '44',
-            },
-          ]}
-        >
-          <View style={[styles.analysisIcon, { backgroundColor: MODULE_COLORS.analysis + '1F' }]}>
-            <Feather name="bar-chart-2" size={20} color={MODULE_COLORS.analysis} />
-          </View>
-          <View style={styles.analysisText}>
-            <Text style={[styles.analysisTitle, { color: theme.text.primary }]}>{t.analysis_title}</Text>
-            <Text style={[styles.analysisSubtitle, { color: theme.text.muted }]} numberOfLines={2}>
-              {t.analysis_subtitle}
-            </Text>
-          </View>
-          <Feather name="arrow-right" size={20} color={MODULE_COLORS.analysis} />
-        </Pressable>
-
-        <Pressable
+        />
+        <ActionStrip
+          icon="message-circle"
+          iconColor={theme.brand.primary}
+          title={t.nav_chat}
           onPress={() => router.push('/chat')}
-          accessibilityRole="button"
-          accessibilityLabel={t.nav_chat}
-          style={({ pressed }) => [
-            styles.analysisStrip,
-            {
-              backgroundColor: pressed ? theme.bg.secondary : theme.brand.primary + '12',
-              borderColor: theme.brand.primary + '44',
-            },
-          ]}
-        >
-          <View style={[styles.analysisIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
-            <Feather name="message-circle" size={20} color={theme.brand.primary} />
-          </View>
-          <View style={styles.analysisText}>
-            <Text style={[styles.analysisTitle, { color: theme.text.primary }]}>{t.nav_chat}</Text>
-            <Text style={[styles.analysisSubtitle, { color: theme.text.muted }]} numberOfLines={1}>
-              {t.assistant_subtitle}
-            </Text>
-          </View>
-          <Feather name="arrow-right" size={20} color={theme.brand.primary} />
-        </Pressable>
+        />
       </ScrollView>
 
       <FAB
@@ -384,27 +517,43 @@ export function DailyDigestScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
+  content: { padding: spacing[4], gap: spacing[3], paddingBottom: 128 },
+
+  // ── Hero
   hero: {
     borderRadius: radius.lg,
-    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
-    overflow: 'hidden',
   },
-  heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
-  heroText: { flex: 1, gap: 2 },
-  heroKicker: { fontSize: 12, fontWeight: '800' },
+  heroHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[4] },
+  heroDateBlock: { flex: 1, gap: 3 },
+  commandLabel: { fontSize: 12, fontWeight: '700' },
+  greeting: { fontSize: 13, fontWeight: '500' },
+  dateStr: { fontSize: 22, fontWeight: '700' },
+  heroStatusPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: spacing[1],
+    paddingHorizontal: spacing[2],
+    paddingVertical: 5,
+    borderRadius: radius.full,
+  },
+  heroStatusText: { fontSize: 12, fontWeight: '600' },
   progressValue: { fontSize: 16, fontWeight: '700' },
-  progressLabel: { fontSize: 10, fontWeight: '500' },
-  heroMetric: {
+  progressLabel: { fontSize: 12, fontWeight: '500' },
+  heroMetricBlock: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
+    padding: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
   },
   heroMetricText: { flex: 1 },
-  heroMetricLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroMetricValue: { fontSize: 26, fontWeight: '800', marginTop: 2 },
+  heroMetricLabel: { fontSize: 13, fontWeight: '500' },
+  heroMetricValue: { fontSize: 26, fontWeight: '700', marginTop: 2 },
   heroMetricIcon: {
     width: 44,
     height: 44,
@@ -412,14 +561,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // ── Summary chips
   summaryStrip: { flexDirection: 'row', gap: spacing[2] },
   summaryChip: {
     flex: 1,
-    minHeight: 66,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 60,
+    borderRadius: radius.sm,
+    borderWidth: 1,
     padding: spacing[2],
-    gap: spacing[1],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   summaryIcon: {
     width: 28,
@@ -428,40 +581,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  summaryText: { flex: 1, minWidth: 0 },
   summaryValue: { fontSize: 15, fontWeight: '700' },
-  summaryLabel: { fontSize: 10, fontWeight: '500' },
+  summaryLabel: { fontSize: 12, fontWeight: '500' },
+
+  // ── Review panel
   reviewPanel: {
     borderRadius: radius.lg,
-    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
+    borderWidth: 1,
   },
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
-  reviewHeaderText: { flex: 1, gap: 3 },
-  reviewHeaderSubtitle: { fontSize: 12, lineHeight: 17 },
-  reviewBadge: {
-    minWidth: 52,
-    height: 34,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing[2],
+  reviewPanelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
   },
-  reviewBadgeText: { fontSize: 13, fontWeight: '800' },
+  reviewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  reviewBadgeText: { fontSize: 13, fontWeight: '700' },
   reviewList: { gap: spacing[1] },
   reviewRow: {
     minHeight: 56,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing[2],
     paddingVertical: spacing[2],
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
   },
-  reviewIcon: {
+  reviewIconWrap: {
     width: 32,
     height: 32,
     borderRadius: radius.full,
@@ -471,20 +626,23 @@ const styles = StyleSheet.create({
   reviewBody: { flex: 1, gap: 2 },
   reviewTitle: { fontSize: 14, fontWeight: '700' },
   reviewSubtitle: { fontSize: 12 },
-  reviewSeverityDot: { width: 8, height: 8, borderRadius: radius.full },
+
+  // ── Timeline
   timelinePanel: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[4],
     gap: spacing[2],
   },
-  timelineHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timelineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   timelineCount: { fontSize: 12, fontWeight: '600' },
   timelineList: { gap: spacing[1] },
   timelineRow: {
     minHeight: 54,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing[2],
     paddingVertical: spacing[2],
     flexDirection: 'row',
@@ -493,7 +651,7 @@ const styles = StyleSheet.create({
   },
   timelineTime: { width: 42, fontSize: 12, fontWeight: '700' },
   timelineEmoji: { fontSize: 14 },
-  timelineIcon: {
+  timelineIconWrap: {
     width: 30,
     height: 30,
     borderRadius: radius.full,
@@ -503,46 +661,69 @@ const styles = StyleSheet.create({
   timelineBody: { flex: 1, gap: 2 },
   timelineTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
   timelineTitle: { flex: 1, fontSize: 14, fontWeight: '700' },
-  timelineMeta: { fontSize: 11 },
+  timelineMeta: { fontSize: 12 },
   timelineAmount: { fontSize: 13, fontWeight: '700' },
-  timelineEmpty: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  timelineEmptyIcon: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  timelineEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[3],
+    minHeight: 72,
+  },
+  timelineEmptyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   timelineEmptyText: { fontSize: 13, fontWeight: '600' },
   timelineEmptyHint: { fontSize: 12 },
+
+  // ── Misc
   sectionTitle: { fontSize: 15, fontWeight: '600' },
   persistenceBanner: {
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[3],
     gap: spacing[1],
   },
   persistenceTitle: { fontSize: 14, fontWeight: '700' },
   persistenceText: { fontSize: 13, lineHeight: 18 },
-  greeting: { fontSize: 14, fontWeight: '500' },
-  dateStr: { fontSize: 22, fontWeight: '700' },
-  analysisStrip: {
-    minHeight: 76,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing[4],
+
+  // ── ActionStrip
+  actionStrip: {
+    minHeight: 64,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
   },
-  analysisIcon: {
+  actionIconWrap: {
     width: 44,
     height: 44,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  analysisText: { flex: 1, gap: 2 },
-  analysisTitle: { fontSize: 15, fontWeight: '700' },
-  analysisSubtitle: { fontSize: 13, lineHeight: 18 },
+  actionText: { flex: 1, gap: 2 },
+  actionTitle: { fontSize: 15, fontWeight: '700' },
+  actionSubtitle: { fontSize: 13, lineHeight: 18 },
+
+  // ── FAB
   fab: {
-    position: 'absolute', right: spacing[6],
-    width: 56, height: 56, borderRadius: radius.full,
-    alignItems: 'center', justifyContent: 'center',
-    elevation: 6, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
+    position: 'absolute',
+    right: spacing[6],
+    width: 56,
+    height: 56,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
 })

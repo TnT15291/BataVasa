@@ -1,14 +1,16 @@
 import { Tabs, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { GestureResponderEvent, Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withSequence,
+  withTiming,
   ReduceMotion,
 } from 'react-native-reanimated'
+import * as Haptics from 'expo-haptics'
 import { useTheme } from '@design/useTheme'
 import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
@@ -16,7 +18,6 @@ import { ModulePicker } from '@features/home/components/ModulePicker'
 
 type IconName = keyof typeof Feather.glyphMap
 
-// Bounces the icon when its tab becomes active
 function AnimatedTabIcon({ name, color, focused }: { name: IconName; color: string; focused: boolean }) {
   const scale = useSharedValue(1)
   const prevFocused = useRef(false)
@@ -25,7 +26,7 @@ function AnimatedTabIcon({ name, color, focused }: { name: IconName; color: stri
     if (focused && !prevFocused.current) {
       scale.value = withSequence(
         withSpring(1.2, { damping: 6, stiffness: 320, reduceMotion: ReduceMotion.System }),
-        withSpring(1, { damping: 12, stiffness: 240, reduceMotion: ReduceMotion.System })
+        withSpring(1,   { damping: 12, stiffness: 240, reduceMotion: ReduceMotion.System })
       )
     }
     prevFocused.current = focused
@@ -42,71 +43,100 @@ function AnimatedTabIcon({ name, color, focused }: { name: IconName; color: stri
   )
 }
 
-// Center FAB: tap returns to Home, long press opens the module picker.
+// Center FAB — tap: home screen | long-press: module picker
 function LauncherButton({
+  onOpenPicker,
   onPress,
-  onLongPress,
-  onTouchMove,
-  onTouchEnd,
   label,
+  hint,
 }: {
+  onOpenPicker: () => void
   onPress: () => void
-  onLongPress: () => void
-  onTouchMove: (event: GestureResponderEvent) => void
-  onTouchEnd: () => void
   label: string
+  hint: string
 }) {
-  const theme = useTheme()
-  const scale = useSharedValue(0.7)
-  const rotation = useSharedValue(0)
+  const theme       = useTheme()
+  const mountScale  = useSharedValue(0.7)
+  const pressScale  = useSharedValue(1)
+  const rotation    = useSharedValue(0)
+  const ringScale   = useSharedValue(1)
+  const ringOpacity = useSharedValue(0)
+  const longPressed = useRef(false)
 
-  // Pop-in on mount
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 10, stiffness: 180, reduceMotion: ReduceMotion.System })
-  }, [scale])
+    mountScale.value = withSpring(1, { damping: 10, stiffness: 180, reduceMotion: ReduceMotion.System })
+  }, [mountScale])
 
-  const animStyle = useAnimatedStyle(() => ({
+  const buttonStyle = useAnimatedStyle(() => ({
     transform: [
-      { scale: scale.value },
+      { scale: mountScale.value * pressScale.value },
       { rotate: `${rotation.value}deg` },
     ],
   }))
 
+  const chargeRingStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ringScale.value }],
+    opacity: ringOpacity.value,
+  }))
+
+  const handlePressIn = () => {
+    longPressed.current   = false
+    pressScale.value      = withSpring(0.88, { damping: 18, stiffness: 480, reduceMotion: ReduceMotion.System })
+    ringOpacity.value     = withTiming(0.35, { duration: 90, reduceMotion: ReduceMotion.System })
+    ringScale.value       = withTiming(1.18, { duration: 180, reduceMotion: ReduceMotion.System })
+  }
+
+  const handlePressOut = () => {
+    if (longPressed.current) return
+    pressScale.value  = withSpring(1, { damping: 8, stiffness: 280, reduceMotion: ReduceMotion.System })
+    ringOpacity.value = withTiming(0, { duration: 160, reduceMotion: ReduceMotion.System })
+    ringScale.value   = withTiming(1, { duration: 160, reduceMotion: ReduceMotion.System })
+  }
+
   const handleLongPress = () => {
-    // Brief rotation feedback on long press
-    rotation.value = withSequence(
-      withSpring(45, { damping: 8, stiffness: 300, reduceMotion: ReduceMotion.System }),
-      withSpring(0, { damping: 10, stiffness: 200, reduceMotion: ReduceMotion.System })
+    longPressed.current = true
+    // Burst ring outward — confirms activation
+    ringScale.value   = withSpring(1.28, { damping: 16, stiffness: 220, reduceMotion: ReduceMotion.System })
+    ringOpacity.value = withTiming(0, { duration: 220, reduceMotion: ReduceMotion.System })
+    // Button pops then settles
+    pressScale.value  = withSequence(
+      withSpring(1.06, { damping: 8,  stiffness: 340, reduceMotion: ReduceMotion.System }),
+      withSpring(1.0,  { damping: 12, stiffness: 260, reduceMotion: ReduceMotion.System })
     )
-    onLongPress()
+    rotation.value = withSequence(
+      withSpring(18, { damping: 8,  stiffness: 260, reduceMotion: ReduceMotion.System }),
+      withSpring(0,  { damping: 10, stiffness: 220, reduceMotion: ReduceMotion.System })
+    )
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    onOpenPicker()
   }
 
   return (
     <Pressable
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       onLongPress={handleLongPress}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-      onTouchCancel={onTouchEnd}
-      delayLongPress={250}
+      delayLongPress={400}
       accessibilityRole="button"
       accessibilityLabel={label}
-      hitSlop={8}
+      accessibilityHint={hint}
     >
-      {({ pressed }) => (
+      <View style={styles.launcherOuter}>
+        <Animated.View
+          style={[styles.chargeRing, { borderColor: theme.brand.primary }, chargeRingStyle]}
+        />
         <Animated.View
           style={[
             styles.launcherButton,
-            {
-              backgroundColor: pressed ? theme.brand.primary + 'CC' : theme.brand.primary,
-              borderColor: theme.bg.elevated,
-            },
-            animStyle,
+            { backgroundColor: theme.brand.primary, borderColor: theme.bg.elevated },
+            buttonStyle,
           ]}
         >
           <Feather name="grid" size={24} color="#fff" />
         </Animated.View>
-      )}
+        <Text style={[styles.launcherLabel, { color: theme.text.muted }]}>{label}</Text>
+      </View>
     </Pressable>
   )
 }
@@ -131,22 +161,6 @@ export default function TabsLayout() {
   const theme = useTheme()
   const { t } = useTranslation()
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [touchPoint, setTouchPoint] = useState<{ x: number; y: number } | null>(null)
-  const selectedRouteRef = useRef<string | null>(null)
-
-  const closePicker = () => {
-    setPickerOpen(false)
-    setTouchPoint(null)
-    selectedRouteRef.current = null
-  }
-
-  const finishPicker = () => {
-    const route = selectedRouteRef.current
-    closePicker()
-    if (route) {
-      requestAnimationFrame(() => router.push(route as any))
-    }
-  }
 
   return (
     <>
@@ -176,17 +190,6 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="finance"
-          options={{
-            title: t.nav_finance,
-            tabBarLabel: t.nav_finance,
-            tabBarActiveTintColor: theme.finance.expense,
-            tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon name="dollar-sign" color={color} focused={focused} />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="habits"
           options={{
             title: t.habits,
@@ -194,29 +197,6 @@ export default function TabsLayout() {
             tabBarActiveTintColor: MODULE_COLORS.habits,
             tabBarIcon: ({ color, focused }) => (
               <AnimatedTabIcon name="check-circle" color={color} focused={focused} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="launcher"
-          options={{
-            title: 'BataVasa',
-            tabBarLabel: '',
-            tabBarButton: () => (
-              <LauncherButton
-                onPress={() => router.push('/')}
-                onLongPress={() => setPickerOpen(true)}
-                onTouchMove={(event) => {
-                  if (!pickerOpen) return
-                  const { pageX, pageY } = event.nativeEvent
-                  setTouchPoint({ x: pageX, y: pageY })
-                }}
-                onTouchEnd={() => {
-                  if (!pickerOpen) return
-                  finishPicker()
-                }}
-                label={t.nav_home}
-              />
             ),
           }}
         />
@@ -232,6 +212,21 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="launcher"
+          options={{
+            title: 'BataVasa',
+            tabBarLabel: '',
+            tabBarButton: () => (
+              <LauncherButton
+                onPress={() => router.navigate('/')}
+                onOpenPicker={() => setPickerOpen(true)}
+                label={t.nav_home}
+                hint={t.module_launcher_subtitle}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="reminders"
           options={{
             title: t.nav_reminders,
@@ -242,12 +237,21 @@ export default function TabsLayout() {
             ),
           }}
         />
+        <Tabs.Screen
+          name="finance"
+          options={{
+            title: t.nav_finance,
+            tabBarLabel: t.nav_finance,
+            tabBarActiveTintColor: theme.finance.expense,
+            tabBarIcon: ({ color, focused }) => (
+              <AnimatedTabIcon name="dollar-sign" color={color} focused={focused} />
+            ),
+          }}
+        />
       </Tabs>
       <ModulePicker
         visible={pickerOpen}
-        touchPoint={touchPoint}
-        onActiveRouteChange={(route) => { selectedRouteRef.current = route }}
-        onClose={closePicker}
+        onClose={() => setPickerOpen(false)}
       />
     </>
   )
@@ -256,14 +260,32 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14, marginRight: 4 },
   headerBtn: { paddingHorizontal: 4 },
-  launcherButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 999,
-    borderWidth: 4,
+  launcherOuter: {
+    width: 80,
+    height: 80,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: -20,
+    gap: 3,
+  },
+  launcherLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  chargeRing: {
+    position: 'absolute',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 1.5,
+  },
+  launcherButton: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowOpacity: 0.24,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },

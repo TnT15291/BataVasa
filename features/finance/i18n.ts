@@ -16,6 +16,7 @@ const SYSTEM_CATEGORY_KEY: Record<string, keyof Translations> = {
   'Freelance': 'cat_freelance',
   'Other Income': 'cat_other_income',
   'Emergency Fund': 'cat_emergency_fund',
+  'Learning Fund': 'cat_learning_fund',
   'Investments': 'cat_investments',
 }
 

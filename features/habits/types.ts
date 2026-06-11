@@ -38,7 +38,7 @@ export type HabitLog = {
 export const CreateHabitInputSchema = z.object({
   name: z.string().min(1).max(100),
   icon: z.string().min(1).max(10).default('✅'),
-  color: z.string().min(4).max(9).default('#4CAF50'),
+  color: z.string().min(4).max(9).default('#C9853E'),
   cadence: CadenceSchema.default('daily'),
   target_per_period: z.number().int().min(1).max(99).default(1),
   schedule_days: z.string().max(20).nullable().optional(),

@@ -1,5 +1,6 @@
 const mockDb = {
   execAsync: jest.fn(),
+  runAsync: jest.fn(),
   getFirstAsync: jest.fn(),
 }
 
@@ -16,8 +17,14 @@ const mockLogger = {
 
 function loadMigrations() {
   jest.resetModules()
-  jest.doMock('../database/core/db', () => ({ getDb: mockGetDb }))
-  jest.doMock('@db/core/db', () => ({ getDb: mockGetDb }))
+  jest.doMock('../database/core/db', () => ({
+    getDb: mockGetDb,
+    nowIso: () => '2026-01-01T00:00:00.000Z',
+  }))
+  jest.doMock('@db/core/db', () => ({
+    getDb: mockGetDb,
+    nowIso: () => '2026-01-01T00:00:00.000Z',
+  }))
   jest.doMock('../database/finance/schema', () => ({ initFinanceSchema: mockInitFinanceSchema }))
   jest.doMock('../database/settings/schema', () => ({ initSettingsSchema: mockInitSettingsSchema }))
   jest.doMock('../database/reminders/schema', () => ({ createReminderSchema: mockCreateReminderSchema }))
@@ -34,6 +41,7 @@ beforeEach(() => {
   mockGetDb.mockResolvedValue(mockDb)
   mockDb.getFirstAsync.mockResolvedValue({ user_version: 0 })
   mockDb.execAsync.mockResolvedValue(undefined)
+  mockDb.runAsync.mockResolvedValue(undefined)
 })
 
 describe('core migrations', () => {
@@ -48,8 +56,8 @@ describe('core migrations', () => {
     expect(mockCreateJournalSchema).toHaveBeenCalledWith(mockDb)
     expect(mockCreateHabitSchema).toHaveBeenCalledWith(mockDb)
     expect(mockCreateSyncQueueSchema).toHaveBeenCalledWith(mockDb)
-    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 12')
-    expect(mockLogger.info).toHaveBeenCalledWith('migrate', 'applied v12')
+    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 17')
+    expect(mockLogger.info).toHaveBeenCalledWith('migrate', 'applied v17')
   })
 
   it('resumes from the stored user_version instead of replaying earlier migrations', async () => {
@@ -58,14 +66,14 @@ describe('core migrations', () => {
 
     await runMigrations()
 
-    expect(mockInitFinanceSchema).not.toHaveBeenCalled()
+    expect(mockInitFinanceSchema).toHaveBeenCalledWith(mockDb)
     expect(mockCreateReminderSchema).not.toHaveBeenCalled()
     expect(mockDb.execAsync).toHaveBeenCalledWith(
       "ALTER TABLE reminder ADD COLUMN is_inbox INTEGER NOT NULL DEFAULT 0"
     )
     expect(mockDb.execAsync).toHaveBeenCalledWith('ALTER TABLE habit ADD COLUMN schedule_days TEXT')
     expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 11')
-    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 12')
+    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 17')
   })
 
   it('ignores duplicate column errors so additive migrations stay idempotent', async () => {
@@ -78,7 +86,7 @@ describe('core migrations', () => {
     await runMigrations()
 
     expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 11')
-    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 12')
+    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 17')
   })
 
   it('reuses the in-flight migration promise', async () => {
@@ -87,7 +95,7 @@ describe('core migrations', () => {
     await Promise.all([runMigrations(), runMigrations()])
 
     expect(mockGetDb).toHaveBeenCalledTimes(1)
-    expect(mockDb.getFirstAsync).toHaveBeenCalledTimes(1)
+    expect(mockDb.getFirstAsync).toHaveBeenCalledTimes(2)
   })
 
   it('re-throws non-duplicate-column errors from addColumnSafe', async () => {

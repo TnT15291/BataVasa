@@ -136,13 +136,12 @@ const styles = StyleSheet.create({
   groupHeader: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
     marginBottom: spacing[2],
     marginLeft: spacing[1],
   },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     overflow: 'hidden',
     marginBottom: spacing[3],
   },
@@ -158,10 +157,10 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   rowName: { fontSize: 15, fontWeight: '500', flex: 1 },
   badge: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
-  badgeText: { fontSize: 10, fontWeight: '600' },
+  badgeText: { fontSize: 12, fontWeight: '600' },
   barTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
   barFill: { height: 4, borderRadius: 2 },
-  budgetText: { fontSize: 11 },
+  budgetText: { fontSize: 12 },
   fab: {
     position: 'absolute',
     right: spacing[6],

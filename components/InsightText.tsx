@@ -84,7 +84,7 @@ export function InsightText({ text }: { text: string }) {
 const styles = StyleSheet.create({
   wrap: { gap: spacing[2] },
   section: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: radius.md,
     padding: spacing[3],
     gap: spacing[2],

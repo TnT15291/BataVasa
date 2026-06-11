@@ -96,12 +96,12 @@ Any future domain table must be added to this map and to the data-management UI.
 
 - Worker processes up to 50 pending items per drain.
 - Failed items increment `retry_count` and store `last_error`.
-- Items with retry count at or above the max retry threshold are purged by the
-  current implementation.
-
-Current hardening gap: purging max-retry items can hide persistent sync failure
-from users. Before public launch, prefer a visible "sync needs attention" state
-instead of silent purge.
+- Failed items stay in `sync_queue` and are retried on later drains. This is
+  deliberate: schema drift or offline failures should not silently drop pending
+  user data.
+- On each drain, the worker also scans local rows with `synced_at IS NULL` and
+  re-enqueues them. This recovers rows that were written while the worker was
+  stopped or previously lost from the queue during older retry behavior.
 
 ## Conflict Model
 

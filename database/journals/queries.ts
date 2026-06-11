@@ -5,11 +5,11 @@ export async function insertJournal(j: Journal): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO journal
-      (id,user_id,content,mood,is_important,occurred_at,
+      (id,user_id,content,mood,is_important,tags,occurred_at,
        location_lat,location_lng,location_label,
        created_at,updated_at,deleted_at,synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [j.id, j.user_id, j.content, j.mood ?? null, j.is_important ?? 0, j.occurred_at,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [j.id, j.user_id, j.content, j.mood ?? null, j.is_important ?? 0, j.tags ?? null, j.occurred_at,
      j.location_lat ?? null, j.location_lng ?? null, j.location_label ?? null,
      j.created_at, j.updated_at, null, null]
   )

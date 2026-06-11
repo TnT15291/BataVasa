@@ -7,6 +7,8 @@ import { createJournalSchema } from '../journals/schema'
 import { createHabitSchema } from '../habits/schema'
 import { createSyncQueueSchema } from '../sync/schema'
 import { logger } from '@services/logger'
+import { uuid } from '@services/uuid'
+import { nowIso } from './db'
 
 // Each entry creates one schema version. user_version starts at 0 (fresh DB)
 // and increments by 1 per applied migration.
@@ -82,6 +84,62 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   // v13 - habit notification times (JSON array of "HH:MM" strings)
   async (db) => {
     await safeAddColumn(db, 'habit', 'notification_times', 'TEXT')
+  },
+  // v14 - retired finance funds. Kept as a no-op so historical user_version
+  // numbers stay stable; current schema treats fund categories as expenses.
+  async (db) => {
+    await initFinanceSchema(db)
+  },
+  // v15 - journal activity tags (comma-separated preset keys)
+  async (db) => {
+    await safeAddColumn(db, 'journal', 'tags', 'TEXT')
+  },
+  // v16 - funds become ordinary spending categories
+  async (db) => {
+    await db.execAsync(`
+      UPDATE finance_category
+      SET kind = 'discretionary',
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      WHERE user_id IS NULL
+        AND name IN ('Emergency Fund', 'Investments', 'Learning Fund');
+    `)
+
+    const row = await db.getFirstAsync<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM finance_category WHERE user_id IS NULL AND name = 'Learning Fund'"
+    )
+    if ((row?.n ?? 0) === 0) {
+      const ts = nowIso()
+      await db.runAsync(
+        `INSERT INTO finance_category (id, user_id, name, icon, color, kind, sort_order, created_at, updated_at)
+         VALUES (?, NULL, 'Learning Fund', 'book-open', '#7D5A86', 'discretionary', 14, ?, ?)`,
+        [uuid(), ts, ts]
+      )
+    }
+  },
+  // v17 - monthly finance plan items for safe-to-spend forecasting
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS finance_plan_item (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('income','expense')),
+        amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+        currency TEXT NOT NULL DEFAULT 'VND',
+        category_id TEXT,
+        due_day INTEGER NOT NULL CHECK (due_day BETWEEN 1 AND 31),
+        status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed','expected')),
+        active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT,
+        synced_at TEXT,
+        FOREIGN KEY (category_id) REFERENCES finance_category(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_plan_item_user_due
+        ON finance_plan_item(user_id, due_day)
+        WHERE deleted_at IS NULL AND active = 1;
+    `)
   },
 ]
 

@@ -147,7 +147,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!supabase) return { ok: false }
     set({ busy: true, error: null })
     try {
-      const redirectTo = Linking.createURL('auth/callback')
+      // Use a fixed scheme URL — Linking.createURL() generates exp:// in Expo Go
+      // which cannot be pre-registered in Supabase. The fixed scheme matches app.json.
+      const redirectTo = 'batavasa://auth/callback'
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo, skipBrowserRedirect: true },

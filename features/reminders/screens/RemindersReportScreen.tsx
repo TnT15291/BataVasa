@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react'
 import {
   View, Text, Pressable, StyleSheet, ScrollView, Share, Platform,
 } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import {
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -56,7 +57,7 @@ function DonutChart({ pct, color, theme }: { pct: number; color: string; theme: 
       </View>
       {/* Hole */}
       <View style={{ position: 'absolute', top: DONUT_STROKE, left: DONUT_STROKE, width: DONUT_INNER, height: DONUT_INNER, borderRadius: DONUT_INNER / 2, backgroundColor: theme.bg.elevated, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text.primary }}>{pct}%</Text>
+        <Text style={{ fontSize: 17, fontWeight: '700', color: theme.text.primary }}>{pct}%</Text>
       </View>
     </View>
   )
@@ -361,7 +362,7 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: 15, fontWeight: '600', flex: 1, textAlign: 'center' },
   customRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing[2] },
   customField: { flex: 1, gap: spacing[1] },
-  customLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  customLabel: { fontSize: 12, fontWeight: '600' },
   dateInput: {
     borderWidth: 1,
     borderRadius: radius.md,
@@ -374,16 +375,16 @@ const styles = StyleSheet.create({
   dateSep: { fontSize: 18, paddingBottom: spacing[2] },
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   statsGrid: { flexDirection: 'row', gap: spacing[3], flexWrap: 'wrap' },
-  statCard: { flex: 1, minWidth: 100, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
+  statCard: { flex: 1, minWidth: 100, borderRadius: radius.lg, borderWidth: 1, padding: spacing[3], alignItems: 'center', gap: spacing[1] },
   statValue: { fontSize: 22, fontWeight: '700' },
-  deltaBadge: { fontSize: 11, fontWeight: '700' },
-  statLabel: { fontSize: 11, textAlign: 'center' },
-  card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
+  deltaBadge: { fontSize: 12, fontWeight: '700' },
+  statLabel: { fontSize: 12, textAlign: 'center' },
+  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
-  cardTitle: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardTitle: { fontSize: 12, fontWeight: '600' },
   donutRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   donutMeta: { flex: 1, gap: spacing[1] },
-  donutCount: { fontSize: 24, fontWeight: '800' },
+  donutCount: { fontSize: 24, fontWeight: '700' },
   donutLabel: { fontSize: 12 },
   priorityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   priorityLabel: { fontSize: 12, fontWeight: '700', width: 58 },

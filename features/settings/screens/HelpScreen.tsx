@@ -4,6 +4,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { FlowDiagram } from '@components/FlowDiagram'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 type IconName = keyof typeof Feather.glyphMap
 
@@ -60,9 +61,9 @@ export function HelpScreen() {
       <Section title={t.help_quickstart_title}>
         <TipRow index={1} title={t.help_tip_account_title} body={t.help_tip_account_body} color={theme.brand.primary} />
         <View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />
-        <TipRow index={2} title={t.help_tip_add_title} body={t.help_tip_add_body} color="#FF9800" />
+        <TipRow index={2} title={t.help_tip_add_title} body={t.help_tip_add_body} color={MODULE_COLORS.habits} />
         <View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />
-        <TipRow index={3} title={t.help_tip_reports_title} body={t.help_tip_reports_body} color="#9C27B0" />
+        <TipRow index={3} title={t.help_tip_reports_title} body={t.help_tip_reports_body} color={MODULE_COLORS.analysis} />
       </Section>
 
       <Section title={t.help_data_title}>
@@ -77,11 +78,11 @@ export function HelpScreen() {
       </Section>
 
       <Section title={t.help_permissions_title}>
-        <InfoRow icon="mic" title={t.mic_permission_title} body={t.mic_permission_hint} color="#FF9800" />
+        <InfoRow icon="mic" title={t.mic_permission_title} body={t.mic_permission_hint} color={MODULE_COLORS.habits} />
         <View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />
-        <InfoRow icon="map-pin" title={t.location_access} body={t.location_access_hint} color="#2196F3" />
+        <InfoRow icon="map-pin" title={t.location_access} body={t.location_access_hint} color={MODULE_COLORS.tasks} />
         <View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />
-        <InfoRow icon="bell" title={t.notification_permission_title} body={t.notification_permission_hint} color="#9C27B0" />
+        <InfoRow icon="bell" title={t.notification_permission_title} body={t.notification_permission_hint} color={MODULE_COLORS.journal} />
       </Section>
 
       <Text style={[styles.footer, { color: theme.text.muted }]}>{t.help_footer}</Text>
@@ -98,11 +99,10 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     marginBottom: spacing[2],
     marginLeft: spacing[1],
-    letterSpacing: 0.5,
   },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 2,
   },
-  tipNumText: { fontSize: 14, fontWeight: '800' },
+  tipNumText: { fontSize: 14, fontWeight: '700' },
   infoRow: { flexDirection: 'row', gap: spacing[3], alignItems: 'flex-start' },
   infoIcon: {
     width: 34,

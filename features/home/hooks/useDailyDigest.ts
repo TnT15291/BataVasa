@@ -54,13 +54,14 @@ export type DailyDigestData = {
   // Cross-module decisions
   reviewItems: ReviewInboxItem[]
   reviewCount: number
-  // Refresh
+  // Loading / Refresh
+  isLoading: boolean
   refreshing: boolean
   onRefresh: () => Promise<void>
 }
 
 export function useDailyDigest(): DailyDigestData {
-  useFinanceBootstrap()
+  const isLoading = useFinanceBootstrap()
   useRemindersBootstrap()
   useHabitsBootstrap()
   useJournalsBootstrap()
@@ -346,6 +347,7 @@ export function useDailyDigest(): DailyDigestData {
     timelineItems,
     reviewItems,
     reviewCount: reviewItems.length,
+    isLoading,
     refreshing,
     onRefresh,
   }

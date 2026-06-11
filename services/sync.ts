@@ -17,6 +17,7 @@ const TABLE_MODULE: Record<string, keyof SyncToggles> = {
   finance_category:   'syncFinance',
   finance_transaction: 'syncFinance',
   finance_rule:       'syncFinance',
+  finance_plan_item:  'syncFinance',
   habit:              'syncHabits',
   habit_log:          'syncHabits',
   journal:            'syncJournals',
@@ -30,6 +31,14 @@ type SyncToggles = {
   syncHabits: boolean
   syncJournals: boolean
   syncReminders: boolean
+}
+
+function sanitizePayloadForRemote(tableName: string, row: Record<string, unknown>): Record<string, unknown> {
+  const payload = { ...row }
+  if (tableName === 'finance_transaction') {
+    delete payload.fund_id
+  }
+  return payload
 }
 
 async function fetchRow(tableName: string, rowId: string): Promise<Record<string, unknown> | null> {
@@ -137,11 +146,33 @@ async function pullTable(tableName: string, userId: string): Promise<number> {
   return changed
 }
 
+async function enqueueUnsyncedLocalRows(settings: SyncToggles & Record<string, unknown>, userId: string): Promise<void> {
+  const db = await getDb()
+  for (const tableName of SYNC_TABLES) {
+    const toggleKey = TABLE_MODULE[tableName]
+    if (toggleKey && settings[toggleKey] === false) continue
+    try {
+      const rows = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM ${tableName}
+         WHERE synced_at IS NULL
+           AND (user_id = ? OR user_id IS NULL)
+         LIMIT 500`,
+        [userId]
+      )
+      for (const row of rows) {
+        if (row.id) await syncQueue.enqueue(tableName, row.id, 'upsert')
+      }
+    } catch (e) {
+      logger.warn(MODULE, 'unsynced scan failed', { table: tableName, error: String(e) })
+    }
+  }
+}
+
 async function refreshLoadedStores(settings: SyncToggles): Promise<void> {
   const tasks: Array<Promise<void>> = []
   if (settings.syncFinance) {
     const finance = useFinanceStore.getState()
-    tasks.push(finance.loadCategories(), finance.loadTransactions())
+    tasks.push(finance.loadCategories(), finance.loadTransactions(), finance.loadPlanItems())
   }
   if (settings.syncHabits) tasks.push(useHabitsStore.getState().loadHabits())
   if (settings.syncJournals) tasks.push(useJournalsStore.getState().loadJournals())
@@ -194,6 +225,7 @@ export async function drainQueue(): Promise<void> {
         logger.warn(MODULE, 'finance category pre-sync failed', { error: String(e) })
       }
     }
+    await enqueueUnsyncedLocalRows(settings, userId)
     const pending = await syncQueue.getPending(50)
 
     for (const item of pending) {
@@ -202,6 +234,11 @@ export async function drainQueue(): Promise<void> {
       if (toggleKey && settings[toggleKey] === false) continue
 
       try {
+        if (!TABLE_MODULE[item.table_name]) {
+          await syncQueue.markSynced(item.id)
+          logger.info(MODULE, 'skipped retired sync table', { table: item.table_name, row: item.row_id })
+          continue
+        }
         if (item.operation === 'upsert') {
           const row = await fetchRow(item.table_name, item.row_id)
           if (!row) {
@@ -209,7 +246,7 @@ export async function drainQueue(): Promise<void> {
             await syncQueue.markSynced(item.id)
             continue
           }
-          const payload = { ...row, user_id: userId }
+          const payload = sanitizePayloadForRemote(item.table_name, { ...row, user_id: userId })
           const { error } = await supabase.from(item.table_name).upsert(payload, { onConflict: 'id' })
           if (error) throw error
           await markSyncedAt(item.table_name, item.row_id)

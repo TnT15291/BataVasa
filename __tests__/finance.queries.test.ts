@@ -111,10 +111,11 @@ describe('finance queries', () => {
   })
 
   it('wipes finance data with counts (scoped to user)', async () => {
-    mockDb.getFirstAsync.mockResolvedValueOnce({ n: 2 }).mockResolvedValueOnce({ n: 1 }).mockResolvedValueOnce({ n: 3 })
-    await expect(wipeFinanceData('user-1')).resolves.toEqual({ transactions: 2, categories: 1, rules: 3 })
+    mockDb.getFirstAsync.mockResolvedValueOnce({ n: 2 }).mockResolvedValueOnce({ n: 1 }).mockResolvedValueOnce({ n: 3 }).mockResolvedValueOnce({ n: 4 })
+    await expect(wipeFinanceData('user-1')).resolves.toEqual({ transactions: 2, categories: 1, rules: 3, planItems: 4 })
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_transaction WHERE user_id = ?', ['user-1'])
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_rule WHERE user_id = ?', ['user-1'])
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_plan_item WHERE user_id = ?', ['user-1'])
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_category WHERE user_id = ?', ['user-1'])
   })
 
@@ -128,7 +129,7 @@ describe('finance queries', () => {
   })
 
   it('inserts, updates, deletes, and exports categories', async () => {
-    mockDb.getAllAsync.mockResolvedValueOnce([baseTx]).mockResolvedValueOnce([baseCategory]).mockResolvedValueOnce([])
+    mockDb.getAllAsync.mockResolvedValueOnce([baseTx]).mockResolvedValueOnce([baseCategory]).mockResolvedValueOnce([]).mockResolvedValueOnce([])
     await insertCategory(baseCategory)
     await updateCategory('cat-1', { name: 'Groceries', id: 'ignored' } as any)
     await softDeleteCategory('cat-1', '2026-01-02T00:00:00.000Z')
@@ -144,6 +145,7 @@ describe('finance queries', () => {
     )
     expect(exported.categories).toEqual([baseCategory])
     expect(exported.transactions).toEqual([baseTx])
+    expect(exported.planItems).toEqual([])
   })
 
   it('no-ops empty category patch', async () => {
@@ -195,7 +197,7 @@ describe('finance queries', () => {
   it('wipeFinanceData returns 0 when counts are null', async () => {
     mockDb.getFirstAsync.mockResolvedValue(null)
     const result = await wipeFinanceData('user-1')
-    expect(result).toEqual({ transactions: 0, categories: 0, rules: 0 })
+    expect(result).toEqual({ transactions: 0, categories: 0, rules: 0, planItems: 0 })
   })
 })
 

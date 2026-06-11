@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   icon: { fontSize: 18 },
-  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
+  label: { fontSize: 12, fontWeight: '600' },
   value: { fontSize: 14, fontWeight: '500', marginTop: 2 },
   placeholder: { fontSize: 13, fontStyle: 'italic' },
   editWrap: {

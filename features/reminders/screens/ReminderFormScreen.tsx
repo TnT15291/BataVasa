@@ -17,8 +17,10 @@ import { notifySaved } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseReminderEntry } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
+import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Recurrence, ReminderPriority } from '../types'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 const RECURRENCES: Recurrence[] = ['none', 'daily', 'weekly', 'monthly']
 const ADVANCE_OPTIONS = [0, 5, 10, 15, 30, 60, 120, 1440, 2880] as const
@@ -33,6 +35,7 @@ export function ReminderFormScreen() {
   const reminders = useReminders()
   const { createReminder, updateReminder, deleteReminder } = useReminderActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
+  const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
 
   const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
@@ -57,6 +60,12 @@ export function ReminderFormScreen() {
   const [prefilled, setPrefilled] = useState(false)
   const [smartText, setSmartText] = useState('')
   const [parsing, setParsing] = useState(false)
+  const [confirmSheet, setConfirmSheet] = useState<{
+    rawInput: string
+    fields: ConfirmField[]
+    payload: { title: string; note: string; remind_at: string; advance_minutes: number; recurrence: Recurrence }
+  } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
 
   useEffect(() => {
     if (!editingReminder || prefilled) return
@@ -167,19 +176,73 @@ export function ReminderFormScreen() {
     try {
       const parsed = await parseReminderEntry(input)
       if (!parsed) { Alert.alert(t.ai_error, t.parse_failed); return }
-      setTitle(parsed.title)
-      setNote(parsed.note || '')
-      setAdvanceMinutes(parsed.advance_minutes ?? 0)
-      setRecurrence(parsed.recurrence)
-      setPriority('medium')
-      setIsInbox(false)
-      setRemindAt(new Date(parsed.remind_at))
-      setSmartText('')
+      const isVoice = override !== undefined
+      if (isVoice || aiAutoConfirm) {
+        const fields: ConfirmField[] = [
+          { label: t.new_reminder, value: parsed.title },
+          { label: t.date, value: format(new Date(parsed.remind_at), 'EEE, dd MMM yyyy / HH:mm', { locale }) },
+        ]
+        if (parsed.recurrence !== 'none') {
+          const recMap: Record<string, string> = { daily: t.recurrence_daily, weekly: t.recurrence_weekly, monthly: t.recurrence_monthly }
+          fields.push({ label: t.reminder_recurrence, value: recMap[parsed.recurrence] ?? parsed.recurrence })
+        }
+        if (parsed.advance_minutes > 0) fields.push({ label: t.remind_before, value: advanceLabel(parsed.advance_minutes) })
+        if (parsed.note) fields.push({ label: t.note_optional.replace(/\s*\(.+\)/, ''), value: parsed.note })
+        setConfirmSheet({ rawInput: input, fields, payload: { title: parsed.title, note: parsed.note, remind_at: parsed.remind_at, advance_minutes: parsed.advance_minutes, recurrence: parsed.recurrence } })
+      } else {
+        setTitle(parsed.title)
+        setNote(parsed.note || '')
+        setAdvanceMinutes(parsed.advance_minutes ?? 0)
+        setRecurrence(parsed.recurrence)
+        setPriority('medium')
+        setIsInbox(false)
+        setRemindAt(new Date(parsed.remind_at))
+        setSmartText('')
+      }
     } catch {
       Alert.alert(t.ai_error, t.parse_failed)
     } finally {
       setParsing(false)
     }
+  }
+
+  const onSheetSave = async () => {
+    if (!confirmSheet) return
+    setConfirmBusy(true)
+    const { title, note, remind_at, advance_minutes, recurrence } = confirmSheet.payload
+    const notifyAt = new Date(new Date(remind_at).getTime() - advance_minutes * 60000)
+    const res = await createReminder({
+      title,
+      note: note || undefined,
+      remind_at: notifyAt.toISOString(),
+      advance_minutes,
+      recurrence,
+      priority: 'medium',
+      is_inbox: 0,
+    })
+    setConfirmBusy(false)
+    if (res.ok) {
+      void hapticSaveSuccess()
+      notifySaved(t, useSettingsStore.getState().syncReminders)
+      setConfirmSheet(null)
+      router.back()
+    } else {
+      Alert.alert(t.could_not_save, res.error ?? '')
+    }
+  }
+
+  const onSheetEdit = () => {
+    if (!confirmSheet) return
+    const { title, note, remind_at, advance_minutes, recurrence } = confirmSheet.payload
+    setTitle(title)
+    setNote(note)
+    setAdvanceMinutes(advance_minutes)
+    setRecurrence(recurrence)
+    setPriority('medium')
+    setIsInbox(false)
+    setRemindAt(new Date(remind_at))
+    setSmartText('')
+    setConfirmSheet(null)
   }
 
   return (
@@ -196,30 +259,6 @@ export function ReminderFormScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        <View style={[styles.previewCard, { backgroundColor: '#2196F314', borderColor: '#2196F344' }]}>
-          <View style={[styles.previewIcon, { backgroundColor: '#2196F31F' }]}>
-            <Feather name="bell" size={26} color="#2196F3" />
-          </View>
-          <View style={styles.previewBody}>
-            <Text style={[styles.previewKicker, { color: theme.text.muted }]}>{isEditing ? t.update : t.new_reminder}</Text>
-            <Text style={[styles.previewTitle, { color: theme.text.primary }]} numberOfLines={2}>
-              {title.trim() || t.reminder_title_placeholder}
-            </Text>
-            <View style={styles.previewMetaRow}>
-              <Feather name={isInbox ? 'inbox' : 'calendar'} size={13} color={theme.text.muted} />
-              <Text style={[styles.previewMeta, { color: theme.text.muted }]}>
-                {isInbox ? t.reminder_inbox : `${dateStr} / ${timeStr}`}
-              </Text>
-            </View>
-            {notifyTimeStr ? (
-              <View style={styles.previewMetaRow}>
-                <Feather name="clock" size={13} color="#2196F3" />
-                <Text style={[styles.previewMeta, { color: theme.text.muted }]}>{t.remind_before}: {notifyTimeStr}</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-
         <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
@@ -249,6 +288,30 @@ export function ReminderFormScreen() {
                 {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
               </Pressable>
             </View>
+          </View>
+        </View>
+
+        <View style={[styles.previewCard, { backgroundColor: MODULE_COLORS.tasks + '14', borderColor: MODULE_COLORS.tasks + '44' }]}>
+          <View style={[styles.previewIcon, { backgroundColor: MODULE_COLORS.tasks + '1F' }]}>
+            <Feather name="bell" size={26} color={MODULE_COLORS.tasks} />
+          </View>
+          <View style={styles.previewBody}>
+            <Text style={[styles.previewKicker, { color: theme.text.muted }]}>{isEditing ? t.update : t.new_reminder}</Text>
+            <Text style={[styles.previewTitle, { color: theme.text.primary }]} numberOfLines={2}>
+              {title.trim() || t.reminder_title_placeholder}
+            </Text>
+            <View style={styles.previewMetaRow}>
+              <Feather name={isInbox ? 'inbox' : 'calendar'} size={13} color={theme.text.muted} />
+              <Text style={[styles.previewMeta, { color: theme.text.muted }]}>
+                {isInbox ? t.reminder_inbox : `${dateStr} / ${timeStr}`}
+              </Text>
+            </View>
+            {notifyTimeStr ? (
+              <View style={styles.previewMetaRow}>
+                <Feather name="clock" size={13} color={MODULE_COLORS.tasks} />
+                <Text style={[styles.previewMeta, { color: theme.text.muted }]}>{t.remind_before}: {notifyTimeStr}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -333,8 +396,8 @@ export function ReminderFormScreen() {
 
         {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: '#2196F31F' }]}>
-              <Feather name="bell" size={16} color="#2196F3" />
+            <View style={[styles.cardIcon, { backgroundColor: MODULE_COLORS.tasks + '1F' }]}>
+              <Feather name="bell" size={16} color={MODULE_COLORS.tasks} />
             </View>
             <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.remind_before}</Text>
           </View>
@@ -445,6 +508,17 @@ export function ReminderFormScreen() {
             : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
         </Pressable>
       </View>
+      {confirmSheet && (
+        <ConfirmEntrySheet
+          visible={!!confirmSheet}
+          rawInput={confirmSheet.rawInput}
+          fields={confirmSheet.fields}
+          onSave={onSheetSave}
+          onEdit={onSheetEdit}
+          onCancel={() => setConfirmSheet(null)}
+          busy={confirmBusy}
+        />
+      )}
     </KeyboardAvoidingView>
   )
 }
@@ -466,13 +540,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   previewBody: { flex: 1, gap: spacing[1] },
-  previewKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  previewTitle: { fontSize: 21, lineHeight: 27, fontWeight: '800' },
+  previewKicker: { fontSize: 12, fontWeight: '700' },
+  previewTitle: { fontSize: 21, lineHeight: 27, fontWeight: '700' },
   previewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
   previewMeta: { fontSize: 12, lineHeight: 17 },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
@@ -485,7 +559,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
   },
-  inboxTitle: { fontSize: 15, fontWeight: '800' },
+  inboxTitle: { fontSize: 15, fontWeight: '700' },
   inboxBody: { fontSize: 12, marginTop: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   cardIcon: {
@@ -495,7 +569,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
+  cardTitle: { fontSize: 15, fontWeight: '700' },
   smartInputWrap: {
     minHeight: 88,
     borderRadius: radius.md,
@@ -519,7 +593,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 12, fontWeight: '700' },
   titleInput: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 17, fontWeight: '700' },
   input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
   noteInput: { minHeight: 80, textAlignVertical: 'top' },

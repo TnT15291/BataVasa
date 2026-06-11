@@ -50,8 +50,8 @@ export async function enqueue(
 export async function getPending(limit = 50): Promise<SyncQueueItem[]> {
   const db = await getDb()
   return db.getAllAsync<SyncQueueItem>(
-    `SELECT * FROM sync_queue WHERE retry_count < ? ORDER BY created_at ASC LIMIT ?`,
-    [MAX_RETRIES, limit]
+    `SELECT * FROM sync_queue ORDER BY created_at ASC LIMIT ?`,
+    [limit]
   )
 }
 
@@ -69,8 +69,8 @@ export async function markFailed(id: string, error: string): Promise<void> {
 }
 
 export async function purgeFailed(): Promise<void> {
-  const db = await getDb()
-  await db.runAsync(`DELETE FROM sync_queue WHERE retry_count >= ?`, [MAX_RETRIES])
+  // Keep failed items so they can retry after the user fixes connectivity or
+  // Supabase schema drift. Silent purging makes sync failures look like data loss.
 }
 
 export async function clearAll(): Promise<void> {

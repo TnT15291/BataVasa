@@ -20,4 +20,20 @@ export function useMode(): 'light' | 'dark' {
   return colorMode === 'system' ? (scheme === 'dark' ? 'dark' : 'light') : colorMode
 }
 
+/**
+ * Returns shadow + border style for top-level card containers.
+ * Inner rows (nested inside a card) should still use border.subtle.
+ */
+export function getCardStyle(theme: ThemeColors) {
+  return {
+    borderWidth: 1,
+    borderColor: theme.border.card,
+    shadowColor: theme.shadow.color,
+    shadowOffset: theme.shadow.offset,
+    shadowOpacity: theme.shadow.opacity,
+    shadowRadius: theme.shadow.radius,
+    elevation: theme.shadow.elevation,
+  } as const
+}
+
 export { typography, spacing, radius }

@@ -23,8 +23,8 @@ export function TransactionRow({ tx, category, onPress, onLongPress }: Props) {
     (tx.amount_cents > 0 && category.kind !== 'income')
   )
   const displayName = categoryMismatch
-    ? tx.amount_cents < 0 ? t.expense : t.income
-    : rawCategoryName
+      ? tx.amount_cents < 0 ? t.expense : t.income
+      : rawCategoryName
   const sign = tx.amount_cents < 0 ? '-' : '+'
   const absAmount = Math.abs(tx.amount_cents)
   const a11yLabel = [
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[3],
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     marginBottom: spacing[2],
     gap: spacing[3],
   },
@@ -98,5 +98,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '600' },
   sub: { fontSize: 12, marginTop: 2 },
   reviewPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.full, paddingHorizontal: spacing[2], paddingVertical: 2, marginTop: 4 },
-  reviewText: { fontSize: 10, fontWeight: '700' },
+  reviewText: { fontSize: 12, fontWeight: '700' },
 })

@@ -287,14 +287,13 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
     marginLeft: spacing[1],
     marginTop: spacing[2],
   },
   tabs: {
     flexDirection: 'row',
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   tab: {
@@ -305,19 +304,19 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   tabBadge: { fontSize: 16 },
-  tabName: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  tabName: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
   activeDot: { width: 6, height: 6, borderRadius: 3, marginTop: 2 },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontSize: 16, fontWeight: '600' },
   chip: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
-  chipText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  chipText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  label: { fontSize: 12, fontWeight: '600' },
   input: {
     borderWidth: 1,
     borderRadius: radius.md,
@@ -343,7 +342,7 @@ const styles = StyleSheet.create({
   statusVal: { fontSize: 13 },
   infoBox: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[2],
   },

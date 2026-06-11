@@ -76,7 +76,7 @@ function styles(theme: ReturnType<typeof useTheme>) {
       height: 88,
       borderRadius: 44,
       backgroundColor: theme.bg.elevated,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderWidth: 1,
       borderColor: theme.border.subtle,
       alignItems: 'center',
       justifyContent: 'center',

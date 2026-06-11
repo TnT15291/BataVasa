@@ -16,6 +16,11 @@ jest.mock('../database/finance/queries', () => ({
   findRuleByPattern: jest.fn(),
   upsertTransactionRule: jest.fn(),
   listTransactionRules: jest.fn(),
+  upsertPlanItem: jest.fn(),
+  listPlanItems: jest.fn(),
+  getPlanItem: jest.fn(),
+  updatePlanItem: jest.fn(),
+  softDeletePlanItem: jest.fn(),
   wipeFinanceData: jest.fn(),
   exportFinanceData: jest.fn(),
 }))
@@ -44,6 +49,7 @@ import {
   deleteCategory,
   wipeAllData,
   exportAllData,
+  calculateSafeToSpend,
   isExpense,
   formatAmount,
 } from '../features/finance/services'
@@ -206,13 +212,14 @@ describe('finance service categories and data management', () => {
   })
 
   it('wipes and exports finance data', async () => {
-    mockQ.wipeFinanceData.mockResolvedValue({ transactions: 2, categories: 1, rules: 0 })
-    mockQ.exportFinanceData.mockResolvedValue({ transactions: [baseTx], categories: [baseCategory], rules: [] })
+    mockQ.wipeFinanceData.mockResolvedValue({ transactions: 2, categories: 1, rules: 0, planItems: 0 })
+    mockQ.exportFinanceData.mockResolvedValue({ transactions: [baseTx], categories: [baseCategory], rules: [], planItems: [] })
 
     const wiped = await wipeAllData()
     expect(wiped.ok).toBe(true)
     if (wiped.ok) expect(wiped.value.deleted).toBe(3)
     expect(mockEnqueue).toHaveBeenCalledWith('finance_transaction', 'ALL', 'wipe')
+    expect(mockEnqueue).toHaveBeenCalledWith('finance_plan_item', 'ALL', 'wipe')
     expect(mockEnqueue).toHaveBeenCalledWith('finance_category', 'ALL', 'wipe')
 
     const exported = await exportAllData()
@@ -223,6 +230,30 @@ describe('finance service categories and data management', () => {
   it('identifies expenses by negative amount', () => {
     expect(isExpense({ amount_cents: -1 })).toBe(true)
     expect(isExpense({ amount_cents: 1 })).toBe(false)
+  })
+})
+
+describe('safe to spend', () => {
+  it('counts savings-style categories as ordinary expense', () => {
+    const savingsCategory = { ...baseCategory, id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', kind: 'savings' as const }
+    const now = new Date('2026-01-15T12:00:00.000Z')
+    const fundAllocation = { ...baseTx, id: 'fund-allocation', category_id: savingsCategory.id, amount_cents: -20000, occurred_at: '2026-01-07T00:00:00.000Z' }
+    const fundSpend = { ...baseTx, id: 'fund-spend', amount_cents: -10000, occurred_at: '2026-01-08T00:00:00.000Z' }
+    const result = calculateSafeToSpend({
+      transactions: [
+        { ...baseTx, id: 'income', amount_cents: 100000, occurred_at: '2026-01-05T00:00:00.000Z' },
+        { ...baseTx, id: 'expense', amount_cents: -25000, occurred_at: '2026-01-06T00:00:00.000Z' },
+        fundAllocation,
+        fundSpend,
+      ],
+      categories: [baseCategory, savingsCategory],
+      currency: 'USD',
+      now,
+    })
+
+    expect(result.income).toBe(100000)
+    expect(result.nonFundExpense).toBe(55000)
+    expect(result.safeToSpend).toBe(45000)
   })
 })
 

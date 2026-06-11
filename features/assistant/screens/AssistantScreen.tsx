@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     maxWidth: '82%',
     padding: spacing[3],
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
   bubbleText: { fontSize: 15, lineHeight: 22 },
   typingRow: {
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     width: '48%',
     minHeight: 58,
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[3],
     gap: spacing[2],
   },

@@ -1,58 +1,44 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  withDelay,
-  Easing,
   ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import * as Haptics from 'expo-haptics'
 import { useTheme } from '@design/useTheme'
 import { MODULE_COLORS } from '@design/moduleColors'
-import { spacing, radius } from '@design/tokens'
+import { radius, spacing } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 
 type IconName = keyof typeof Feather.glyphMap
-
-type Module = {
-  icon: IconName
-  label: string
-  color: string
-  route: string
-}
+type Module = { icon: IconName; label: string; color: string; route: string }
 
 type ItemProps = {
   mod: Module
   visible: boolean
   delay: number
-  active: boolean
-  position: { x: number; y: number }
   onPress: () => void
 }
 
-// Each item manages its own animation so hooks-in-loop is avoided
-function PickerItem({ mod, visible, delay, active, position, onPress }: ItemProps) {
+function PickerItem({ mod, visible, delay, onPress }: ItemProps) {
   const theme = useTheme()
-  const scale = useSharedValue(0)
+  const progress = useSharedValue(0)
 
   useEffect(() => {
-    const cfg = { reduceMotion: ReduceMotion.System }
-    if (visible) {
-      scale.value = withDelay(delay, withSpring(1, { damping: 10, stiffness: 260, ...cfg }))
-    } else {
-      scale.value = withTiming(0, { duration: 100, easing: Easing.in(Easing.quad), ...cfg })
-    }
-  }, [visible, delay, scale])
+    progress.value = visible
+      ? withDelay(delay, withTiming(1, { duration: 170, reduceMotion: ReduceMotion.System }))
+      : withTiming(0, { duration: 120, reduceMotion: ReduceMotion.System })
+  }, [visible, delay, progress])
 
-  const activeScale = active ? 1.18 : 1
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: position.x }, { translateY: position.y }, { scale: scale.value * activeScale }],
-    opacity: scale.value,
+    opacity: progress.value,
+    transform: [{ translateY: (1 - progress.value) * 6 }],
   }))
 
   return (
@@ -63,16 +49,16 @@ function PickerItem({ mod, visible, delay, active, position, onPress }: ItemProp
         accessibilityLabel={mod.label}
         style={({ pressed }) => [
           styles.item,
-          { opacity: pressed ? 0.75 : 1 },
+          {
+            backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary,
+            borderColor: pressed ? mod.color + '66' : theme.border.subtle,
+          },
         ]}
       >
-        <View style={[styles.itemCircle, {
-          backgroundColor: active ? mod.color : mod.color + '20',
-          borderColor: active ? mod.color : mod.color + '40',
-        }]}>
-          <Feather name={mod.icon} size={22} color={active ? '#fff' : mod.color} />
+        <View style={[styles.itemIcon, { backgroundColor: mod.color + '18' }]}>
+          <Feather name={mod.icon} size={19} color={mod.color} />
         </View>
-        <Text style={[styles.itemLabel, { color: active ? theme.text.primary : theme.text.secondary }]} numberOfLines={1}>
+        <Text style={[styles.itemLabel, { color: theme.text.primary }]} numberOfLines={1}>
           {mod.label}
         </Text>
       </Pressable>
@@ -82,198 +68,164 @@ function PickerItem({ mod, visible, delay, active, position, onPress }: ItemProp
 
 type Props = {
   visible: boolean
-  touchPoint?: { x: number; y: number } | null
-  onActiveRouteChange?: (route: string | null) => void
   onClose: () => void
 }
 
-export function ModulePicker({ visible, touchPoint, onActiveRouteChange, onClose }: Props) {
+export function ModulePicker({ visible, onClose }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { width, height } = useWindowDimensions()
-  const [activeRoute, setActiveRoute] = useState<string | null>(null)
+  const { width } = useWindowDimensions()
 
-  const TAB_BAR_H = 62 + insets.bottom
-  const origin = useMemo(() => ({
-    x: width / 2,
-    y: height - TAB_BAR_H + 10,
-  }), [width, height, TAB_BAR_H])
-
-  const modules: Module[] = [
-    { icon: 'dollar-sign', label: t.nav_finance, color: theme.finance.expense, route: '/finance' },
-    { icon: 'check-circle', label: t.habits, color: MODULE_COLORS.habits, route: '/habits' },
-    { icon: 'book-open', label: t.nav_journal, color: MODULE_COLORS.journal, route: '/journals' },
-    { icon: 'bell', label: t.nav_reminders, color: MODULE_COLORS.tasks, route: '/reminders' },
-  ]
-
-  const positions = useMemo(() => {
-    const radius = Math.min(154, Math.max(126, width * 0.36))
-    const angles = [-152, -116, -64, -28]
-    return angles.map((deg) => {
-      const rad = (deg * Math.PI) / 180
-      return {
-        x: Math.cos(rad) * radius,
-        y: Math.sin(rad) * radius,
-      }
-    })
-  }, [width])
-
-  const centers = useMemo(() => positions.map((pos, index) => ({
-    route: modules[index].route,
-    x: origin.x + pos.x,
-    y: origin.y + pos.y,
-  })), [modules, origin, positions])
-
-  // Arc animation
-  const arcScale = useSharedValue(0.7)
-  const arcOpacity = useSharedValue(0)
-  const arcTranslateY = useSharedValue(24)
-
-  // Backdrop
-  const backdropOpacity = useSharedValue(0)
-
-  useEffect(() => {
-    const cfg = { reduceMotion: ReduceMotion.System }
-    if (visible) {
-      backdropOpacity.value = withTiming(1, { duration: 200, ...cfg })
-      arcOpacity.value = withTiming(1, { duration: 180, ...cfg })
-      arcScale.value = withSpring(1, { damping: 16, stiffness: 240, ...cfg })
-      arcTranslateY.value = withSpring(0, { damping: 18, stiffness: 260, ...cfg })
-    } else {
-      backdropOpacity.value = withTiming(0, { duration: 180, ...cfg })
-      arcOpacity.value = withTiming(0, { duration: 150, easing: Easing.in(Easing.quad), ...cfg })
-      arcScale.value = withTiming(0.8, { duration: 160, easing: Easing.in(Easing.quad), ...cfg })
-      arcTranslateY.value = withTiming(20, { duration: 150, ...cfg })
-      setActiveRoute(null)
-    }
-  }, [visible, backdropOpacity, arcOpacity, arcScale, arcTranslateY])
-
-  useEffect(() => {
-    if (!visible || !touchPoint) {
-      if (!visible) onActiveRouteChange?.(null)
-      return
-    }
-
-    let nearest: string | null = null
-    let best = Number.POSITIVE_INFINITY
-    for (const center of centers) {
-      const dx = touchPoint.x - center.x
-      const dy = touchPoint.y - center.y
-      const distance = Math.sqrt(dx * dx + dy * dy)
-      if (distance < best) {
-        best = distance
-        nearest = center.route
-      }
-    }
-
-    const next = best <= 76 ? nearest : null
-    setActiveRoute(next)
-    onActiveRouteChange?.(next)
-  }, [centers, onActiveRouteChange, touchPoint, visible])
-
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }))
-
-  // Scale from bottom-center so modules grow out of the Home button.
-  const arcStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: arcTranslateY.value },
-      { scale: arcScale.value },
+  const modules: Module[] = useMemo(
+    () => [
+      { icon: 'dollar-sign',  label: t.nav_finance,  color: theme.finance.expense, route: '/finance'   },
+      { icon: 'check-circle', label: t.habits,        color: MODULE_COLORS.habits,  route: '/habits'    },
+      { icon: 'book-open',    label: t.nav_journal,   color: MODULE_COLORS.journal, route: '/journals'  },
+      { icon: 'bell',         label: t.nav_reminders, color: MODULE_COLORS.tasks,   route: '/reminders' },
     ],
-    opacity: arcOpacity.value,
+    [t.nav_finance, t.habits, t.nav_journal, t.nav_reminders, theme.finance.expense],
+  )
+
+  const panelProgress = useSharedValue(0)
+
+  useEffect(() => {
+    panelProgress.value = withTiming(visible ? 1 : 0, {
+      duration: visible ? 180 : 140,
+      reduceMotion: ReduceMotion.System,
+    })
+  }, [visible, panelProgress])
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: panelProgress.value }))
+  const panelStyle = useAnimatedStyle(() => ({
+    opacity: panelProgress.value,
+    transform: [{ translateY: (1 - panelProgress.value) * 18 }],
   }))
 
   const navigate = (route: string) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     onClose()
-    setTimeout(() => router.push(route as any), 120)
+    setTimeout(() => router.navigate(route as any), 90)
   }
+
+  const panelWidth = Math.min(width - spacing[8], 420)
 
   return (
     <>
-      {/* Backdrop — tap to dismiss */}
       <Animated.View
-        style={[StyleSheet.absoluteFill, backdropStyle]}
-        pointerEvents={visible ? 'box-none' : 'none'}
+        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.32)' }, backdropStyle]}
+        pointerEvents={visible ? 'auto' : 'none'}
       >
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={onClose}
-          accessible={false}
-        />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
       </Animated.View>
 
       <Animated.View
-        pointerEvents={visible ? 'box-none' : 'none'}
+        pointerEvents={visible ? 'auto' : 'none'}
         style={[
-          styles.arcWrap,
-          { left: origin.x, top: origin.y },
-          arcStyle,
+          styles.panel,
+          {
+            width: panelWidth,
+            bottom: 76 + insets.bottom,
+            backgroundColor: theme.bg.elevated,
+            borderColor: theme.border.card,
+            shadowColor: theme.shadow.color,
+            shadowOffset: theme.shadow.offset,
+            shadowOpacity: theme.shadow.opacity,
+            shadowRadius: theme.shadow.radius,
+            elevation: theme.shadow.elevation,
+          },
+          panelStyle,
         ]}
       >
-        <View style={[styles.originHint, { backgroundColor: theme.brand.primary + '22', borderColor: theme.brand.primary + '55' }]}>
-          <Feather name="home" size={17} color={theme.brand.primary} />
+        <View style={styles.panelHeader}>
+          <Text style={[styles.panelTitle, { color: theme.text.primary }]}>{t.home_command_center}</Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t.ai_confirm_cancel}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.closeBtn,
+              { backgroundColor: pressed ? theme.bg.secondary : 'transparent' },
+            ]}
+          >
+            <Feather name="x" size={17} color={theme.text.secondary} />
+          </Pressable>
         </View>
-        {modules.map((mod, i) => (
-          <PickerItem
-            key={mod.route}
-            mod={mod}
-            visible={visible}
-            delay={i * 45}
-            active={activeRoute === mod.route}
-            position={positions[i]}
-            onPress={() => navigate(mod.route)}
-          />
-        ))}
+        <View style={styles.grid}>
+          {modules.map((mod, i) => (
+            <PickerItem
+              key={mod.route}
+              mod={mod}
+              visible={visible}
+              delay={visible ? i * 25 : 0}
+              onPress={() => navigate(mod.route)}
+            />
+          ))}
+        </View>
       </Animated.View>
     </>
   )
 }
 
 const styles = StyleSheet.create({
-  arcWrap: {
+  panel: {
     position: 'absolute',
-    width: 1,
-    height: 1,
-  },
-  originHint: {
-    position: 'absolute',
-    width: 42,
-    height: 42,
-    left: -21,
-    top: -21,
-    borderRadius: radius.full,
+    alignSelf: 'center',
     borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing[3],
+    gap: spacing[3],
+  },
+  panelHeader: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[2],
+  },
+  panelTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  closeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
   },
   itemWrap: {
-    position: 'absolute',
-    left: -38,
-    top: -38,
+    width: '48%',
+    minWidth: 0,
+    flexGrow: 1,
   },
   item: {
-    width: 76,
-    alignItems: 'center',
-    gap: spacing[1] + 2,
-  },
-  itemCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    minHeight: 56,
     borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  itemIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 10,
   },
   itemLabel: {
-    fontSize: 11,
+    flex: 1,
+    fontSize: 13,
     fontWeight: '700',
-    textAlign: 'center',
   },
 })

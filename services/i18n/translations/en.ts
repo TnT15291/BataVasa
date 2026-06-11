@@ -47,7 +47,7 @@ export const en: Translations = {
   mode_system: 'System',
   theme: 'Theme',
 
-  theme_default: 'Default',
+  theme_default: 'Living Ledger',
   theme_sage: 'Sage',
   theme_ocean: 'Ocean',
   theme_sunset: 'Sunset',
@@ -180,7 +180,8 @@ export const en: Translations = {
   cat_freelance: 'Freelance',
   cat_other_income: 'Other Income',
   cat_emergency_fund: 'Emergency Fund',
-  cat_investments: 'Investments',
+  cat_learning_fund: 'Learning Fund',
+  cat_investments: 'Investment Fund',
 
   date: 'Date',
   location: 'Location',
@@ -218,6 +219,7 @@ export const en: Translations = {
   edit_transaction: 'Edit Transaction',
   update: 'Update',
   confirm_delete_msg: 'Delete this transaction? Reversible on next sync.',
+  confirm_delete_item: 'This action cannot be undone.',
 
   ai_confirm_title: 'Confirm before saving',
   ai_confirm_you_said: 'You said:',
@@ -433,6 +435,20 @@ export const en: Translations = {
   habit_insight_tip: 'Tip',
   habit_last_7_days: 'Last 7 Days',
   habit_last_4_weeks: 'Last 4 weeks',
+  journal_reflection_title: 'Journal Reflection',
+  journal_reflection_generate: 'Generate AI Reflection',
+  journal_reflection_loading: 'Analyzing your journals…',
+  journal_reflection_min_data: 'Write at least 3 entries to unlock AI reflection.',
+  journal_reflection_mood: 'Mood Pattern',
+  journal_reflection_themes: 'Recurring Themes',
+  journal_reflection_questions: "What You're Exploring",
+  journal_reflection_prompt: 'Reflection Prompt',
+  reminder_insight_title: 'Reminder Insights',
+  reminder_insight_generate: 'Generate AI Insights',
+  reminder_insight_loading: 'Analyzing your reminders…',
+  reminder_insight_min_data: 'Add at least 5 reminders to unlock AI insights.',
+  reminder_insight_pattern: 'Completion Pattern',
+  reminder_insight_tip: 'Suggestions',
   journal_empty_prompt: 'Today I noticed...',
 
   // Auth
@@ -471,6 +487,9 @@ export const en: Translations = {
   auth_error_same_password: 'New password must be different from your current one.',
   auth_error_invalid_email: 'Please enter a valid email address.',
   auth_error_generic: 'Something went wrong. Please try again.',
+  error_title_generic: 'Something went wrong',
+  error_button_try_again: 'Try again',
+  error_database_init_failed: 'Database initialization failed',
   auth_not_configured_title: 'Sign-in unavailable',
   auth_not_configured_body: "Sign-in isn't available yet. See the setup guide:",
   auth_signed_in_as: 'Signed in as',
@@ -524,6 +543,26 @@ export const en: Translations = {
   help_permissions_title: 'Permissions we may ask for',
   help_footer: 'You can change language, theme, sync, and privacy options anytime in Settings.',
   category_others: 'Others',
+
+  // Habit strength score
+  habit_strength_score: '30d Stability',
+
+  // Journal activity tags
+  journal_tags_label: 'Activity Tags',
+  tag_work: 'Work',
+  tag_family: 'Family',
+  tag_health: 'Health',
+  tag_money: 'Money',
+  tag_sleep: 'Sleep',
+  tag_exercise: 'Exercise',
+  tag_stress: 'Stress',
+  tag_food: 'Food',
+  tag_travel: 'Travel',
+  tag_social: 'Social',
+
+  // Reminder calendar view
+  view_calendar: 'Calendar',
+  view_list: 'List',
   report_category_breakdown: 'By Category',
   priority_low: 'Low',
   priority_medium: 'Medium',
@@ -539,6 +578,16 @@ export const en: Translations = {
   pay_bill: 'Pay {{name}}',
   load_more: 'Load more',
   no_review_items: 'No transactions need review',
+  safe_to_spend: 'Safe to spend',
+  safe_to_spend_formula: 'Logged income plus remaining planned income, minus logged spending and remaining planned expenses.',
+  safe_income: 'Income',
+  safe_planned_income: 'Planned income left',
+  safe_regular_expense: 'Spent',
+  safe_planned_expense: 'Planned expenses left',
+  monthly_plan: 'Monthly plan',
+  monthly_plan_empty: 'Save recurring items into the plan so Safe to spend can forecast more accurately.',
+  plan_due_day: 'Day {{day}} monthly',
+  recurring_patterns: 'Recurring patterns',
 
   // Habits — schedule
   cadence_custom: 'Selected days',
@@ -565,7 +614,7 @@ export const en: Translations = {
   journal_anniversary_reminder_hint: 'Creates a high-priority task for this important event.',
 
   // Home timeline
-  today_timeline: 'Today timeline',
+  today_timeline: "Today's Timeline",
   today_timeline_empty: 'Your finance, tasks, habits, and journal entries will appear here today.',
   home_command_center: 'Command Center',
   review_inbox_title: 'Review Inbox',

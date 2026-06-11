@@ -383,11 +383,10 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     marginBottom: spacing[2],
     marginLeft: spacing[1],
-    letterSpacing: 0.5,
   },
   section: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   row: {

@@ -105,10 +105,10 @@ export function UpdatePasswordScreen() {
 
 const styles = StyleSheet.create({
   body: { padding: spacing[6], paddingTop: spacing[8] * 1.5, gap: spacing[2], flexGrow: 1, justifyContent: 'center' },
-  logo: { fontSize: 34, fontWeight: '700', textAlign: 'center', letterSpacing: 0.5 },
+  logo: { fontSize: 34, fontWeight: '700', textAlign: 'center' },
   title: { fontSize: 18, fontWeight: '600', textAlign: 'center', marginTop: spacing[5] },
   subtitle: { fontSize: 14, textAlign: 'center', marginTop: spacing[2], marginBottom: spacing[5] },
-  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: spacing[2] },
+  label: { fontSize: 12, fontWeight: '600', marginTop: spacing[2] },
   input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
   error: { fontSize: 13, marginTop: spacing[2] },
   cta: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[5] },

@@ -178,6 +178,37 @@ describe('parseUniversalEntry', () => {
     expect(result).toEqual([])
   })
 
+  it('preserves short Vietnamese habit title from user input when AI damages tone marks', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
+      { confidence: 0.9, reason: 'habit', selectedByDefault: true, entry: {
+        module: 'habits', title: 'Uương nước', frequency: 'daily',
+      }},
+    ]}))
+    const result = await parseUniversalCandidates('uống nước')
+    expect(result).toHaveLength(1)
+    expect(result[0]?.entry).toMatchObject({ module: 'habits', title: 'uống nước' })
+  })
+
+  it('keeps AI habit target_per_period when present', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
+      { confidence: 0.9, reason: 'habit', selectedByDefault: true, entry: {
+        module: 'habits', title: 'tập thở', frequency: 'daily', target_per_period: 5,
+      }},
+    ]}))
+    const result = await parseUniversalCandidates('tập thở 5 lần 1 ngày')
+    expect(result[0]?.entry).toMatchObject({ module: 'habits', title: 'tập thở', target_per_period: 5 })
+  })
+
+  it('infers habit target_per_period from Vietnamese text when AI omits it', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
+      { confidence: 0.9, reason: 'habit', selectedByDefault: true, entry: {
+        module: 'habits', title: 'tập thở', frequency: 'daily',
+      }},
+    ]}))
+    const result = await parseUniversalCandidates('tập thở 5 lần 1 ngày')
+    expect(result[0]?.entry).toMatchObject({ module: 'habits', title: 'tập thở', target_per_period: 5 })
+  })
+
   it('normalizeEntry returns null for journal with empty content', async () => {
     mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
       { confidence: 0.7, reason: 'x', selectedByDefault: true, entry: {

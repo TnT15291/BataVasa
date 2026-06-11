@@ -68,6 +68,16 @@ describe('parseSmartEntry', () => {
     expect(result).not.toBeNull()
     expect(result?.amount_cents).toBe(50000)
     expect(result?.direction).toBe('expense')
+    const [, userMsg] = mockChat.mock.calls[0][0]
+    expect(userMsg.content).not.toContain('Available funds')
+    expect(userMsg.content).not.toContain('fund_hint')
+    expect(userMsg.content).toContain('ordinary expense categories')
+  })
+
+  it('treats fund wording as a category-only parse', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":200000,"direction":"expense","category_hint":"Learning Fund","merchant":"","note":"swimming class"}')
+    const result = await parseSmartEntry('hoc boi 200k quy hoc tap', [baseCategory, { ...baseCategory, name: 'Learning Fund' }])
+    expect(result?.category_hint).toBe('Learning Fund')
   })
 
   it('returns null when AI response has no JSON', async () => {
@@ -108,11 +118,11 @@ describe('parseSmartEntry', () => {
     expect(result).toBeNull()
   })
 
-  it('does not override when ratio is within acceptable range', async () => {
+  it('does not override amount when ratio is within acceptable range', async () => {
     // extractAmount returns 50000; AI returns 50000 (ratio=1, within range)
-    mockChat.mockResolvedValue('{"amount_cents":50000,"direction":"expense","category_hint":"Food","merchant":"Starbucks","note":"iced"}')
+    mockChat.mockResolvedValue('{"amount_cents":50000,"direction":"expense","category_hint":"Food","merchant":"Cafe","note":"iced"}')
     const result = await parseSmartEntry('50k cafe', [baseCategory])
     expect(result?.amount_cents).toBe(50000)
-    expect(result?.merchant).toBe('Starbucks')
+    expect(result?.merchant).toBe('cafe')
   })
 })

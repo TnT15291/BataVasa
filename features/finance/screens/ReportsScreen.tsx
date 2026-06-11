@@ -26,7 +26,7 @@ import {
   format, parseISO, isValid,
   eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval,
 } from 'date-fns'
-import { useTheme, type Theme } from '@design/useTheme'
+import { useTheme, getCardStyle, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation, type Translations } from '@services/i18n'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
@@ -47,10 +47,60 @@ type ChartBucket = { key: string; label: string; from: Date; to: Date; income: n
 
 type CatBreakdownItem = { cat: Category | undefined; amount: number }
 
-function getCategoryIconName(icon: string | undefined): string {
-  if (!icon) return 'circle'
-  if (icon === 'utensils') return 'coffee'
-  return icon
+function ArcFill({ pct, color, size, strokeWidth }: {
+  pct: number; color: string; size: number; strokeWidth: number
+}) {
+  const half = size / 2
+  const clamped = Math.min(100, Math.max(0, pct))
+  const rightDeg = (Math.min(clamped, 50) / 50) * 180 - 180
+  const leftDeg = (Math.max(clamped - 50, 0) / 50) * 180 - 180
+  const circleStyle = {
+    width: size, height: size, borderRadius: half,
+    borderWidth: strokeWidth, borderColor: color,
+    position: 'absolute' as const,
+  }
+  return (
+    <>
+      <View style={{ position: 'absolute', top: 0, right: 0, width: half, height: size, overflow: 'hidden' }}>
+        <View style={{ position: 'absolute', top: 0, left: -half, width: size, height: size }}>
+          <View style={[circleStyle, { transform: [{ rotate: `${rightDeg}deg` }] }]} />
+        </View>
+      </View>
+      <View style={{ position: 'absolute', top: 0, left: 0, width: half, height: size, overflow: 'hidden' }}>
+        <View style={{ position: 'absolute', top: 0, right: -half, width: size, height: size }}>
+          <View style={[circleStyle, { transform: [{ rotate: `${leftDeg}deg` }] }]} />
+        </View>
+      </View>
+    </>
+  )
+}
+
+function CategoryDonutChart({ breakdown, totalExpense, bgColor, trackColor, size = 120, ringWidth = 18 }: {
+  breakdown: CatBreakdownItem[]; totalExpense: number
+  bgColor: string; trackColor: string; size?: number; ringWidth?: number
+}) {
+  if (breakdown.length === 0 || totalExpense === 0) return <View style={{ width: size, height: size }} />
+  const withCumulative = breakdown.map((item, i) => ({
+    color: item.cat?.color ?? '#888888',
+    cumPct: breakdown.slice(0, i + 1).reduce((s, x) => s + x.amount, 0) / totalExpense * 100,
+  }))
+  const layers = [...withCumulative].reverse()
+  const innerSize = size - ringWidth * 2
+  return (
+    <View style={{ width: size, height: size }}>
+      <View style={[StyleSheet.absoluteFill, {
+        borderRadius: size / 2, borderWidth: ringWidth, borderColor: trackColor,
+      }]} />
+      {layers.map((layer, i) => (
+        <ArcFill key={i} pct={layer.cumPct} color={layer.color} size={size} strokeWidth={ringWidth} />
+      ))}
+      <View style={{
+        position: 'absolute', top: ringWidth, left: ringWidth,
+        width: innerSize, height: innerSize, borderRadius: innerSize / 2,
+        backgroundColor: bgColor,
+      }} />
+    </View>
+  )
 }
 
 function CategoryBreakdownCard({
@@ -65,45 +115,38 @@ function CategoryBreakdownCard({
 }) {
   if (breakdown.length === 0 || totalExpense === 0) return null
   return (
-    <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+    <View style={[styles.card, getCardStyle(theme), { backgroundColor: theme.bg.elevated }]}>
       <View style={styles.snapshotHeader}>
         <Text style={[styles.snapshotTitle, { color: theme.text.primary }]}>{t.report_category_breakdown}</Text>
         <Text style={[styles.snapshotMeta, { color: theme.text.muted }]}>{t.expense}</Text>
       </View>
-      <View style={[styles.stackedBar, { backgroundColor: theme.bg.secondary }]}>
-        {breakdown.map((item) => (
-          <View
-            key={item.cat?.id ?? 'others'}
-            style={{ flex: item.amount / totalExpense, height: '100%', backgroundColor: item.cat?.color ?? theme.text.muted }}
-          />
-        ))}
-      </View>
-      {breakdown.map((item) => {
-        const pct = Math.round((item.amount / totalExpense) * 100)
-        const color = item.cat?.color ?? theme.text.muted
-        const name = item.cat
-          ? item.cat.kind === 'income' ? `${t.expense} (${t.review_queue})` : translateCategoryName(item.cat, t)
-          : t.category_others
-        return (
-          <View key={item.cat?.id ?? 'others'} style={styles.catRow}>
-            <View style={[styles.catIconWrap, { backgroundColor: color + '20' }]}>
-              <Feather name={getCategoryIconName(item.cat?.icon) as any} size={16} color={color} />
-            </View>
-            <View style={styles.catBody}>
-              <View style={styles.catNameRow}>
+      <View style={styles.donutLayout}>
+        <CategoryDonutChart
+          breakdown={breakdown}
+          totalExpense={totalExpense}
+          bgColor={theme.bg.elevated}
+          trackColor={theme.bg.secondary}
+        />
+        <View style={styles.catList}>
+          {breakdown.map((item) => {
+            const pct = Math.round((item.amount / totalExpense) * 100)
+            const color = item.cat?.color ?? theme.text.muted
+            const name = item.cat
+              ? item.cat.kind === 'income' ? `${t.expense} (${t.review_queue})` : translateCategoryName(item.cat, t)
+              : t.category_others
+            return (
+              <View key={item.cat?.id ?? 'others'} style={styles.catRow}>
+                <View style={[styles.catDot, { backgroundColor: color }]} />
                 <Text style={[styles.catName, { color: theme.text.primary }]} numberOfLines={1}>{name}</Text>
                 <Text style={[styles.catAmount, { color: theme.text.secondary }]}>
                   {formatAmount(item.amount, currency, language)}
                 </Text>
+                <Text style={[styles.catPct, { color: theme.text.muted }]}>{pct}%</Text>
               </View>
-              <View style={[styles.catBarTrack, { backgroundColor: theme.bg.secondary }]}>
-                <View style={[styles.catBarFill, { width: `${pct}%` as any, backgroundColor: color }]} />
-              </View>
-            </View>
-            <Text style={[styles.catPct, { color: theme.text.muted }]}>{pct}%</Text>
-          </View>
-        )
-      })}
+            )
+          })}
+        </View>
+      </View>
     </View>
   )
 }
@@ -117,7 +160,7 @@ function StatCard({
   const isGood = deltaPositive ? (delta ?? 0) >= 0 : (delta ?? 0) <= 0
   const sign = (delta ?? 0) >= 0 ? '+' : ''
   return (
-    <View style={[styles.statCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+    <View style={[styles.statCard, getCardStyle(theme), { backgroundColor: theme.bg.elevated }]}>
       <Text style={[styles.statValue, { color: theme.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
@@ -257,6 +300,7 @@ export function ReportsScreen() {
 
   const range = getRange()
   const reportCurrency = fxRates ? displayCurrency : currency
+  const catById = useMemo(() => new Map(cats.map((cat) => [cat.id, cat])), [cats])
   const rangeTxs = useMemo(() => {
     if (!range) return []
     const fromIso = range.from.toISOString()
@@ -267,7 +311,7 @@ export function ReportsScreen() {
       if (kindFilter === 'expense') return tx.amount_cents < 0
       return true
     })
-  }, [allTxs, range?.from, range?.to, kindFilter])
+  }, [allTxs, range?.from, range?.to, kindFilter, catById])
 
   const amountInReportCurrency = useCallback((amount: number, txCurrency: string) => {
     if (txCurrency === reportCurrency) return amount
@@ -286,7 +330,7 @@ export function ReportsScreen() {
       else expense += Math.abs(amount)
     }
     return { count: rangeTxs.length, income, expense }
-  }, [rangeTxs, amountInReportCurrency])
+  }, [rangeTxs, amountInReportCurrency, catById])
   const hasRangeData = summary.count > 0
 
   const prevSummary = useMemo(() => {
@@ -321,7 +365,7 @@ export function ReportsScreen() {
       else expense += Math.abs(amount)
     }
     return { count: prevTxs.length, income, expense }
-  }, [period, anchorDate, allTxs, amountInReportCurrency])
+  }, [period, anchorDate, allTxs, amountInReportCurrency, catById])
 
   const calcDelta = (cur: number, prev: number): number | undefined =>
     prev === 0 ? undefined : Math.round(((cur - prev) / Math.abs(prev)) * 100)
@@ -334,14 +378,14 @@ export function ReportsScreen() {
       if (amount === 0) continue
       const existing = catMap.get(tx.category_id)
       if (existing) existing.amount += amount
-      else catMap.set(tx.category_id, { amount, cat: cats.find((c) => c.id === tx.category_id) })
+      else catMap.set(tx.category_id, { amount, cat: catById.get(tx.category_id) })
     }
     const sorted = Array.from(catMap.values()).sort((a, b) => b.amount - a.amount)
     const top = sorted.slice(0, 5)
     const othersAmount = sorted.slice(5).reduce((s, x) => s + x.amount, 0)
     if (othersAmount > 0) top.push({ amount: othersAmount, cat: undefined })
     return top
-  }, [rangeTxs, cats, amountInReportCurrency])
+  }, [rangeTxs, catById, amountInReportCurrency])
 
   const chartBuckets = useMemo<ChartBucket[]>(() => {
     if (!range) return []
@@ -383,7 +427,7 @@ export function ReportsScreen() {
     }
     return eachMonthOfInterval({ start: range.from, end: range.to })
       .map((d) => makeBucket(startOfMonth(d), endOfMonth(d), format(d, 'MMM yy', { locale: dfLocale }), format(d, 'yyyy-MM')))
-  }, [range?.from, range?.to, rangeTxs, period, dfLocale, amountInReportCurrency])
+  }, [range?.from, range?.to, rangeTxs, period, dfLocale, amountInReportCurrency, catById])
 
   const chartMax = Math.max(...chartBuckets.map((b) => Math.max(b.income, b.expense)), 1)
 
@@ -435,7 +479,7 @@ export function ReportsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       {/* Period tabs */}
-      <View style={[styles.tabs, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      <View style={[styles.tabs, getCardStyle(theme), { backgroundColor: theme.bg.elevated }]}>
         {TABS.map(({ key, label }) => {
           const active = period === key
           return (
@@ -525,7 +569,7 @@ export function ReportsScreen() {
             theme={theme}
           />
         </View>
-        <View style={[styles.snapshotCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.snapshotCard, getCardStyle(theme), { backgroundColor: theme.bg.elevated }]}>
           <View style={styles.snapshotHeader}>
             <Text style={[styles.snapshotTitle, { color: theme.text.primary }]}>{t.report_snapshot}</Text>
             <Text style={[styles.snapshotMeta, { color: theme.text.muted }]}>{range ? range.label : t.custom_range}</Text>
@@ -599,7 +643,7 @@ export function ReportsScreen() {
         )}
         {report ? (
           <>
-            <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <View style={[styles.card, getCardStyle(theme), { backgroundColor: theme.bg.elevated }]}>
               <InsightText text={report} />
             </View>
             <Pressable onPress={shareReport} style={[styles.shareBtn, { borderColor: theme.border.strong }]}>
@@ -685,7 +729,7 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   customField: { flex: 1, gap: spacing[1] },
-  customLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  customLabel: { fontSize: 12, fontWeight: '600' },
   dateInput: {
     borderWidth: 1,
     borderRadius: radius.md,
@@ -701,17 +745,17 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[3],
     alignItems: 'center',
     gap: spacing[1],
   },
   statValue: { fontSize: 20, fontWeight: '700' },
-  deltaBadge: { fontSize: 11, fontWeight: '700' },
-  statLabel: { fontSize: 11, textAlign: 'center' },
+  deltaBadge: { fontSize: 12, fontWeight: '700' },
+  statLabel: { fontSize: 12, textAlign: 'center' },
   snapshotCard: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
@@ -721,7 +765,7 @@ const styles = StyleSheet.create({
   legendRow: { flexDirection: 'row', gap: spacing[3], alignItems: 'center' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
   legendDot: { width: 8, height: 8, borderRadius: radius.full },
-  legendText: { fontSize: 11, fontWeight: '600' },
+  legendText: { fontSize: 12, fontWeight: '600' },
   columnChart: {
     minHeight: 170,
     flexDirection: 'row',
@@ -738,11 +782,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   columnBar: { width: '100%', borderRadius: radius.sm },
-  columnLabel: { fontSize: 10, maxWidth: 34, textAlign: 'center' },
+  columnLabel: { fontSize: 12, maxWidth: 34, textAlign: 'center' },
   filterRow: { flexDirection: 'row', gap: spacing[2] },
   filterPill: {
     flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: radius.full,
     paddingVertical: spacing[2],
     alignItems: 'center',
@@ -750,25 +794,16 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 12, fontWeight: '600' },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
   },
-  stackedBar: { flexDirection: 'row', height: 12, borderRadius: radius.full, overflow: 'hidden' },
+  donutLayout: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  catList: { flex: 1, gap: spacing[2] },
   catRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  catIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  catBody: { flex: 1, gap: 2 },
-  catNameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[2] },
-  catName: { fontSize: 13, fontWeight: '500', flex: 1 },
-  catAmount: { fontSize: 12 },
-  catBarTrack: { height: 4, borderRadius: radius.full, overflow: 'hidden' },
-  catBarFill: { height: '100%', borderRadius: radius.full },
-  catPct: { fontSize: 11, fontWeight: '700', width: 32, textAlign: 'right' },
+  catDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  catName: { fontSize: 12, fontWeight: '500', flex: 1 },
+  catAmount: { fontSize: 11 },
+  catPct: { fontSize: 11, fontWeight: '700', width: 28, textAlign: 'right' },
   shareBtn: {
     paddingVertical: spacing[3],
     borderRadius: radius.md,

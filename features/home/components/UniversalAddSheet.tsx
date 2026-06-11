@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   View, Text, TextInput, Pressable, StyleSheet,
   Modal, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
@@ -34,14 +34,35 @@ import { useRemindersStore } from '@store/remindersStore'
 import { useHabitsStore } from '@store/habitsStore'
 import { useJournalsStore } from '@store/journalsStore'
 import { formatAmount } from '@features/finance/services'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 type IconName = keyof typeof Feather.glyphMap
 
-const MODULE_META: Record<string, { icon: IconName; color: string }> = {
-  finance:  { icon: 'dollar-sign', color: '#4CAF50' },
-  reminder: { icon: 'bell', color: '#2196F3' },
-  habits:   { icon: 'check-circle', color: '#FF9800' },
-  journal:  { icon: 'book-open', color: '#9C27B0' },
+function getModuleMeta(theme: ReturnType<typeof useTheme>): Record<string, { icon: IconName; color: string }> {
+  return {
+    finance:  { icon: 'dollar-sign', color: theme.finance.income },
+    reminder: { icon: 'bell', color: MODULE_COLORS.tasks },
+    habits:   { icon: 'check-circle', color: MODULE_COLORS.habits },
+    journal:  { icon: 'book-open', color: MODULE_COLORS.journal },
+  }
+}
+
+function habitFrequencyLine(frequency: string, target: number, language: string, t: ReturnType<typeof useTranslation>['t']): string {
+  const cadence = frequency === 'weekdays'
+    ? t.cadence_weekdays
+    : frequency === 'weekly'
+    ? t.cadence_weekly
+    : frequency === 'monthly'
+    ? t.cadence_monthly
+    : t.cadence_daily
+
+  if (language === 'vi') {
+    if (frequency === 'weekly') return `${target} lần mỗi tuần`
+    if (frequency === 'monthly') return `${target} lần mỗi tháng`
+    if (frequency === 'weekdays') return `${target} lần mỗi ngày thường`
+    return `${target} lần mỗi ngày`
+  }
+  return `${target}x ${cadence.toLowerCase()}`
 }
 
 type Props = {
@@ -50,6 +71,8 @@ type Props = {
   initialText?: string
   autoAnalyzeToken?: number
 }
+
+type SheetStep = 'input' | 'confirm'
 
 type CandidateCardProps = {
   candidate: UniversalCandidate
@@ -64,7 +87,7 @@ type CandidateCardProps = {
 
 function CandidateCard({ candidate, selected, onToggle, index, language, currency, t, theme }: CandidateCardProps) {
   const result = candidate.entry
-  const meta = MODULE_META[result.module]!
+  const meta = getModuleMeta(theme)[result.module]!
   const locale = getDateFnsLocale(language)
   const scale = useSharedValue(1)
 
@@ -96,7 +119,7 @@ function CandidateCard({ candidate, selected, onToggle, index, language, currenc
       result.note || '',
     ].filter(Boolean)
   } else if (result.module === 'habits') {
-    lines = [result.title, result.frequency]
+    lines = [result.title, habitFrequencyLine(result.frequency, result.target_per_period, language, t)]
   } else {
     lines = [result.content?.slice(0, 120) ?? '']
   }
@@ -157,12 +180,21 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   const createHabit = useHabitsStore((s) => s.createHabit)
   const createJournal = useJournalsStore((s) => s.createJournal)
 
+  const catState = useFinanceStore((s) => s.catState)
+  const loadCategories = useFinanceStore((s) => s.loadCategories)
+
   const [text, setText] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [candidates, setCandidates] = useState<UniversalCandidate[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [show, setShow] = useState(false)
+  const [step, setStep] = useState<SheetStep>('input')
+  const analyzeRunRef = useRef(0)
+
+  useEffect(() => {
+    if (catState === 'idle') void loadCategories()
+  }, [catState, loadCategories])
 
   const translateY = useSharedValue(600)
   const backdropOpacity = useSharedValue(0)
@@ -179,11 +211,13 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   }, [visible])
 
   const reset = () => {
+    analyzeRunRef.current += 1
     setText('')
     setCandidates([])
     setSelectedIds([])
     setAnalyzing(false)
     setSaving(false)
+    setStep('input')
   }
 
   const animateOut = (onDone?: () => void) => {
@@ -226,38 +260,48 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   }))
 
   const quickModules: { route: string; icon: IconName; color: string; label: string }[] = [
-    { route: '/new', icon: 'dollar-sign', color: '#4CAF50', label: t.nav_new_transaction },
-    { route: '/reminder', icon: 'bell', color: '#2196F3', label: t.new_reminder },
-    { route: '/habit', icon: 'check-circle', color: '#FF9800', label: t.new_habit },
-    { route: '/journal', icon: 'book-open', color: '#9C27B0', label: t.new_journal },
+    { route: '/new', icon: 'dollar-sign', color: theme.finance.income, label: t.nav_new_transaction },
+    { route: '/reminder', icon: 'bell', color: MODULE_COLORS.tasks, label: t.new_reminder },
+    { route: '/habit', icon: 'check-circle', color: MODULE_COLORS.habits, label: t.new_habit },
+    { route: '/journal', icon: 'book-open', color: MODULE_COLORS.journal, label: t.new_journal },
   ]
 
   const onAnalyze = async (override?: string) => {
     const input = (override ?? text).trim()
-    if (!input) return
+    if (!input || analyzing) return
+    if (override) setText(override)
+    const runId = analyzeRunRef.current + 1
+    analyzeRunRef.current = runId
     const provider = useSettingsStore.getState().aiProvider
     const key = await getProviderKey(provider)
+    if (runId !== analyzeRunRef.current) return
     if (!key) { Alert.alert(t.api_key_required, t.no_api_key_msg); return }
-    if (override) setText(override)
     setAnalyzing(true)
     try {
       const parsed = await parseUniversalCandidates(input)
+      if (runId !== analyzeRunRef.current) return
       if (parsed.length === 0) {
         Alert.alert(t.ai_error, t.parse_failed)
       } else {
         setCandidates(parsed)
         const defaults = parsed.filter((c) => c.selectedByDefault).map((c) => c.id)
         setSelectedIds(defaults.length > 0 ? defaults : [parsed[0]!.id])
+        setStep('confirm')
       }
-    } catch { Alert.alert(t.ai_error, t.parse_failed) }
-    finally { setAnalyzing(false) }
+    } catch {
+      if (runId === analyzeRunRef.current) Alert.alert(t.ai_error, t.parse_failed)
+    } finally {
+      if (runId === analyzeRunRef.current) setAnalyzing(false)
+    }
   }
 
   useEffect(() => {
     if (!visible || !initialText.trim()) return
+    analyzeRunRef.current += 1
     setText(initialText)
     setCandidates([])
     setSelectedIds([])
+    setStep('input')
     if (autoAnalyzeToken > 0) {
       void onAnalyze(initialText)
     }
@@ -310,9 +354,9 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
         const res = await createHabit({
           name: entry.title,
           cadence,
-          target_per_period: 1,
+          target_per_period: entry.target_per_period,
           icon: '✅',
-          color: '#4CAF50',
+          color: MODULE_COLORS.habits,
         })
         if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
       } else if (entry.module === 'journal') {
@@ -364,7 +408,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
 
             <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.universal_add_title}</Text>
 
-            {candidates.length === 0 ? (
+            {step === 'input' ? (
               <>
                 <TextInput
                   value={text}
@@ -374,7 +418,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
                   multiline
                   numberOfLines={3}
                   style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
-                  autoFocus
+                  autoFocus={!analyzing}
                 />
                 <Text style={[styles.examples, { color: theme.text.muted }]}>{t.universal_add_examples}</Text>
                 <View style={styles.analyzeRow}>
@@ -435,7 +479,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
                   <Pressable onPress={handleClose} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
                     <Text style={{ color: theme.text.secondary }}>{t.cancel}</Text>
                   </Pressable>
-                  <Pressable onPress={() => { setCandidates([]); setSelectedIds([]) }} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
+                  <Pressable onPress={() => { analyzeRunRef.current += 1; setCandidates([]); setSelectedIds([]); setStep('input') }} style={[styles.actionBtn, { borderColor: theme.border.strong }]}>
                     <Text style={{ color: theme.text.secondary }}>{t.ai_confirm_edit}</Text>
                   </Pressable>
                   <Pressable
@@ -513,7 +557,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  resultModule: { fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  resultModule: { fontSize: 14, fontWeight: '700' },
   resultCheck: {
     marginLeft: 'auto',
     width: 22,

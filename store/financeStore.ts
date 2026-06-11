@@ -6,6 +6,9 @@ import type {
   UpdateTransactionInput,
   CreateCategoryInput,
   UpdateCategoryInput,
+  PlanItem,
+  CreatePlanItemInput,
+  UpdatePlanItemInput,
 } from '@features/finance/types'
 import * as svc from '@features/finance/services'
 import { logger } from '@services/logger'
@@ -17,14 +20,17 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 type FinanceState = {
   transactions: Transaction[]
   categories: Category[]
+  planItems: PlanItem[]
   txState: LoadState
   catState: LoadState
+  planState: LoadState
   lastError: string | null
   txHasMore: boolean
   txLoadingMore: boolean
 
   loadCategories: () => Promise<void>
   loadTransactions: () => Promise<void>
+  loadPlanItems: () => Promise<void>
   loadMoreTransactions: () => Promise<void>
   createTransaction: (input: CreateTransactionInput) => Promise<{ ok: boolean; error?: string }>
   updateTransaction: (input: UpdateTransactionInput) => Promise<{ ok: boolean; error?: string }>
@@ -33,13 +39,18 @@ type FinanceState = {
   createCategory: (input: CreateCategoryInput) => Promise<{ ok: boolean; error?: string }>
   updateCategory: (input: UpdateCategoryInput) => Promise<{ ok: boolean; error?: string }>
   deleteCategory: (id: string) => Promise<{ ok: boolean; error?: string }>
+  createPlanItem: (input: CreatePlanItemInput) => Promise<{ ok: boolean; error?: string }>
+  updatePlanItem: (input: UpdatePlanItemInput) => Promise<{ ok: boolean; error?: string }>
+  deletePlanItem: (id: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => ({
   transactions: [],
   categories: [],
+  planItems: [],
   txState: 'idle',
   catState: 'idle',
+  planState: 'idle',
   lastError: null,
   txHasMore: false,
   txLoadingMore: false,
@@ -63,6 +74,17 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     } else {
       logger.error('finance.store', 'loadTransactions failed', { code: r.error.code })
       set({ txState: 'error', lastError: r.error.message })
+    }
+  },
+
+  async loadPlanItems() {
+    set({ planState: 'loading' })
+    const r = await svc.listPlanItems()
+    if (r.ok) {
+      set({ planItems: r.value, planState: 'ready' })
+    } else {
+      logger.error('finance.store', 'loadPlanItems failed', { code: r.error.code })
+      set({ planState: 'error', lastError: r.error.message })
     }
   },
 
@@ -141,14 +163,43 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return { ok: false, error: r.error.message }
   },
 
+  async createPlanItem(input) {
+    const r = await svc.createPlanItem(input)
+    if (r.ok) {
+      set({ planItems: [...get().planItems, r.value] })
+      return { ok: true }
+    }
+    return { ok: false, error: r.error.message }
+  },
+
+  async updatePlanItem(input) {
+    const r = await svc.updatePlanItem(input)
+    if (r.ok) {
+      const updated = r.value
+      set({ planItems: get().planItems.map((p) => (p.id === updated.id ? updated : p)) })
+      return { ok: true }
+    }
+    return { ok: false, error: r.error.message }
+  },
+
+  async deletePlanItem(id) {
+    const r = await svc.deletePlanItem(id)
+    if (r.ok) {
+      set({ planItems: get().planItems.filter((p) => p.id !== id) })
+      return { ok: true }
+    }
+    return { ok: false, error: r.error.message }
+  },
+
   async wipeAll() {
     const r = await svc.wipeAllData()
     if (r.ok) {
       // Clear in-memory state; re-trigger load so system categories re-show
-      set({ transactions: [], categories: [], catState: 'idle', txState: 'idle' })
+      set({ transactions: [], categories: [], planItems: [], catState: 'idle', txState: 'idle', planState: 'idle' })
       // Re-load categories so the system seed re-populates the cache
       await get().loadCategories()
       await get().loadTransactions()
+      await get().loadPlanItems()
       return { ok: true, deleted: r.value.deleted }
     }
     return { ok: false, error: r.error.message }

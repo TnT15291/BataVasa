@@ -1,6 +1,6 @@
 export const MODULE_COLORS = {
-  tasks: '#2196F3',
-  habits: '#FF9800',
-  journal: '#9C27B0',
-  analysis: '#607D8B',
+  tasks: '#4C6F91',
+  habits: '#C9853E',
+  journal: '#7D5A86',
+  analysis: '#5E756E',
 } as const

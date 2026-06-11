@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   hint: { fontSize: 12, marginLeft: spacing[1], marginTop: -spacing[2], fontStyle: 'italic' },
   list: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   row: {

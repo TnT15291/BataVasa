@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[3],
   },
   stepRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },

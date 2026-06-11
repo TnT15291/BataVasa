@@ -21,20 +21,45 @@ type DayStat = {
   journalCount: number
 }
 
+function calculatePromptSafeToSpend(input: {
+  transactions: Transaction[]
+  categories: Category[]
+  currency: string
+}): { safeToSpend: number } {
+  const now = new Date()
+  const month = now.getMonth()
+  const year = now.getFullYear()
+  let income = 0
+  let expense = 0
+  for (const tx of input.transactions) {
+    if (tx.currency !== input.currency) continue
+    const d = new Date(tx.occurred_at)
+    if (d.getMonth() !== month || d.getFullYear() !== year) continue
+    if (tx.amount_cents > 0) {
+      income += tx.amount_cents
+      continue
+    }
+    expense += Math.abs(tx.amount_cents)
+  }
+  return { safeToSpend: Math.max(0, income - expense) }
+}
+
 function buildDayStats(
   txs: Transaction[],
   journals: Journal[],
   cutoff: string,
+  categories: Category[],
 ): Map<string, DayStat> {
   const days = new Map<string, DayStat>()
   const blank = (): DayStat => ({ expense: 0, income: 0, mood: null, journalCount: 0 })
+  const catById = new Map(categories.map((cat) => [cat.id, cat]))
 
   for (const tx of txs) {
     if (tx.occurred_at < cutoff) continue
     const date = tx.occurred_at.split('T')[0]!
     const d = days.get(date) ?? blank()
     if (tx.amount_cents < 0) d.expense += Math.abs(tx.amount_cents)
-    else d.income += tx.amount_cents
+    else if (tx.amount_cents > 0) d.income += tx.amount_cents
     days.set(date, d)
   }
 
@@ -112,14 +137,17 @@ function buildSummary(input: CrossModuleInput, currency: string): string {
       const name = catMap.get(tx.category_id)?.name ?? 'Other'
       const abs = Math.abs(tx.amount_cents)
       if (tx.amount_cents > 0) income += abs
-      else expense += abs
-      catTotals.set(name, (catTotals.get(name) ?? 0) + abs)
+      else {
+        expense += abs
+        catTotals.set(name, (catTotals.get(name) ?? 0) + abs)
+      }
     }
     const topCats = Array.from(catTotals.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([name, amt]) => `  ${name}: ${fmtAI(amt, currency)}`)
-    sections.push(`FINANCE (last 30 days):\n  Income: ${fmtAI(income, currency)} | Expense: ${fmtAI(expense, currency)} | Net: ${fmtAI(income - expense, currency)}\n  Top categories:\n${topCats.join('\n')}`)
+    const safe = calculatePromptSafeToSpend({ transactions, categories, currency })
+    sections.push(`FINANCE (last 30 days):\n  Income: ${fmtAI(income, currency)} | Expense: ${fmtAI(expense, currency)} | Net cash: ${fmtAI(income - expense, currency)} | Safe to spend: ${fmtAI(safe.safeToSpend, currency)}\n  Top spending categories:\n${topCats.join('\n')}`)
   }
 
   // Habits summary
@@ -147,7 +175,7 @@ function buildSummary(input: CrossModuleInput, currency: string): string {
   }
 
   // Cross-module correlation block
-  const dayStats = buildDayStats(recentTxs, recentJournals, cutoff)
+  const dayStats = buildDayStats(recentTxs, recentJournals, cutoff, categories)
   const corr = correlationBlock(dayStats, currency)
   if (corr) sections.push(`CROSS-MODULE PATTERNS:\n${corr}`)
 

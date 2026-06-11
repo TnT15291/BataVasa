@@ -6,6 +6,7 @@ export type Journal = {
   content: string
   mood: number | null // 1-5: very sad → very happy
   is_important: number
+  tags: string | null // comma-separated preset tag keys e.g. "work,health"
   occurred_at: string
   location_lat: number | null
   location_lng: number | null
@@ -20,6 +21,7 @@ export const CreateJournalInputSchema = z.object({
   content: z.string().min(1).max(10000),
   mood: z.number().int().min(1).max(5).optional(),
   is_important: z.number().int().min(0).max(1).optional(),
+  tags: z.string().max(500).optional(),
   occurred_at: z.string().datetime(),
   location_lat: z.number().min(-90).max(90).optional(),
   location_lng: z.number().min(-180).max(180).optional(),

@@ -7,6 +7,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 type HabitWithStats = Habit & {
   todayCount: number
   streak: number
+  strengthScore: number
   dueToday: boolean
 }
 
@@ -25,11 +26,12 @@ type HabitsState = {
 }
 
 async function hydrateStats(habit: Habit): Promise<HabitWithStats> {
-  const [todayCount, streak] = await Promise.all([
+  const [todayCount, streak, strengthScore] = await Promise.all([
     svc.getCurrentPeriodLogCount(habit),
     svc.getHabitStreak(habit.id),
+    svc.getHabit30DayScore(habit),
   ])
-  return { ...habit, todayCount, streak, dueToday: svc.isHabitDueOnDate(habit, new Date()) }
+  return { ...habit, todayCount, streak, strengthScore, dueToday: svc.isHabitDueOnDate(habit, new Date()) }
 }
 
 export const useHabitsStore = create<HabitsState>((set, get) => ({

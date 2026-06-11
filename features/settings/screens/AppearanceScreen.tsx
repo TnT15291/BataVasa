@@ -1,6 +1,6 @@
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import { useTheme, useMode } from '@design/useTheme'
+import { useTheme, useMode, getCardStyle } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore, type ColorMode, type ThemeName } from '@store/settingsStore'
@@ -10,6 +10,7 @@ const COLOR_MODES: ColorMode[] = ['light', 'dark', 'system']
 
 export function AppearanceScreen() {
   const theme = useTheme()
+  const cardStyle = getCardStyle(theme)
   const mode = useMode()
   const { t } = useTranslation()
   const { colorMode, themeName, setColorMode, setThemeName } = useSettingsStore()
@@ -32,7 +33,7 @@ export function AppearanceScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={styles.container}>
       {/* Color Mode */}
       <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.color_mode.toUpperCase()}</Text>
-      <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
         <View style={styles.modeRow}>
           {COLOR_MODES.map((m) => {
             const active = colorMode === m
@@ -59,7 +60,7 @@ export function AppearanceScreen() {
 
       {/* Theme picker */}
       <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.theme.toUpperCase()}</Text>
-      <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
         <View style={styles.swatchGrid}>
           {THEME_SWATCHES.map((s) => {
             const active = themeName === s.name
@@ -102,11 +103,10 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     marginBottom: spacing[2],
     marginLeft: spacing[1],
-    letterSpacing: 0.5,
   },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
   },
   modeRow: { flexDirection: 'row', gap: spacing[2] },

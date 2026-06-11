@@ -48,7 +48,7 @@ export function MoodSelector({ value, onChange }: Props) {
             ]}
           >
             <Text style={styles.emoji} importantForAccessibility="no">{m.emoji}</Text>
-            <Text style={{ color: active ? '#fff' : theme.text.muted, fontSize: 11 }} importantForAccessibility="no">
+            <Text style={{ color: active ? '#fff' : theme.text.muted, fontSize: 12 }} importantForAccessibility="no">
               {label}
             </Text>
           </Pressable>

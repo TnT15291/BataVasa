@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
   container: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     maxHeight: '90%',
     overflow: 'hidden',
   },
@@ -200,7 +200,6 @@ const styles = StyleSheet.create({
   step: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
   },
   section: {
     gap: spacing[3],
@@ -220,7 +219,7 @@ const styles = StyleSheet.create({
     marginTop: spacing[2],
   },
   languageOption: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],
@@ -232,14 +231,13 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[2],
   },
   cardLabel: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
   },
   cardTitle: {
     fontSize: 16,
@@ -266,7 +264,7 @@ const styles = StyleSheet.create({
   },
   bulletList: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[2],
   },
@@ -277,13 +275,11 @@ const styles = StyleSheet.create({
   flowTitle: {
     fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
     marginTop: spacing[1],
   },
   syncNote: {
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[3],
     marginTop: spacing[1],
   },

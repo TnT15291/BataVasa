@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },

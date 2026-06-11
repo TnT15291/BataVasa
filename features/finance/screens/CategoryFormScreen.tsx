@@ -200,7 +200,7 @@ export function CategoryFormScreen() {
 
 const styles = StyleSheet.create({
   body: { padding: spacing[4], gap: spacing[3], paddingBottom: spacing[8] },
-  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 12, fontWeight: '600' },
   input: {
     borderWidth: 1,
     borderRadius: radius.md,

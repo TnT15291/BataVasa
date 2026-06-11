@@ -74,7 +74,7 @@ export function CategoryPicker({ categories, selectedId, onSelect, filterKind, s
 
 const styles = StyleSheet.create({
   group: { marginBottom: spacing[4] },
-  groupTitle: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginBottom: spacing[2] },
+  groupTitle: { fontSize: 12, fontWeight: '600', marginBottom: spacing[2] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   chip: {
     paddingHorizontal: spacing[3],

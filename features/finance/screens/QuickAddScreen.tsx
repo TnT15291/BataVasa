@@ -300,7 +300,7 @@ export function QuickAddScreen() {
         <View style={[styles.smartBox, { backgroundColor: theme.bg.elevated, borderColor: hasApiKey ? theme.border.subtle : theme.border.strong }]}>
           <View style={styles.smartHeader}>
             <View style={[styles.smartIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
-              <Feather name="star" size={16} color={hasApiKey ? theme.brand.primary : theme.text.muted} />
+              <Feather name="zap" size={16} color={hasApiKey ? theme.brand.primary : theme.text.muted} />
             </View>
             <Text style={[styles.smartTitle, { color: hasApiKey ? theme.brand.primary : theme.text.muted }]}>
               {t.smart_entry}
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   setupRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   smartBox: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[3],
     gap: spacing[2],
   },
@@ -511,13 +511,13 @@ const styles = StyleSheet.create({
   smartHint: { fontSize: 12 },
   primaryCard: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
   detailsCard: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
@@ -531,14 +531,14 @@ const styles = StyleSheet.create({
   },
   amountInput: {
     fontSize: 44,
-    fontWeight: '800',
+    fontWeight: '700',
     textAlign: 'center',
     paddingVertical: spacing[3],
     borderBottomWidth: 1,
   },
   currency: { textAlign: 'center', fontSize: 12, marginTop: -spacing[2] },
-  label: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginTop: spacing[1], letterSpacing: 0.5 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 12, fontWeight: '700', marginTop: spacing[1] },
+  sectionTitle: { fontSize: 12, fontWeight: '700' },
   box: {
     borderRadius: radius.md,
     borderWidth: 1,

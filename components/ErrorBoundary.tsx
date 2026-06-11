@@ -1,6 +1,9 @@
 import React from 'react'
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ScrollView, Appearance } from 'react-native'
 import * as Sentry from '@sentry/react-native'
+import { useSettingsStore } from '@store/settingsStore'
+import { themes } from '@design/themes'
+import { getTranslations } from '@services/i18n'
 
 type Props = { children: React.ReactNode }
 type State = { hasError: boolean; message: string; stack: string }
@@ -27,30 +30,40 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const theme = getActiveTheme()
+      const t = getTranslations()
+
       return (
-        <View style={styles.container}>
-          <Text style={styles.title}>Something went wrong</Text>
+        <View style={[styles.container, { backgroundColor: theme.bg.primary }] }>
+          <Text style={[styles.title, { color: theme.text.danger }]}>{t.error_title_generic}</Text>
           {this.state.message ? (
-            <Text style={styles.message}>{this.state.message}</Text>
+            <Text style={[styles.message, { color: theme.text.muted }]}>{this.state.message}</Text>
           ) : (
-            <Text style={styles.body}>An unexpected error occurred.</Text>
+            <Text style={[styles.body, { color: theme.text.muted }]}>{t.auth_error_generic}</Text>
           )}
           {__DEV__ && this.state.stack ? (
-            <ScrollView style={styles.stackBox} contentContainerStyle={styles.stackContent}>
-              <Text style={styles.stack}>{this.state.stack.trim()}</Text>
+            <ScrollView style={[styles.stackBox, { backgroundColor: theme.bg.secondary }]} contentContainerStyle={styles.stackContent}>
+              <Text style={[styles.stack, { color: theme.text.secondary }]}>{this.state.stack.trim()}</Text>
             </ScrollView>
           ) : null}
           <Pressable
-            style={styles.btn}
+            style={[styles.btn, { backgroundColor: theme.brand.primary }]}
             onPress={() => this.setState({ hasError: false, message: '', stack: '' })}
           >
-            <Text style={styles.btnText}>Try again</Text>
+            <Text style={[styles.btnText, { color: '#fff' }]}>{t.error_button_try_again}</Text>
           </Pressable>
         </View>
       )
     }
     return this.props.children
   }
+}
+
+function getActiveTheme() {
+  const scheme = Appearance.getColorScheme()
+  const { colorMode, themeName } = useSettingsStore.getState()
+  const mode = colorMode === 'system' ? (scheme === 'dark' ? 'dark' : 'light') : colorMode
+  return themes[themeName][mode]
 }
 
 const styles = StyleSheet.create({

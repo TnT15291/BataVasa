@@ -50,7 +50,7 @@ export const vi = {
   theme: 'Chủ đề màu',
 
   // Theme names
-  theme_default: 'Mặc định',
+  theme_default: 'Living Ledger',
   theme_sage: 'Thiên nhiên',
   theme_ocean: 'Đại dương',
   theme_sunset: 'Hoàng hôn',
@@ -189,7 +189,8 @@ export const vi = {
   cat_freelance: 'Tự do',
   cat_other_income: 'Thu nhập khác',
   cat_emergency_fund: 'Quỹ khẩn cấp',
-  cat_investments: 'Đầu tư',
+  cat_learning_fund: 'Quỹ học tập',
+  cat_investments: 'Quỹ đầu tư',
 
   // Date / Location (cross-module)
   date: 'Ngày',
@@ -231,6 +232,7 @@ export const vi = {
   edit_transaction: 'Sửa giao dịch',
   update: 'Cập nhật',
   confirm_delete_msg: 'Xóa giao dịch này? Hành động có thể hoàn tác khi đồng bộ.',
+  confirm_delete_item: 'Hành động này không thể hoàn tác.',
 
   // AI confirm sheet (Cross-Module Rule 5)
   ai_confirm_title: 'Xác nhận trước khi lưu',
@@ -450,6 +452,20 @@ export const vi = {
   habit_insight_tip: 'Mẹo',
   habit_last_7_days: '7 ngày qua',
   habit_last_4_weeks: '4 tuần gần đây',
+  journal_reflection_title: 'Phân tích Nhật ký',
+  journal_reflection_generate: 'Tạo phân tích AI',
+  journal_reflection_loading: 'Đang phân tích nhật ký…',
+  journal_reflection_min_data: 'Hãy viết ít nhất 3 nhật ký để mở khóa phân tích AI.',
+  journal_reflection_mood: 'Xu hướng tâm trạng',
+  journal_reflection_themes: 'Chủ đề lặp lại',
+  journal_reflection_questions: 'Điều bạn đang khám phá',
+  journal_reflection_prompt: 'Gợi ý suy ngẫm',
+  reminder_insight_title: 'Phân tích Nhắc nhở',
+  reminder_insight_generate: 'Tạo phân tích AI',
+  reminder_insight_loading: 'Đang phân tích nhắc nhở…',
+  reminder_insight_min_data: 'Hãy thêm ít nhất 5 nhắc nhở để mở khóa phân tích AI.',
+  reminder_insight_pattern: 'Xu hướng hoàn thành',
+  reminder_insight_tip: 'Gợi ý cải thiện',
   journal_empty_prompt: 'Hôm nay tôi nhận ra...',
 
   // Auth
@@ -488,6 +504,9 @@ export const vi = {
   auth_error_same_password: 'Mật khẩu mới phải khác mật khẩu hiện tại.',
   auth_error_invalid_email: 'Vui lòng nhập địa chỉ email hợp lệ.',
   auth_error_generic: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+  error_title_generic: 'Đã có lỗi xảy ra',
+  error_button_try_again: 'Thử lại',
+  error_database_init_failed: 'Khởi tạo cơ sở dữ liệu không thành công',
   auth_not_configured_title: 'Chưa cấu hình đăng nhập',
   auth_not_configured_body: 'Tính năng đăng nhập chưa sẵn sàng. Xem hướng dẫn thiết lập:',
   auth_signed_in_as: 'Đăng nhập bằng',
@@ -556,6 +575,16 @@ export const vi = {
   pay_bill: 'Thanh toán {{name}}',
   load_more: 'Xem thêm',
   no_review_items: 'Không có giao dịch cần xem xét',
+  safe_to_spend: 'Có thể chi an toàn',
+  safe_to_spend_formula: 'Thu đã ghi + thu dự kiến còn lại, trừ chi đã ghi và khoản cần chi còn lại.',
+  safe_income: 'Thu vào',
+  safe_planned_income: 'Thu dự kiến còn lại',
+  safe_regular_expense: 'Đã chi',
+  safe_planned_expense: 'Cần chi còn lại',
+  monthly_plan: 'Kế hoạch tháng',
+  monthly_plan_empty: 'Lưu các khoản lặp lại vào kế hoạch để Safe to spend dự toán chính xác hơn.',
+  plan_due_day: 'Ngày {{day}} hằng tháng',
+  recurring_patterns: 'Khoản lặp lại',
 
   // Habits — schedule
   cadence_custom: 'Ngày tuỳ chọn',
@@ -603,6 +632,26 @@ export const vi = {
   mood_neutral: 'Bình thường',
   mood_low: 'Buồn',
   mood_bad: 'Tệ',
+
+  // Habit strength score
+  habit_strength_score: 'Điểm 30 ngày',
+
+  // Journal activity tags
+  journal_tags_label: 'Nhãn hoạt động',
+  tag_work: 'Công việc',
+  tag_family: 'Gia đình',
+  tag_health: 'Sức khỏe',
+  tag_money: 'Tiền bạc',
+  tag_sleep: 'Giấc ngủ',
+  tag_exercise: 'Vận động',
+  tag_stress: 'Căng thẳng',
+  tag_food: 'Ăn uống',
+  tag_travel: 'Du lịch',
+  tag_social: 'Xã hội',
+
+  // Reminder calendar view
+  view_calendar: 'Lịch',
+  view_list: 'Danh sách',
 }
 
 export type Translations = typeof vi

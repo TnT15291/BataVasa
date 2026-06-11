@@ -16,6 +16,7 @@ import { notifySaved } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseJournalEntry } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
+import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
 import { Feather } from '@expo/vector-icons'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
 import { useReminderActions } from '@features/reminders/hooks/useReminders'
@@ -27,6 +28,12 @@ const MOODS = [
   { value: 4, emoji: '🙂' },
   { value: 5, emoji: '😊' },
 ] as const
+
+const ACTIVITY_TAGS = [
+  'work', 'family', 'health', 'money', 'sleep',
+  'exercise', 'stress', 'food', 'travel', 'social',
+] as const
+type ActivityTag = typeof ACTIVITY_TAGS[number]
 
 const JOURNAL_TEMPLATES = [
   { key: 'checkin',  mood: 3, content: 'Today I noticed...\n\nI felt...\n\nOne thing I want to remember is...' },
@@ -46,6 +53,7 @@ export function JournalFormScreen() {
   const { createJournal, updateJournal, deleteJournal } = useJournalActions()
   const { createReminder } = useReminderActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
+  const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
 
   const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
@@ -58,6 +66,7 @@ export function JournalFormScreen() {
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<number | null>(null)
   const [isImportant, setIsImportant] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<ActivityTag[]>([])
   const [remindAfterYear, setRemindAfterYear] = useState(!isEditing)
   const [occurredAt, setOccurredAt] = useState(new Date())
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -65,12 +74,24 @@ export function JournalFormScreen() {
   const [prefilled, setPrefilled] = useState(false)
   const [smartText, setSmartText] = useState('')
   const [parsing, setParsing] = useState(false)
+  const [confirmSheet, setConfirmSheet] = useState<{
+    rawInput: string
+    fields: ConfirmField[]
+    payload: { content: string; mood: number | null; is_important: number; occurred_at: string }
+  } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
 
   useEffect(() => {
     if (!editingJournal || prefilled) return
     setContent(editingJournal.content)
     setMood(editingJournal.mood ?? null)
     setIsImportant((editingJournal.is_important ?? 0) === 1)
+    setSelectedTags(
+      (editingJournal.tags ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s): s is ActivityTag => (ACTIVITY_TAGS as readonly string[]).includes(s))
+    )
     setRemindAfterYear(false)
     setOccurredAt(new Date(editingJournal.occurred_at))
     setPrefilled(true)
@@ -99,18 +120,21 @@ export function JournalFormScreen() {
       return
     }
     setSubmitting(true)
+    const tagsStr = selectedTags.length > 0 ? selectedTags.join(',') : undefined
     const res = isEditing
       ? await updateJournal({
           id: editingId!,
           content: trimmed,
           mood: mood ?? undefined,
           is_important: isImportant ? 1 : 0,
+          tags: tagsStr,
           occurred_at: occurredAt.toISOString(),
         })
       : await createJournal({
           content: trimmed,
           mood: mood ?? undefined,
           is_important: isImportant ? 1 : 0,
+          tags: tagsStr,
           occurred_at: occurredAt.toISOString(),
         })
     setSubmitting(false)
@@ -149,6 +173,8 @@ export function JournalFormScreen() {
     ])
   }
 
+  const MOOD_EMOJIS: Record<number, string> = { 1: '😢', 2: '😕', 3: '😐', 4: '🙂', 5: '😊' }
+
   const handleSmartParse = async (override?: string) => {
     const input = (override ?? smartText).trim()
     if (!input || parsing) return
@@ -159,16 +185,90 @@ export function JournalFormScreen() {
     try {
       const parsed = await parseJournalEntry(input)
       if (!parsed) { Alert.alert(t.ai_error, t.parse_failed); return }
-      setContent(parsed.content)
-      setMood(parsed.mood)
-      setIsImportant(parsed.is_important === 1)
-      setOccurredAt(new Date(parsed.occurred_at))
-      setSmartText('')
+      const isVoice = override !== undefined
+      if (isVoice || aiAutoConfirm) {
+        const fields: ConfirmField[] = [
+          { label: t.new_journal, value: parsed.content.length > 80 ? `${parsed.content.slice(0, 80)}…` : parsed.content },
+        ]
+        if (parsed.mood != null) fields.push({ label: t.journal_mood_label, value: MOOD_EMOJIS[parsed.mood] ?? String(parsed.mood) })
+        fields.push({ label: t.date, value: format(new Date(parsed.occurred_at), 'EEE, dd MMM yyyy', { locale }) })
+        if (parsed.is_important === 1) fields.push({ label: t.journal_important_event, value: '⭐' })
+        setConfirmSheet({ rawInput: input, fields, payload: { content: parsed.content, mood: parsed.mood, is_important: parsed.is_important, occurred_at: parsed.occurred_at } })
+      } else {
+        setContent(parsed.content)
+        setMood(parsed.mood)
+        setIsImportant(parsed.is_important === 1)
+        setOccurredAt(new Date(parsed.occurred_at))
+        setSmartText('')
+      }
     } catch {
       Alert.alert(t.ai_error, t.parse_failed)
     } finally {
       setParsing(false)
     }
+  }
+
+  const onSheetSave = async () => {
+    if (!confirmSheet) return
+    setConfirmBusy(true)
+    const { content, mood: parsedMood, is_important, occurred_at } = confirmSheet.payload
+    const res = await createJournal({
+      content,
+      mood: parsedMood ?? undefined,
+      is_important,
+      occurred_at,
+    })
+    setConfirmBusy(false)
+    if (res.ok) {
+      if (is_important === 1 && res.journal) {
+        const anniversary = addYears(new Date(res.journal.occurred_at), 1)
+        anniversary.setHours(9, 0, 0, 0)
+        await createReminder({
+          title: `Remember: ${content.slice(0, 80)}`,
+          note: `One year since this journal entry.${content.length > 120 ? ` ${content.slice(0, 120)}...` : ` ${content}`}`,
+          remind_at: anniversary.toISOString(),
+          advance_minutes: 0,
+          recurrence: 'none',
+          priority: 'high',
+        })
+      }
+      void hapticSaveSuccess()
+      notifySaved(t, useSettingsStore.getState().syncJournals)
+      setConfirmSheet(null)
+      router.back()
+    } else {
+      Alert.alert(t.could_not_save, res.error ?? '')
+    }
+  }
+
+  const onSheetEdit = () => {
+    if (!confirmSheet) return
+    const { content, mood: parsedMood, is_important, occurred_at } = confirmSheet.payload
+    setContent(content)
+    setMood(parsedMood)
+    setIsImportant(is_important === 1)
+    setOccurredAt(new Date(occurred_at))
+    setSmartText('')
+    setConfirmSheet(null)
+  }
+
+  const tagLabels: Record<ActivityTag, string> = {
+    work: t.tag_work,
+    family: t.tag_family,
+    health: t.tag_health,
+    money: t.tag_money,
+    sleep: t.tag_sleep,
+    exercise: t.tag_exercise,
+    stress: t.tag_stress,
+    food: t.tag_food,
+    travel: t.tag_travel,
+    social: t.tag_social,
+  }
+
+  const toggleTag = (tag: ActivityTag) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    )
   }
 
   const templateLabels: Record<string, string> = {
@@ -274,6 +374,29 @@ export function JournalFormScreen() {
         })}
       </View>
 
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_tags_label.toUpperCase()}</Text>
+      <View style={styles.templateGrid}>
+        {ACTIVITY_TAGS.map((tag) => {
+          const active = selectedTags.includes(tag)
+          return (
+            <Pressable
+              key={tag}
+              onPress={() => toggleTag(tag)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: active }}
+              style={[styles.templateChip, {
+                backgroundColor: active ? theme.brand.primary + '22' : theme.bg.elevated,
+                borderColor: active ? theme.brand.primary : theme.border.subtle,
+              }]}
+            >
+              <Text style={[styles.templateText, { color: active ? theme.brand.primary : theme.text.secondary }]}>
+                {tagLabels[tag]}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_templates_label.toUpperCase()}</Text>
       <View style={styles.templateGrid}>
         {JOURNAL_TEMPLATES.map((template) => (
@@ -341,7 +464,15 @@ export function JournalFormScreen() {
         textAlignVertical="top"
       />
 
-      {/* Save */}
+    </ScrollView>
+
+    <View style={[styles.footer, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      {isEditing && (
+        <Pressable onPress={onDelete} style={styles.deleteBtn}>
+          <Feather name="trash-2" size={16} color={theme.semantic.danger} />
+          <Text style={[styles.deleteBtnText, { color: theme.semantic.danger }]}>{t.delete_journal}</Text>
+        </Pressable>
+      )}
       <Pressable
         onPress={onSave}
         disabled={submitting}
@@ -351,20 +482,27 @@ export function JournalFormScreen() {
           ? <ActivityIndicator color="#fff" />
           : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
       </Pressable>
+    </View>
 
-      {isEditing && (
-        <Pressable onPress={onDelete} style={styles.deleteBtn}>
-          <Text style={[styles.deleteBtnText, { color: theme.text.danger }]}>{t.delete_journal}</Text>
-        </Pressable>
-      )}
-    </ScrollView>
+    {confirmSheet && (
+      <ConfirmEntrySheet
+        visible={!!confirmSheet}
+        rawInput={confirmSheet.rawInput}
+        fields={confirmSheet.fields}
+        onSave={onSheetSave}
+        onEdit={onSheetEdit}
+        onCancel={() => setConfirmSheet(null)}
+        busy={confirmBusy}
+      />
+    )}
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  body: { padding: spacing[4], gap: spacing[3], paddingBottom: spacing[8] },
-  card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing[4], gap: spacing[3] },
+  body: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
+  footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth, gap: spacing[2] },
+  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   cardIcon: {
     width: 30,
@@ -373,7 +511,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
+  cardTitle: { fontSize: 15, fontWeight: '700' },
   smartInputWrap: {
     minHeight: 88,
     borderRadius: radius.md,
@@ -397,7 +535,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 12, fontWeight: '600' },
   datePill: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3] },
   moodRow: { flexDirection: 'row', gap: spacing[3] },
   moodBtn: {
@@ -407,7 +545,7 @@ const styles = StyleSheet.create({
   moodEmoji: { fontSize: 24 },
   templateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   templateChip: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderRadius: radius.full,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
@@ -439,8 +577,8 @@ const styles = StyleSheet.create({
     padding: spacing[3], fontSize: 15, lineHeight: 22,
     minHeight: 200,
   },
-  saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[2] },
+  saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteBtn: { alignItems: 'center', paddingVertical: spacing[3] },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], paddingVertical: spacing[2] },
   deleteBtnText: { fontSize: 15 },
 })

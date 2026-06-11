@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser'
 WebBrowser.maybeCompleteAuthSession()
 import * as Sentry from '@sentry/react-native'
 import { useEffect, useRef, useState } from 'react'
-import { AppState, View, Text, ActivityIndicator, LogBox } from 'react-native'
+import { AppState, View, Text, ActivityIndicator, StyleSheet, LogBox } from 'react-native'
 import { Stack } from 'expo-router'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -18,6 +18,7 @@ import { useAuthStore } from '@store/authStore'
 import { AuthScreen } from '@features/auth/AuthScreen'
 import { UpdatePasswordScreen } from '@features/auth/UpdatePasswordScreen'
 import { usePasswordRecoveryLink } from '@features/auth/usePasswordRecoveryLink'
+import { useGoogleAuthCallback } from '@features/auth/useGoogleAuthCallback'
 import { startSyncWorker, drainQueue } from '@services/sync'
 import { BiometricLockScreen } from '@/components/BiometricLockScreen'
 import { ToastHost } from '@/components/Toast'
@@ -51,6 +52,7 @@ export default function RootLayout() {
 
   // Handle `batavasa://reset-password` deep links from recovery emails.
   usePasswordRecoveryLink()
+  useGoogleAuthCallback()
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [locked, setLocked] = useState(false)
@@ -93,7 +95,7 @@ export default function RootLayout() {
   if (error) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg.primary, padding: 24 }}>
-        <Text style={{ color: theme.text.danger, fontWeight: '600', marginBottom: 8 }}>Database init failed</Text>
+        <Text style={{ color: theme.text.danger, fontWeight: '600', marginBottom: 8 }}>{t.error_database_init_failed}</Text>
         <Text style={{ color: theme.text.muted, textAlign: 'center' }}>{error}</Text>
       </View>
     )
@@ -117,7 +119,7 @@ export default function RootLayout() {
         <>
         {recoveryMode ? (
           <UpdatePasswordScreen />
-        ) : session ? (
+        ) : (
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: theme.bg.elevated },
@@ -182,9 +184,18 @@ export default function RootLayout() {
           <Stack.Screen name="habits-report" options={{ title: t.habits_report_title }} />
           <Stack.Screen name="journals-report" options={{ title: t.journals_report_title }} />
           <Stack.Screen name="reminders-report" options={{ title: t.reminders_report_title }} />
+          <Stack.Screen name="habits-insights" options={{ title: t.habit_insight_title }} />
+          <Stack.Screen name="journals-insights" options={{ title: t.journal_reflection_title }} />
+          <Stack.Screen name="reminders-insights" options={{ title: t.reminder_insight_title }} />
+          <Stack.Screen name="auth/callback" options={{ headerShown: false, animation: 'none' }} />
         </Stack>
-        ) : (
-          <AuthScreen />
+        )}
+        {/* Auth gate: overlay covers the Stack while unauthenticated so routing
+            still works for deep links (e.g. batavasa://auth/callback on Android). */}
+        {!recoveryMode && !session && (
+          <View style={StyleSheet.absoluteFill}>
+            <AuthScreen />
+          </View>
         )}
         <ToastHost />
         </>

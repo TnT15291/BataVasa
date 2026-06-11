@@ -69,10 +69,62 @@ export function SkeletonTransactionList() {
   )
 }
 
+export function SkeletonDailyDigest() {
+  const theme = useTheme()
+  return (
+    <View style={{ padding: 16, gap: 12 }}>
+      {/* Hero card */}
+      <View style={[skStyles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={skStyles.heroTop}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <SkeletonBox width="30%" height={11} />
+            <SkeletonBox width="50%" height={13} />
+            <SkeletonBox width="70%" height={22} />
+            <SkeletonBox width="40%" height={22} borderRadius={11} style={{ marginTop: 4 }} />
+          </View>
+          <SkeletonBox width={64} height={64} borderRadius={32} />
+        </View>
+        <SkeletonBox width="100%" height={52} borderRadius={10} style={{ marginTop: 4 }} />
+        <View style={skStyles.chipRow}>
+          <SkeletonBox width="31%" height={52} borderRadius={6} />
+          <SkeletonBox width="31%" height={52} borderRadius={6} />
+          <SkeletonBox width="31%" height={52} borderRadius={6} />
+        </View>
+      </View>
+      {/* Timeline card */}
+      <View style={[skStyles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <SkeletonBox width="35%" height={14} />
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={skStyles.timelineRow}>
+            <SkeletonBox width={36} height={11} />
+            <SkeletonBox width={30} height={30} borderRadius={15} />
+            <View style={{ flex: 1, gap: 5 }}>
+              <SkeletonBox width="60%" height={13} />
+              <SkeletonBox width="40%" height={11} />
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+const skStyles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  chipRow: { flexDirection: 'row', gap: 8 },
+  timelineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46 },
+})
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: 16,
     gap: 10,
   },
@@ -82,7 +134,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: 12,
   },
 })

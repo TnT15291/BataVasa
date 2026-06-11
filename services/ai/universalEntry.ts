@@ -26,6 +26,7 @@ export type HabitsEntry = {
   module: 'habits'
   title: string
   frequency: string
+  target_per_period: number
 }
 
 export type JournalEntry = {
@@ -107,19 +108,92 @@ function normalizeConfidence(value: unknown, fallback: number): number {
   return Math.max(0, Math.min(1, n))
 }
 
-function normalizeEntry(entry: any, now: Date, localAmount: number | null): UniversalEntry | null {
+function foldText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+}
+
+// When the AI returns a merchant/note/title that doesn't appear verbatim in the
+// user's original text, the model likely corrupted a diacritic or swapped a vowel
+// (e.g. "lý lịch" → "lý lệch"). For optional fields (merchant, note) we can safely
+// fall back to `fallback`; for required fields (reminder title) the caller passes
+// the AI value as fallback so the entry is still usable.
+function restoreVerbatim(original: string, aiValue: string, fallback: string): string {
+  if (!aiValue.trim()) return ''
+  if (original.includes(aiValue)) return aiValue
+  const lower = original.toLowerCase()
+  const aiLower = aiValue.toLowerCase()
+  if (lower.includes(aiLower)) {
+    const idx = lower.indexOf(aiLower)
+    return original.slice(idx, idx + aiValue.length)
+  }
+  return fallback
+}
+
+function cleanHabitTitleFromInput(text: string): string | null {
+  const cleaned = text
+    .trim()
+    .replace(/^["'“”‘’]+|["'“”‘’.,!?]+$/g, '')
+    .replace(/^(?:tạo|tao|thêm|them)\s+(?:thói quen|thoi quen|habit)\s+/i, '')
+    .replace(/^(?:thói quen|thoi quen|habit)\s*[:\-]\s*/i, '')
+    .trim()
+
+  if (!cleaned) return null
+  if (cleaned.length > 48) return null
+  if (cleaned.split(/\s+/).length > 6) return null
+  if (/\d/.test(cleaned)) return null
+  return cleaned
+}
+
+function preserveHabitTitleFromInput(text: string, aiTitle: string): string {
+  const inputTitle = cleanHabitTitleFromInput(text)
+  if (!inputTitle) return aiTitle
+
+  const foldedInput = foldText(inputTitle)
+  const foldedAI = foldText(aiTitle).replace(/^u+ong\b/, 'uong')
+  const likelySameShortHabit =
+    foldedInput === foldedAI ||
+    foldedInput.includes(foldedAI) ||
+    foldedAI.includes(foldedInput) ||
+    (foldedInput.includes('uong') && foldedAI.includes('uong'))
+
+  return likelySameShortHabit ? inputTitle : aiTitle
+}
+
+function normalizeHabitTarget(value: unknown, fallback = 1): number {
+  const n = Number(value)
+  if (!isFinite(n)) return fallback
+  return Math.max(1, Math.min(99, Math.round(n)))
+}
+
+function inferHabitTargetFromText(text: string): number {
+  const folded = foldText(text)
+  const match = folded.match(/\b(\d{1,2})\s*(?:lan|x|times?)\s*(?:\/|\s+)?(?:1\s*)?(?:ngay|day|daily)\b/)
+  if (!match) return 1
+  return normalizeHabitTarget(match[1])
+}
+
+function normalizeEntry(entry: any, now: Date, localAmount: number | null, originalText: string): UniversalEntry | null {
   if (!entry?.module) return null
 
   if (entry.module === 'finance') {
     const amount = Math.abs(Number(entry.amount_cents))
     if (!amount || amount <= 0) return null
+    const aiMerchant = String(entry.merchant || '')
+    const aiNote = String(entry.note || '')
     const normalized: FinanceEntry = {
       module: 'finance',
       amount_cents: Math.round(amount),
       direction: entry.direction === 'income' ? 'income' : 'expense',
       category_hint: String(entry.category_hint || (entry.direction === 'income' ? 'Other Income' : 'Shopping')),
-      merchant: String(entry.merchant || ''),
-      note: String(entry.note || ''),
+      // Restore verbatim from original to prevent AI diacritic corruption (e.g. lý lịch→lý lệch).
+      // merchant falls back to '' (optional); note falls back to AI value (may be valid paraphrase).
+      merchant: restoreVerbatim(originalText, aiMerchant, ''),
+      note: restoreVerbatim(originalText, aiNote, aiNote),
       occurred_at: normalizeAIISOString(entry.occurred_at, now),
     }
     if (localAmount !== null) {
@@ -135,12 +209,15 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null): Univ
     const fallback = new Date(now)
     fallback.setDate(fallback.getDate() + 1)
     fallback.setHours(9, 0, 0, 0)
+    const aiTitle = String(entry.title)
+    const aiNote = String(entry.note || '')
     const normalized: ReminderEntry = {
       module: 'reminder',
-      title: String(entry.title),
+      // Title is required — fall back to AI value if not verbatim (better than empty).
+      title: restoreVerbatim(originalText, aiTitle, aiTitle),
       remind_at: isNaN(remindAt.getTime()) || remindAt < now ? fallback.toISOString() : remindAt.toISOString(),
       recurrence: ['none', 'daily', 'weekly', 'monthly'].includes(entry.recurrence) ? entry.recurrence : 'none',
-      note: String(entry.note || ''),
+      note: restoreVerbatim(originalText, aiNote, aiNote),
     }
     return normalized
   }
@@ -151,6 +228,7 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null): Univ
       module: 'habits',
       title: String(entry.title),
       frequency: String(entry.frequency || 'daily'),
+      target_per_period: normalizeHabitTarget(entry.target_per_period),
     }
   }
 
@@ -220,12 +298,14 @@ Classification rules:
 - If the input is ambiguous between modules, return multiple candidates with confidence scores.
 - Do not create duplicate candidates for non-finance modules.
 
+CRITICAL: merchant, note, and title fields MUST be copied VERBATIM from the user input — do NOT rephrase, translate, or change any characters including Vietnamese tone marks and vowel forms. If you cannot copy verbatim, use an empty string.
+
 Return this JSON shape:
 {"candidates":[{"confidence":0.0-1.0,"reason":"short reason","selectedByDefault":true|false,"entry":<one entry>}]}
 
-Finance entry: {"module":"finance","amount_cents":<positive int>,"direction":"expense|income","category_hint":"<english category name>","merchant":"<store or empty string>","note":"<note or empty string>","occurred_at":"<ISO datetime with UTC${tzOffset} offset>"}
-Reminder entry: {"module":"reminder","title":"<short task title>","remind_at":"<ISO datetime with UTC${tzOffset} offset>","recurrence":"none|daily|weekly|monthly","note":"<note or empty string>"}
-Habits entry: {"module":"habits","title":"<habit name>","frequency":"daily|weekly|custom"}
+Finance entry: {"module":"finance","amount_cents":<positive int>,"direction":"expense|income","category_hint":"<english category name>","merchant":"<verbatim from input, or ''>","note":"<verbatim from input, or ''>","occurred_at":"<ISO datetime with UTC${tzOffset} offset>"}
+Reminder entry: {"module":"reminder","title":"<verbatim from input, or short extracted task>","remind_at":"<ISO datetime with UTC${tzOffset} offset>","recurrence":"none|daily|weekly|monthly","note":"<verbatim from input, or ''>"}
+Habits entry: {"module":"habits","title":"<habit name>","frequency":"daily|weekly|custom","target_per_period":<integer 1-99, e.g. 5 for "5 times per day">}
 Journal entry: {"module":"journal","content":"<full text>"}
 
 Common finance categories: Food & Groceries, Transport, Housing, Utilities, Healthcare, Dining Out, Entertainment, Shopping, Subscriptions, Salary, Freelance, Other Income, Emergency Fund, Investments`
@@ -253,12 +333,19 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
 
     const candidates: UniversalCandidate[] = []
     for (const rawCandidate of rawCandidates) {
-      const entry = normalizeEntry(rawCandidate.entry ?? rawCandidate, now, localAmount)
+      const entry = normalizeEntry(rawCandidate.entry ?? rawCandidate, now, localAmount, text)
       if (!entry) continue
       // Journal content must always equal the user's exact original text — AI output
       // often corrupts tonal-language diacritics (e.g. Vietnamese ấ→á, ồ→ổ) when
       // paraphrasing, and the raw input is always the correct source of truth here.
       if (entry.module === 'journal') entry.content = text
+      if (entry.module === 'habits') {
+        entry.title = preserveHabitTitleFromInput(text, entry.title)
+        const inferredTarget = inferHabitTargetFromText(text)
+        entry.target_per_period = inferredTarget > 1
+          ? inferredTarget
+          : normalizeHabitTarget(entry.target_per_period)
+      }
       candidates.push({
         id: candidateId(entry),
         entry,

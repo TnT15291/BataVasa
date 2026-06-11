@@ -1,9 +1,10 @@
 import { getDb } from '../core/db'
-import type { Category, Transaction, TransactionRule } from '@features/finance/types'
+import type { Category, Transaction, TransactionRule, PlanItem } from '@features/finance/types'
 
 type CategoryRow = Category
 type TransactionRow = Transaction
 type TransactionRuleRow = TransactionRule
+type PlanItemRow = PlanItem
 
 export async function insertTransaction(row: TransactionRow): Promise<void> {
   const db = await getDb()
@@ -159,6 +160,86 @@ export async function listTransactionRules(userId: string | null): Promise<Trans
   )
 }
 
+export async function upsertPlanItem(row: PlanItemRow): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    `INSERT INTO finance_plan_item
+     (id, user_id, name, kind, amount_cents, currency, category_id, due_day, status, active, created_at, updated_at, deleted_at, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       user_id = excluded.user_id,
+       name = excluded.name,
+       kind = excluded.kind,
+       amount_cents = excluded.amount_cents,
+       currency = excluded.currency,
+       category_id = excluded.category_id,
+       due_day = excluded.due_day,
+       status = excluded.status,
+       active = excluded.active,
+       updated_at = excluded.updated_at,
+       deleted_at = excluded.deleted_at,
+       synced_at = excluded.synced_at`,
+    [
+      row.id,
+      row.user_id,
+      row.name,
+      row.kind,
+      row.amount_cents,
+      row.currency,
+      row.category_id,
+      row.due_day,
+      row.status,
+      row.active,
+      row.created_at,
+      row.updated_at,
+      row.deleted_at,
+      row.synced_at,
+    ]
+  )
+}
+
+export async function listPlanItems(userId: string | null): Promise<PlanItemRow[]> {
+  const db = await getDb()
+  return db.getAllAsync<PlanItemRow>(
+    `SELECT * FROM finance_plan_item
+     WHERE deleted_at IS NULL
+       AND user_id = ?
+     ORDER BY kind, due_day, name`,
+    [userId]
+  )
+}
+
+export async function getPlanItem(id: string, userId: string | null): Promise<PlanItemRow | null> {
+  const db = await getDb()
+  const row = await db.getFirstAsync<PlanItemRow>(
+    'SELECT * FROM finance_plan_item WHERE id = ? AND user_id = ? AND deleted_at IS NULL',
+    [id, userId]
+  )
+  return row ?? null
+}
+
+export async function updatePlanItem(id: string, patch: Partial<PlanItemRow>): Promise<void> {
+  const db = await getDb()
+  const cols: string[] = []
+  const vals: (string | number | null)[] = []
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === 'id') continue
+    cols.push(`${k} = ?`)
+    vals.push(v as string | number | null)
+  }
+  if (cols.length === 0) return
+  vals.push(id)
+  await db.runAsync(`UPDATE finance_plan_item SET ${cols.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function softDeletePlanItem(id: string, deletedAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    'UPDATE finance_plan_item SET deleted_at = ?, updated_at = ? WHERE id = ?',
+    [deletedAt, deletedAt, id]
+  )
+}
+
 export async function findDuplicateTransaction(
   amountCents: number,
   merchant: string | null,
@@ -184,7 +265,7 @@ export async function findDuplicateTransaction(
 // Wipes: all transactions + user-created categories. System categories stay
 // (they're seeded data, will re-show on next launch).
 // Returns count of deleted rows for confirmation toast.
-export async function wipeFinanceData(userId: string | null): Promise<{ transactions: number; categories: number; rules: number }> {
+export async function wipeFinanceData(userId: string | null): Promise<{ transactions: number; categories: number; rules: number; planItems: number }> {
   const db = await getDb()
   const txCount = await db.getFirstAsync<{ n: number }>(
     'SELECT COUNT(*) AS n FROM finance_transaction WHERE user_id = ?',
@@ -198,13 +279,19 @@ export async function wipeFinanceData(userId: string | null): Promise<{ transact
     'SELECT COUNT(*) AS n FROM finance_rule WHERE user_id = ?',
     [userId]
   )
+  const planCount = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM finance_plan_item WHERE user_id = ?',
+    [userId]
+  )
   await db.runAsync('DELETE FROM finance_transaction WHERE user_id = ?', [userId])
   await db.runAsync('DELETE FROM finance_rule WHERE user_id = ?', [userId])
+  await db.runAsync('DELETE FROM finance_plan_item WHERE user_id = ?', [userId])
   await db.runAsync('DELETE FROM finance_category WHERE user_id = ?', [userId])
   return {
     transactions: txCount?.n ?? 0,
     categories: catCount?.n ?? 0,
     rules: ruleCount?.n ?? 0,
+    planItems: planCount?.n ?? 0,
   }
 }
 
@@ -266,7 +353,7 @@ export async function softDeleteCategory(id: string, deletedAt: string): Promise
   )
 }
 
-export async function exportFinanceData(userId: string | null): Promise<{ transactions: TransactionRow[]; categories: CategoryRow[]; rules: TransactionRuleRow[] }> {
+export async function exportFinanceData(userId: string | null): Promise<{ transactions: TransactionRow[]; categories: CategoryRow[]; rules: TransactionRuleRow[]; planItems: PlanItemRow[] }> {
   const db = await getDb()
   const transactions = await db.getAllAsync<TransactionRow>(
     'SELECT * FROM finance_transaction WHERE deleted_at IS NULL AND user_id = ? ORDER BY occurred_at DESC',
@@ -280,5 +367,9 @@ export async function exportFinanceData(userId: string | null): Promise<{ transa
     'SELECT * FROM finance_rule WHERE deleted_at IS NULL AND user_id = ? ORDER BY updated_at DESC',
     [userId]
   )
-  return { transactions, categories, rules }
+  const planItems = await db.getAllAsync<PlanItemRow>(
+    'SELECT * FROM finance_plan_item WHERE deleted_at IS NULL AND user_id = ? ORDER BY kind, due_day, name',
+    [userId]
+  )
+  return { transactions, categories, rules, planItems }
 }

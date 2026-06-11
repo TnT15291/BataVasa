@@ -88,6 +88,8 @@ Return ONLY valid JSON, no other text:
 Rules:
 - Default direction is expense unless income is clearly stated.
 - category_hint MUST be copied verbatim from the Available categories list above.
+- merchant and note MUST be copied VERBATIM from the user input — do NOT rephrase or change any characters including Vietnamese tone marks. If unsure, use empty string.
+- Treat investment, learning, and emergency fund mentions as ordinary expense categories when those categories exist.
 - Examples (VND): "50k cafe" → 50000. "1.5tr xe" → 1500000. "2 triệu" → 2000000.`
 
   try {
@@ -95,7 +97,7 @@ Rules:
       [
         {
           role: 'system',
-          content: `You are a JSON-only financial transaction parser. The user writes in ${language}. Always return valid JSON, nothing else.`,
+          content: `You are a JSON-only financial transaction parser. The user writes in ${language}. Always return valid JSON, nothing else. Copy merchant and note fields verbatim from the user input without modifying any characters.`,
         },
         { role: 'user', content },
       ],
@@ -109,6 +111,21 @@ Rules:
     if (localAmount !== null) {
       const ratio = parsed.amount_cents / localAmount
       if (ratio >= 10 || ratio <= 0.1) parsed.amount_cents = localAmount
+    }
+    // Restore merchant/note from original text to guard against AI diacritic corruption.
+    // If the AI output doesn't appear verbatim in the original: merchant → '' (optional),
+    // note → keep AI value (may be a valid extraction of a longer phrase).
+    if (parsed.merchant) {
+      const m = parsed.merchant
+      if (!text.includes(m)) {
+        const lower = text.toLowerCase()
+        if (lower.includes(m.toLowerCase())) {
+          const idx = lower.indexOf(m.toLowerCase())
+          parsed.merchant = text.slice(idx, idx + m.length)
+        } else {
+          parsed.merchant = ''
+        }
+      }
     }
     return parsed
   } catch {
