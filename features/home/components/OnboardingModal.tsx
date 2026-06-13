@@ -59,10 +59,8 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
       return
     }
     if (step === 1) {
-      if (!hasApiKey) {
-        router.push('/ai-settings')
-        return
-      }
+      // AI is optional — never block onboarding on an API key. The
+      // "Open AI settings" button above handles setup for those who want it.
       setStep(2)
       return
     }
@@ -156,16 +154,9 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
             ) : null}
             <Pressable
               onPress={handleContinue}
-              style={[
-                styles.footerButton,
-                {
-                  backgroundColor: step === 1 && !hasApiKey ? theme.border.strong : theme.brand.primary,
-                  opacity: step === 1 && !hasApiKey ? 0.6 : 1,
-                },
-              ]}
-              disabled={step === 1 && !hasApiKey}
+              style={[styles.footerButton, { backgroundColor: theme.brand.primary }]}
             >
-              <Text style={[styles.footerText, { color: '#fff' }]}> 
+              <Text style={[styles.footerText, { color: '#fff' }]}>
                 {step === 2 ? t.onboarding_start : t.onboarding_next}
               </Text>
             </Pressable>

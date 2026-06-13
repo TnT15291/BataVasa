@@ -35,10 +35,25 @@ export async function softDeleteHabit(id: string, deletedAt: string): Promise<vo
   )
 }
 
+export async function restoreHabit(id: string, restoredAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    `UPDATE habit SET deleted_at = NULL, updated_at = ? WHERE id = ?`,
+    [restoredAt, id]
+  )
+}
+
 export async function getHabit(id: string, userId: string | null): Promise<Habit | null> {
   const db = await getDb()
   return db.getFirstAsync<Habit>(
     `SELECT * FROM habit WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [id, userId]
+  )
+}
+
+export async function getHabitIncludingDeleted(id: string, userId: string | null): Promise<Habit | null> {
+  const db = await getDb()
+  return db.getFirstAsync<Habit>(
+    `SELECT * FROM habit WHERE id = ? AND user_id = ?`, [id, userId]
   )
 }
 
@@ -88,6 +103,19 @@ export async function listLogsForHabit(habitId: string): Promise<HabitLog[]> {
   return db.getAllAsync<HabitLog>(
     `SELECT * FROM habit_log WHERE habit_id = ? AND deleted_at IS NULL ORDER BY occurred_at DESC`,
     [habitId]
+  )
+}
+
+// All of the user's habit logs since `fromIso`, across habits — feeds the
+// cross-module habit↔mood↔spending correlation analysis.
+export async function listLogsSince(userId: string | null, fromIso: string): Promise<HabitLog[]> {
+  const db = await getDb()
+  return db.getAllAsync<HabitLog>(
+    `SELECT * FROM habit_log
+     WHERE user_id = ? AND deleted_at IS NULL
+       AND occurred_at >= ?
+     ORDER BY occurred_at DESC`,
+    [userId, fromIso]
   )
 }
 

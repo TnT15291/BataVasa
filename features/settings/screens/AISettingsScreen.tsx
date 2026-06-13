@@ -249,7 +249,7 @@ export function AISettingsScreen() {
       </View>
 
       {/* Status overview */}
-      <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.ai_status.toUpperCase()}</Text>
+      <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.ai_status}</Text>
       <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         {PROVIDER_ORDER.map((p) => {
           const cfg = AI_PROVIDERS[p]

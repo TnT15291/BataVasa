@@ -8,6 +8,7 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { useFinanceBootstrap, useCategories, useTransactions } from '../hooks/useFinance'
+import { FAB } from '@components/FAB'
 import { translateCategoryName, translateKind } from '../i18n'
 import { formatAmount } from '../services'
 import type { Category, CategoryKind } from '../types'
@@ -67,7 +68,7 @@ export function CategoryListScreen() {
           return (
             <View key={kind}>
               <Text style={[styles.groupHeader, { color: theme.text.muted }]}>
-                {translateKind(kind, t).toUpperCase()}
+                {translateKind(kind, t)}
               </Text>
               <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
                 {group.map((cat, idx) => {
@@ -119,14 +120,13 @@ export function CategoryListScreen() {
         })}
       </ScrollView>
 
-      <Pressable
+      <FAB
         onPress={() => router.push('/category')}
-        accessibilityRole="button"
         accessibilityLabel={t.new_category}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}
       >
         <Feather name="plus" size={28} color="#fff" />
-      </Pressable>
+      </FAB>
     </View>
   )
 }

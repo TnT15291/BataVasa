@@ -58,7 +58,8 @@ describe('centsToDisplay', () => {
 
   it('divides by 100 for minor-unit currencies', () => {
     expect(centsToDisplay(5000, 'USD')).toBe(50)
-    expect(centsToDisplay(12345, 'EUR')).toBe(123)
+    // Exact — editing a transaction must not round away the cents.
+    expect(centsToDisplay(12345, 'EUR')).toBe(123.45)
   })
 })
 

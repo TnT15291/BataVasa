@@ -18,14 +18,16 @@ import {
   useCategories,
   useTransactions,
   useFinanceActions,
+  usePlanItemActions,
+  useDebtActions,
 } from '../hooks/useFinance'
 import { CategoryPicker } from '../components/CategoryPicker'
 import { MoodSelector } from '../components/MoodSelector'
-import type { Mood, Category } from '../types'
+import type { Mood, Category, Transaction, DebtDirection, PlanItemKind } from '../types'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
-import { parseSmartEntry } from '@services/ai/smartEntry'
+import { parseSmartEntry, extractAmount } from '@services/ai/smartEntry'
 import { getProviderKey } from '@services/ai/openai'
 import { centsToDisplay, displayToCents } from '@services/ai/aiLanguage'
 import { useSettingsStore } from '@store/settingsStore'
@@ -35,11 +37,12 @@ import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySh
 import { VoiceButton } from '@components/VoiceButton'
 import { translateCategoryName, matchCategory } from '../i18n'
 import { extractDateFromText } from '@services/dateParser'
-import { formatAmount } from '../services'
+import { formatAmount, parseAmountInput } from '../services'
+import { maybeConfirmPlanItemMatch } from '../planMatch'
 import { format as formatDate } from 'date-fns'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
-import { notifySaved } from '@store/toastStore'
+import { notifySaved, toast } from '@store/toastStore'
 
 type Direction = 'expense' | 'income'
 type SmartEntrySource = 'manual' | 'voice'
@@ -56,7 +59,9 @@ export function QuickAddScreen() {
   const [hasApiKey, setHasApiKey] = useState(false)
   const categories = useCategories()
   const allTxs = useTransactions()
-  const { create, update, remove } = useFinanceActions()
+  const { create, update, remove, restore } = useFinanceActions()
+  const { createPlanItem } = usePlanItemActions()
+  const { createDebt } = useDebtActions()
 
   const params = useLocalSearchParams<{ id?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
@@ -83,15 +88,34 @@ export function QuickAddScreen() {
   const [confirmSheet, setConfirmSheet] = useState<{
     rawInput: string
     fields: ConfirmField[]
-    payload: {
-      direction: Direction
-      amount_cents: number
-      category: Category
-      merchant: string
-      note: string
-      occurredAt: Date
-      source: SmartEntrySource
-    }
+    payload:
+      | {
+          intent: 'transaction'
+          direction: Direction
+          amount_cents: number
+          category: Category
+          merchant: string
+          note: string
+          occurredAt: Date
+          source: SmartEntrySource
+        }
+      | {
+          intent: 'plan_item'
+          kind: PlanItemKind
+          amount_cents: number
+          name: string
+          category: Category | null
+          due_day: number
+          note: string
+        }
+      | {
+          intent: 'debt'
+          debt_direction: DebtDirection
+          amount_cents: number
+          counterparty: string
+          dueAt: Date | null
+          note: string
+        }
   } | null>(null)
   const [confirmBusy, setConfirmBusy] = useState(false)
 
@@ -122,7 +146,22 @@ export function QuickAddScreen() {
     return categories.filter((c) => c.kind !== 'income')
   }, [direction, categories])
 
+  const categoryMatchesDirection = (cat: Category, dir: Direction): boolean =>
+    dir === 'income' ? cat.kind === 'income' : cat.kind !== 'income'
+
+  const fallbackCategoryForDirection = (dir: Direction): Category | null => {
+    if (dir === 'income') return categories.find((c) => c.kind === 'income') ?? null
+    return categories.find((c) => c.name === 'Shopping') ?? categories.find((c) => c.kind !== 'income') ?? null
+  }
+
+  const matchCategoryForDirection = (hint: string, dir: Direction): Category | null => {
+    const matched = matchCategory(categories, hint, t)
+    if (matched && categoryMatchesDirection(matched, dir)) return matched
+    return fallbackCategoryForDirection(dir)
+  }
+
   const applyParsedToForm = (p: {
+    intent: 'transaction'
     direction: Direction
     amount_cents: number
     category: Category
@@ -148,20 +187,77 @@ export function QuickAddScreen() {
     try {
       const parsed = await parseSmartEntry(text, categories)
       if (!parsed) {
-        Alert.alert(t.ai_error, t.smart_entry_hint)
+        // A finance entry cannot exist without an amount — ask for the one
+        // missing field instead of showing a generic parse error.
+        if (extractAmount(text, currency) === null) {
+          Alert.alert(t.smart_missing_title, t.smart_missing_amount_msg)
+        } else {
+          Alert.alert(t.ai_error, t.smart_entry_hint)
+        }
         return
       }
-      const matched = matchCategory(categories, parsed.category_hint, t)
-      const fallbackCat =
-        matched ??
-        categories.find((c) => (parsed.direction === 'income' ? c.kind === 'income' : c.kind !== 'income')) ??
-        null
+      if (parsed.intent === 'plan_item') {
+        const matched = matchCategory(categories, parsed.category_hint, t)
+        const safeMatched = matched && categoryMatchesDirection(matched, parsed.kind) ? matched : null
+        const payload = {
+          intent: 'plan_item' as const,
+          kind: parsed.kind,
+          amount_cents: parsed.amount_cents,
+          name: parsed.name || text,
+          category: safeMatched,
+          due_day: parsed.due_day,
+          note: parsed.note ?? '',
+        }
+        const fields: ConfirmField[] = [
+          { label: t.monthly_plan, value: parsed.kind === 'income' ? t.income : t.expense },
+          { label: t.plan_name_placeholder.replace(/^e\.g\.\s*/i, ''), value: payload.name },
+          { label: t.amount, value: formatAmount(parsed.amount_cents, currency, language) },
+          { label: t.plan_due_day_label, value: String(payload.due_day) },
+        ]
+        if (safeMatched) fields.push({ label: t.category, value: translateCategoryName(safeMatched, t) })
+        if (payload.note) fields.push({ label: t.note_optional.replace(/\s*\(.+\)/, ''), value: payload.note })
+        setConfirmSheet({ rawInput: text, fields, payload })
+        return
+      }
+      if (parsed.intent === 'debt') {
+        const dueAt = parsed.due_at ? new Date(parsed.due_at) : null
+        // Missing counterparty: save as "unknown" instead of failing validation
+        // (Cross-Module smart-entry rule: prompt, default, never error).
+        const payload = {
+          intent: 'debt' as const,
+          debt_direction: parsed.debt_direction,
+          amount_cents: parsed.amount_cents,
+          counterparty: parsed.counterparty.trim() || t.unknown_person,
+          dueAt: dueAt && !Number.isNaN(dueAt.getTime()) ? dueAt : null,
+          note: parsed.note ?? '',
+        }
+        const fields: ConfirmField[] = [
+          { label: t.debt_book, value: parsed.debt_direction === 'borrowed' ? t.debt_borrowed : t.debt_lent },
+          { label: t.debt_counterparty, value: payload.counterparty },
+          { label: t.amount, value: formatAmount(parsed.amount_cents, currency, language) },
+        ]
+        if (payload.dueAt) {
+          fields.push({
+            label: t.debt_due_date,
+            value: formatDate(payload.dueAt, 'EEE, dd MMM yyyy / HH:mm', {
+              locale: getDateFnsLocale(language),
+            }),
+          })
+        } else {
+          fields.push({ label: t.debt_due_date, value: t.debt_no_due_date })
+        }
+        if (payload.note) fields.push({ label: t.note_optional.replace(/\s*\(.+\)/, ''), value: payload.note })
+        setConfirmSheet({ rawInput: text, fields, payload })
+        return
+      }
+      const fallbackCat = matchCategoryForDirection(parsed.category_hint, parsed.direction as Direction)
       if (!fallbackCat) {
         Alert.alert(t.pick_category, t.pick_category_msg)
         return
       }
 
       const payload = {
+        intent: 'transaction' as const,
         direction: parsed.direction as Direction,
         amount_cents: parsed.amount_cents,
         category: fallbackCat,
@@ -206,6 +302,56 @@ export function QuickAddScreen() {
     if (!confirmSheet) return
     setConfirmBusy(true)
     const p = confirmSheet.payload
+    if (p.intent === 'plan_item') {
+      const res = await createPlanItem({
+        name: p.name,
+        kind: p.kind,
+        amount_cents: p.amount_cents,
+        currency,
+        category_id: p.category?.id ?? null,
+        due_day: p.due_day,
+        status: 'confirmed',
+      })
+      setConfirmBusy(false)
+      if (res.ok) {
+        void hapticSaveSuccess()
+        notifySaved(t, useSettingsStore.getState().syncFinance)
+        setConfirmSheet(null)
+        router.back()
+      } else {
+        Alert.alert(t.could_not_save, res.error ?? '')
+      }
+      return
+    }
+    if (p.intent === 'debt') {
+      const labels = {
+        reminderTitle: (p.debt_direction === 'lent' ? t.debt_reminder_title_lent : t.debt_reminder_title_borrowed)
+          .replace('{{name}}', p.counterparty),
+        reminderNote: p.note || undefined,
+        settleNote: (p.debt_direction === 'lent' ? t.debt_settle_tx_note_lent : t.debt_settle_tx_note_borrowed)
+          .replace('{{name}}', p.counterparty),
+      }
+      const res = await createDebt({
+        direction: p.debt_direction,
+        counterparty: p.counterparty,
+        amount_cents: p.amount_cents,
+        currency,
+        note: p.note || undefined,
+        occurred_at: new Date().toISOString(),
+        due_at: p.dueAt ? p.dueAt.toISOString() : null,
+        remind_days_before: 1,
+      }, labels)
+      setConfirmBusy(false)
+      if (res.ok) {
+        void hapticSaveSuccess()
+        notifySaved(t, useSettingsStore.getState().syncFinance)
+        setConfirmSheet(null)
+        router.back()
+      } else {
+        Alert.alert(t.could_not_save, res.error ?? '')
+      }
+      return
+    }
     const signed = p.direction === 'expense' ? -p.amount_cents : p.amount_cents
     const res = await create({
       amount_cents: signed,
@@ -222,6 +368,7 @@ export function QuickAddScreen() {
       notifySaved(t, useSettingsStore.getState().syncFinance)
       setConfirmSheet(null)
       router.back()
+      if (res.tx) void maybeConfirmPlanItemMatch(res.tx, t)
     } else {
       Alert.alert(t.could_not_save, res.error ?? '')
     }
@@ -229,13 +376,17 @@ export function QuickAddScreen() {
 
   const onSheetEdit = () => {
     if (!confirmSheet) return
+    if (confirmSheet.payload.intent !== 'transaction') {
+      setConfirmSheet(null)
+      return
+    }
     applyParsedToForm(confirmSheet.payload)
     setConfirmSheet(null)
   }
 
   const onSave = async () => {
-    const raw = parseInt(amountText.replace(/[^0-9]/g, ''), 10)
-    if (!Number.isFinite(raw) || raw <= 0) {
+    const amount = parseAmountInput(amountText)
+    if (amount === null) {
       Alert.alert(t.invalid_amount, t.invalid_amount_msg)
       return
     }
@@ -244,7 +395,7 @@ export function QuickAddScreen() {
       return
     }
     setSubmitting(true)
-    const cents = displayToCents(raw, currency)
+    const cents = Math.round(displayToCents(amount, currency))
     const signed = direction === 'expense' ? -cents : cents
     const trimmedLabel = location.label.trim()
     const payload = {
@@ -262,7 +413,7 @@ export function QuickAddScreen() {
       location_lng: trimmedLabel ? location.lng ?? undefined : undefined,
       location_label: trimmedLabel || undefined,
     }
-    const res = isEditing
+    const res: { ok: boolean; error?: string; tx?: Transaction } = isEditing
       ? await update({ id: editingId!, ...payload })
       : await create(payload)
     setSubmitting(false)
@@ -273,6 +424,7 @@ export function QuickAddScreen() {
     void hapticSaveSuccess()
     notifySaved(t, useSettingsStore.getState().syncFinance)
     router.back()
+    if (res.tx) void maybeConfirmPlanItemMatch(res.tx, t)
   }
 
   const onDelete = () => {
@@ -283,9 +435,11 @@ export function QuickAddScreen() {
         text: t.delete,
         style: 'destructive',
         onPress: async () => {
-          const r = await remove(editingId!)
+          const id = editingId!
+          const r = await remove(id)
           if (r.ok) router.back()
           else Alert.alert(t.could_not_save, r.error ?? '')
+          if (r.ok) toast.undo(t.toast_deleted, t.undo, () => { void restore(id) })
         },
       },
     ])
@@ -378,7 +532,8 @@ export function QuickAddScreen() {
             onChangeText={setAmountText}
             placeholder="0"
             placeholderTextColor={theme.text.muted}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
+            accessibilityLabel={direction === 'expense' ? t.expense : t.income}
             style={[styles.amountInput, { color: theme.text.primary, borderColor: theme.border.strong }]}
           />
           <Text style={[styles.currency, { color: theme.text.muted }]}>{currency}</Text>

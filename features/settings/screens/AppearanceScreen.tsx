@@ -32,7 +32,7 @@ export function AppearanceScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={styles.container}>
       {/* Color Mode */}
-      <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.color_mode.toUpperCase()}</Text>
+      <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.color_mode}</Text>
       <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
         <View style={styles.modeRow}>
           {COLOR_MODES.map((m) => {
@@ -59,7 +59,7 @@ export function AppearanceScreen() {
       </View>
 
       {/* Theme picker */}
-      <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.theme.toUpperCase()}</Text>
+      <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.theme}</Text>
       <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
         <View style={styles.swatchGrid}>
           {THEME_SWATCHES.map((s) => {

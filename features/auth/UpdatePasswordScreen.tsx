@@ -9,6 +9,7 @@ import { useTranslation } from '@services/i18n'
 import { useAuthStore } from '@store/authStore'
 import { toast } from '@store/toastStore'
 import { KeyboardAvoider } from '@components/KeyboardAvoider'
+import { BrandLogo } from '@components/BrandLogo'
 
 /**
  * Shown when a password-recovery deep link put the store into `recoveryMode`
@@ -52,7 +53,7 @@ export function UpdatePasswordScreen() {
   return (
     <KeyboardAvoider style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.logo, { color: theme.brand.primary }]}>BataVasa</Text>
+        <BrandLogo />
         <Text style={[styles.title, { color: theme.text.primary }]}>{t.auth_update_password_title}</Text>
         <Text style={[styles.subtitle, { color: theme.text.muted }]}>{t.auth_update_password_subtitle}</Text>
 
@@ -105,7 +106,6 @@ export function UpdatePasswordScreen() {
 
 const styles = StyleSheet.create({
   body: { padding: spacing[6], paddingTop: spacing[8] * 1.5, gap: spacing[2], flexGrow: 1, justifyContent: 'center' },
-  logo: { fontSize: 34, fontWeight: '700', textAlign: 'center' },
   title: { fontSize: 18, fontWeight: '600', textAlign: 'center', marginTop: spacing[5] },
   subtitle: { fontSize: 14, textAlign: 'center', marginTop: spacing[2], marginBottom: spacing[5] },
   label: { fontSize: 12, fontWeight: '600', marginTop: spacing[2] },

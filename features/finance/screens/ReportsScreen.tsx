@@ -646,8 +646,14 @@ export function ReportsScreen() {
             <View style={[styles.card, getCardStyle(theme), { backgroundColor: theme.bg.elevated }]}>
               <InsightText text={report} />
             </View>
-            <Pressable onPress={shareReport} style={[styles.shareBtn, { borderColor: theme.border.strong }]}>
-              <Text style={[styles.shareText, { color: theme.text.secondary }]}>📤 {t.copy}</Text>
+            <Pressable
+              onPress={shareReport}
+              accessibilityRole="button"
+              accessibilityLabel={t.share}
+              style={[styles.shareBtn, { borderColor: theme.border.strong }]}
+            >
+              <Feather name="share-2" size={16} color={theme.text.secondary} />
+              <Text style={[styles.shareText, { color: theme.text.secondary }]}>{t.share}</Text>
             </Pressable>
           </>
         ) : !loading && (!hasRangeData || (keyChecked && !hasApiKey)) ? (
@@ -802,13 +808,16 @@ const styles = StyleSheet.create({
   catRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   catDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   catName: { fontSize: 12, fontWeight: '500', flex: 1 },
-  catAmount: { fontSize: 11 },
-  catPct: { fontSize: 11, fontWeight: '700', width: 28, textAlign: 'right' },
+  catAmount: { fontSize: 12 },
+  catPct: { fontSize: 12, fontWeight: '700', width: 32, textAlign: 'right' },
   shareBtn: {
     paddingVertical: spacing[3],
     borderRadius: radius.md,
     borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing[2],
   },
   shareText: { fontSize: 14 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },

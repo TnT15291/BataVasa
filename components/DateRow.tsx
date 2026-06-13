@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Platform, Pressable, Text, View, StyleSheet, Modal } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
@@ -59,7 +60,7 @@ export function DateRow({ value, onChange, label }: Props) {
           },
         ]}
       >
-        <Text style={[styles.icon]}>📅</Text>
+        <Feather name="calendar" size={18} color={theme.brand.primary} />
         <View style={{ flex: 1 }}>
           <Text style={[styles.label, { color: theme.text.muted }]}>{displayLabel}</Text>
           <Text style={[styles.value, { color: theme.text.primary }]}>{formatted}</Text>
@@ -136,7 +137,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing[3],
   },
-  icon: { fontSize: 18 },
   label: { fontSize: 12, fontWeight: '600' },
   value: { fontSize: 14, fontWeight: '500', marginTop: 2 },
   webBackdrop: {

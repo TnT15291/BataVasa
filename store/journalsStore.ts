@@ -13,6 +13,7 @@ type JournalsState = {
   createJournal: (input: CreateJournalInput) => Promise<{ ok: boolean; journal?: Journal; error?: string }>
   updateJournal: (input: UpdateJournalInput) => Promise<{ ok: boolean; journal?: Journal; error?: string }>
   deleteJournal: (id: string) => Promise<{ ok: boolean; error?: string }>
+  restoreJournal: (id: string) => Promise<{ ok: boolean; error?: string }>
   wipeAll: () => Promise<{ ok: boolean; deleted?: number; error?: string }>
 }
 
@@ -56,6 +57,17 @@ export const useJournalsStore = create<JournalsState>((set, get) => ({
     const r = await svc.deleteJournal(id)
     if (r.ok) {
       set((s) => ({ journals: s.journals.filter((j) => j.id !== id) }))
+      return { ok: true }
+    }
+    return { ok: false, error: r.error.message }
+  },
+
+  async restoreJournal(id) {
+    const r = await svc.restoreJournal(id)
+    if (r.ok) {
+      set((s) => ({
+        journals: [r.value, ...s.journals].sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()),
+      }))
       return { ok: true }
     }
     return { ok: false, error: r.error.message }

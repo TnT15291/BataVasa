@@ -42,7 +42,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   const theme = useTheme()
   return (
     <>
-      <Text style={[styles.sectionHeader, { color: theme.text.muted }]}>{title.toUpperCase()}</Text>
+      <Text style={[styles.sectionHeader, { color: theme.text.muted }]}>{title}</Text>
       <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         {children}
       </View>

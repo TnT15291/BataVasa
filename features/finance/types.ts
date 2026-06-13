@@ -61,6 +61,11 @@ export type Transaction = {
   location_lat: number | null
   location_lng: number | null
   location_label: string | null
+  // Explicit link to the plan item this transaction settles (user-confirmed).
+  // plan_match_dismissed=1 means the user said "not that bill" — the
+  // settle heuristic must never auto-match this transaction again.
+  plan_item_id: string | null
+  plan_match_dismissed: number
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -111,6 +116,62 @@ export const UpdatePlanItemInputSchema = CreatePlanItemInputSchema.partial().ext
   id: z.string().uuid(),
 })
 export type UpdatePlanItemInput = z.infer<typeof UpdatePlanItemInputSchema>
+
+export const DebtDirectionSchema = z.enum(['lent', 'borrowed'])
+export type DebtDirection = z.infer<typeof DebtDirectionSchema>
+
+export const DebtStatusSchema = z.enum(['open', 'settled'])
+export type DebtStatus = z.infer<typeof DebtStatusSchema>
+
+export type Debt = {
+  id: string
+  user_id: string | null
+  // 'lent' = money I gave out (counts as expense); 'borrowed' = money I took (counts as income)
+  direction: DebtDirection
+  counterparty: string
+  amount_cents: number
+  currency: string
+  note: string | null
+  occurred_at: string
+  // Repayment schedule. null = no due date agreed yet.
+  due_at: string | null
+  remind_days_before: number
+  // Linked reminder that fires before/at the due date.
+  reminder_id: string | null
+  // The income/expense transaction created when the debt was recorded.
+  transaction_id: string | null
+  status: DebtStatus
+  settled_at: string | null
+  // The opposite transaction created when the debt was settled.
+  settled_transaction_id: string | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+  synced_at: string | null
+}
+
+export const CreateDebtInputSchema = z.object({
+  direction: DebtDirectionSchema,
+  counterparty: z.string().min(1).max(120),
+  amount_cents: z.number().int().positive(),
+  currency: z.string().min(3).max(3).default('VND'),
+  note: z.string().max(500).optional(),
+  occurred_at: z.string().datetime(),
+  due_at: z.string().datetime().nullable().optional(),
+  remind_days_before: z.number().int().min(0).max(90).default(1),
+})
+export type CreateDebtInput = z.infer<typeof CreateDebtInputSchema>
+
+export const UpdateDebtInputSchema = z.object({
+  id: z.string().uuid(),
+  counterparty: z.string().min(1).max(120).optional(),
+  amount_cents: z.number().int().positive().optional(),
+  note: z.string().max(500).nullable().optional(),
+  occurred_at: z.string().datetime().optional(),
+  due_at: z.string().datetime().nullable().optional(),
+  remind_days_before: z.number().int().min(0).max(90).optional(),
+})
+export type UpdateDebtInput = z.infer<typeof UpdateDebtInputSchema>
 
 const TransactionInputBaseSchema = z.object({
   amount_cents: z.number().int().refine((n) => n !== 0, 'Amount cannot be zero'),

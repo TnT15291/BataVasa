@@ -30,6 +30,7 @@ describe('parseReminderEntry', () => {
       remind_at: '2026-05-21T09:00:00.000Z',
       advance_minutes: 30,
       recurrence: 'weekly',
+      missing: [],
     })
   })
 
@@ -56,14 +57,18 @@ describe('parseReminderEntry', () => {
     expect((await parseReminderEntry('x'))?.recurrence).toBe('none')
   })
 
-  it('returns null when title is missing', async () => {
+  it('falls back to the raw input when title is missing and flags it', async () => {
     mockChat.mockResolvedValue(JSON.stringify({ remind_at: '2026-05-21T09:00:00Z' }))
-    expect(await parseReminderEntry('x')).toBeNull()
+    const r = await parseReminderEntry('gọi mẹ tối nay')
+    expect(r?.title).toBe('gọi mẹ tối nay')
+    expect(r?.missing).toContain('title')
   })
 
-  it('returns null when remind_at is missing', async () => {
+  it('flags a missing remind_at instead of returning null', async () => {
     mockChat.mockResolvedValue(JSON.stringify({ title: 'X' }))
-    expect(await parseReminderEntry('x')).toBeNull()
+    const r = await parseReminderEntry('x')
+    expect(r?.remind_at).toBe('')
+    expect(r?.missing).toContain('date')
   })
 
   it('returns null for output containing no JSON object', async () => {

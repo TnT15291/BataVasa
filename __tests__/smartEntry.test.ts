@@ -80,6 +80,18 @@ describe('parseSmartEntry', () => {
     expect(result?.category_hint).toBe('Learning Fund')
   })
 
+  it('replaces income category_hint when AI marks a normal expense', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":100000,"direction":"expense","category_hint":"Other Income","merchant":"","note":""}')
+    const result = await parseSmartEntry('chi tieu 100k', [
+      baseCategory,
+      { ...baseCategory, id: 'cat-shopping', name: 'Shopping', kind: 'discretionary' },
+      { ...baseCategory, id: 'cat-income', name: 'Other Income', kind: 'income' },
+    ])
+    expect(result?.intent).toBe('transaction')
+    expect(result?.direction).toBe('expense')
+    expect(result?.category_hint).toBe('Shopping')
+  })
+
   it('returns null when AI response has no JSON', async () => {
     mockChat.mockResolvedValue('Sorry, I cannot parse that.')
     const result = await parseSmartEntry('some text', [baseCategory])
@@ -124,5 +136,37 @@ describe('parseSmartEntry', () => {
     const result = await parseSmartEntry('50k cafe', [baseCategory])
     expect(result?.amount_cents).toBe(50000)
     expect(result?.merchant).toBe('cafe')
+  })
+
+  it('routes monthly spending wording to a plan item, not a transaction', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":1000000,"direction":"expense","category_hint":"Food","merchant":"","note":""}')
+    const result = await parseSmartEntry('Thêm khoản chi tiêu hằng tháng tiền điện 1tr', [baseCategory])
+    expect(result?.intent).toBe('plan_item')
+    if (result?.intent !== 'plan_item') throw new Error('Expected plan item')
+    expect(result.kind).toBe('expense')
+    expect(result.amount_cents).toBe(1000000)
+    expect(result.name).toContain('tiền điện')
+  })
+
+  it('routes borrowed money wording to debt book as borrowed', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":2000000,"direction":"expense","category_hint":"Food","merchant":"","note":""}')
+    const result = await parseSmartEntry('Vay của Anh Quang 2m trả vào ngày 10 tháng sau', [baseCategory])
+    expect(result?.intent).toBe('debt')
+    if (result?.intent !== 'debt') throw new Error('Expected debt')
+    expect(result.debt_direction).toBe('borrowed')
+    expect(result.amount_cents).toBe(2000000)
+    expect(result.counterparty).toBe('Anh Quang')
+    expect(result.due_at).not.toBeNull()
+  })
+
+  it('routes vay name amount date wording to borrowed debt and keeps amount positive', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":-17000000,"direction":"expense","category_hint":"Other Income","merchant":"","note":""}')
+    const result = await parseSmartEntry('Vay anh Hung 17m ngay 19 tra', [baseCategory])
+    expect(result?.intent).toBe('debt')
+    if (result?.intent !== 'debt') throw new Error('Expected debt')
+    expect(result.debt_direction).toBe('borrowed')
+    expect(result.amount_cents).toBe(17000000)
+    expect(result.counterparty).toBe('anh Hung')
+    expect(result.due_at).not.toBeNull()
   })
 })

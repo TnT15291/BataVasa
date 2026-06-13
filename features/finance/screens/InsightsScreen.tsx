@@ -92,7 +92,7 @@ export function InsightsScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.btnText}>{result ? t.refresh : t.analyzing.replace('...', '')}</Text>
+              <Text style={styles.btnText}>{result ? t.refresh : t.generate}</Text>
             )}
           </Pressable>
         )}

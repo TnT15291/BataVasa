@@ -171,6 +171,26 @@ export async function deleteHabit(id: string): Promise<Result<void, AppError>> {
   }
 }
 
+export async function restoreHabit(id: string): Promise<Result<Habit, AppError>> {
+  try {
+    const existing = await q.getHabitIncludingDeleted(id, getCurrentUserId())
+    if (!existing) return appErr('NOT_FOUND', 'Habit not found')
+    await q.restoreHabit(id, nowIso())
+    if (existing.notification_times) {
+      const times: string[] = JSON.parse(existing.notification_times)
+      void scheduleHabitNotifications(existing.id, existing.name, times, getTranslations().habit_notification_body)
+    }
+    void enqueue('habit', id, 'upsert')
+    const fresh = await q.getHabit(id, getCurrentUserId())
+    if (!fresh) return appErr('INTERNAL', 'Restored habit vanished')
+    logger.info(MODULE, 'habit restored', { id })
+    return ok(fresh)
+  } catch (e) {
+    logger.error(MODULE, 'restoreHabit failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to restore habit', e)
+  }
+}
+
 export async function loadHabits(): Promise<Result<Habit[], AppError>> {
   try {
     const habits = await q.listHabits(getCurrentUserId())
@@ -287,6 +307,18 @@ export async function unlogHabit(
   } catch (e) {
     logger.error(MODULE, 'unlogHabit failed', { error: String(e) })
     return appErr('DB_ERROR', 'Failed to unlog habit', e)
+  }
+}
+
+/** All habit logs from the last `days` days, across habits (for cross-module analysis). */
+export async function listRecentLogs(days = 30): Promise<Result<HabitLog[], AppError>> {
+  try {
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+    const rows = await q.listLogsSince(getCurrentUserId(), from)
+    return ok(rows)
+  } catch (e) {
+    logger.error(MODULE, 'listRecentLogs failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to load habit logs', e)
   }
 }
 

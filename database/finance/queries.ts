@@ -1,17 +1,18 @@
 import { getDb } from '../core/db'
-import type { Category, Transaction, TransactionRule, PlanItem } from '@features/finance/types'
+import type { Category, Transaction, TransactionRule, PlanItem, Debt } from '@features/finance/types'
 
 type CategoryRow = Category
 type TransactionRow = Transaction
 type TransactionRuleRow = TransactionRule
 type PlanItemRow = PlanItem
+type DebtRow = Debt
 
 export async function insertTransaction(row: TransactionRow): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO finance_transaction
-     (id, user_id, amount_cents, currency, category_id, merchant, note, occurred_at, mood, source, needs_review, review_reason, location_lat, location_lng, location_label, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, user_id, amount_cents, currency, category_id, merchant, note, occurred_at, mood, source, needs_review, review_reason, location_lat, location_lng, location_label, plan_item_id, plan_match_dismissed, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       row.id,
       row.user_id,
@@ -28,6 +29,8 @@ export async function insertTransaction(row: TransactionRow): Promise<void> {
       row.location_lat,
       row.location_lng,
       row.location_label,
+      row.plan_item_id ?? null,
+      row.plan_match_dismissed ?? 0,
       row.created_at,
       row.updated_at,
     ]
@@ -53,6 +56,14 @@ export async function softDeleteTransaction(id: string, deletedAt: string): Prom
   await db.runAsync(
     'UPDATE finance_transaction SET deleted_at = ?, updated_at = ? WHERE id = ?',
     [deletedAt, deletedAt, id]
+  )
+}
+
+export async function restoreTransaction(id: string, restoredAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    'UPDATE finance_transaction SET deleted_at = NULL, updated_at = ? WHERE id = ?',
+    [restoredAt, id]
   )
 }
 
@@ -98,6 +109,15 @@ export async function listTransactions(userId: string | null, params: ListTransa
   const offset = params.offset ?? 0
   const sql = `SELECT * FROM finance_transaction WHERE ${where.join(' AND ')} ORDER BY occurred_at DESC LIMIT ? OFFSET ?`
   return db.getAllAsync<TransactionRow>(sql, [...args, limit, offset])
+}
+
+export async function getTransactionIncludingDeleted(id: string, userId: string | null): Promise<TransactionRow | null> {
+  const db = await getDb()
+  const row = await db.getFirstAsync<TransactionRow>(
+    'SELECT * FROM finance_transaction WHERE id = ? AND user_id = ?',
+    [id, userId]
+  )
+  return row ?? null
 }
 
 export async function upsertTransactionRule(row: TransactionRuleRow): Promise<void> {
@@ -218,6 +238,15 @@ export async function getPlanItem(id: string, userId: string | null): Promise<Pl
   return row ?? null
 }
 
+export async function getPlanItemIncludingDeleted(id: string, userId: string | null): Promise<PlanItemRow | null> {
+  const db = await getDb()
+  const row = await db.getFirstAsync<PlanItemRow>(
+    'SELECT * FROM finance_plan_item WHERE id = ? AND user_id = ?',
+    [id, userId]
+  )
+  return row ?? null
+}
+
 export async function updatePlanItem(id: string, patch: Partial<PlanItemRow>): Promise<void> {
   const db = await getDb()
   const cols: string[] = []
@@ -237,6 +266,104 @@ export async function softDeletePlanItem(id: string, deletedAt: string): Promise
   await db.runAsync(
     'UPDATE finance_plan_item SET deleted_at = ?, updated_at = ? WHERE id = ?',
     [deletedAt, deletedAt, id]
+  )
+}
+
+export async function restorePlanItem(id: string, restoredAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    'UPDATE finance_plan_item SET deleted_at = NULL, updated_at = ? WHERE id = ?',
+    [restoredAt, id]
+  )
+}
+
+export async function insertDebt(row: DebtRow): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    `INSERT INTO finance_debt
+     (id, user_id, direction, counterparty, amount_cents, currency, note, occurred_at, due_at, remind_days_before, reminder_id, transaction_id, status, settled_at, settled_transaction_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      row.id,
+      row.user_id,
+      row.direction,
+      row.counterparty,
+      row.amount_cents,
+      row.currency,
+      row.note,
+      row.occurred_at,
+      row.due_at,
+      row.remind_days_before,
+      row.reminder_id,
+      row.transaction_id,
+      row.status,
+      row.settled_at,
+      row.settled_transaction_id,
+      row.created_at,
+      row.updated_at,
+    ]
+  )
+}
+
+export async function updateDebt(id: string, patch: Partial<DebtRow>): Promise<void> {
+  const db = await getDb()
+  const cols: string[] = []
+  const vals: (string | number | null)[] = []
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === 'id') continue
+    cols.push(`${k} = ?`)
+    vals.push(v as string | number | null)
+  }
+  if (cols.length === 0) return
+  vals.push(id)
+  await db.runAsync(`UPDATE finance_debt SET ${cols.join(', ')} WHERE id = ?`, vals)
+}
+
+export async function getDebt(id: string, userId: string | null): Promise<DebtRow | null> {
+  const db = await getDb()
+  const row = await db.getFirstAsync<DebtRow>(
+    'SELECT * FROM finance_debt WHERE id = ? AND user_id = ? AND deleted_at IS NULL',
+    [id, userId]
+  )
+  return row ?? null
+}
+
+export async function getDebtIncludingDeleted(id: string, userId: string | null): Promise<DebtRow | null> {
+  const db = await getDb()
+  const row = await db.getFirstAsync<DebtRow>(
+    'SELECT * FROM finance_debt WHERE id = ? AND user_id = ?',
+    [id, userId]
+  )
+  return row ?? null
+}
+
+// Open debts first (nearest due date on top), settled history below.
+export async function listDebts(userId: string | null): Promise<DebtRow[]> {
+  const db = await getDb()
+  return db.getAllAsync<DebtRow>(
+    `SELECT * FROM finance_debt
+     WHERE deleted_at IS NULL
+       AND user_id = ?
+     ORDER BY status ASC,
+       CASE WHEN status = 'open' THEN COALESCE(due_at, '9999') END ASC,
+       occurred_at DESC`,
+    [userId]
+  )
+}
+
+export async function softDeleteDebt(id: string, deletedAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    'UPDATE finance_debt SET deleted_at = ?, updated_at = ? WHERE id = ?',
+    [deletedAt, deletedAt, id]
+  )
+}
+
+export async function restoreDebt(id: string, restoredAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    'UPDATE finance_debt SET deleted_at = NULL, updated_at = ? WHERE id = ?',
+    [restoredAt, id]
   )
 }
 
@@ -265,7 +392,7 @@ export async function findDuplicateTransaction(
 // Wipes: all transactions + user-created categories. System categories stay
 // (they're seeded data, will re-show on next launch).
 // Returns count of deleted rows for confirmation toast.
-export async function wipeFinanceData(userId: string | null): Promise<{ transactions: number; categories: number; rules: number; planItems: number }> {
+export async function wipeFinanceData(userId: string | null): Promise<{ transactions: number; categories: number; rules: number; planItems: number; debts: number }> {
   const db = await getDb()
   const txCount = await db.getFirstAsync<{ n: number }>(
     'SELECT COUNT(*) AS n FROM finance_transaction WHERE user_id = ?',
@@ -283,15 +410,21 @@ export async function wipeFinanceData(userId: string | null): Promise<{ transact
     'SELECT COUNT(*) AS n FROM finance_plan_item WHERE user_id = ?',
     [userId]
   )
+  const debtCount = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM finance_debt WHERE user_id = ?',
+    [userId]
+  )
   await db.runAsync('DELETE FROM finance_transaction WHERE user_id = ?', [userId])
   await db.runAsync('DELETE FROM finance_rule WHERE user_id = ?', [userId])
   await db.runAsync('DELETE FROM finance_plan_item WHERE user_id = ?', [userId])
+  await db.runAsync('DELETE FROM finance_debt WHERE user_id = ?', [userId])
   await db.runAsync('DELETE FROM finance_category WHERE user_id = ?', [userId])
   return {
     transactions: txCount?.n ?? 0,
     categories: catCount?.n ?? 0,
     rules: ruleCount?.n ?? 0,
     planItems: planCount?.n ?? 0,
+    debts: debtCount?.n ?? 0,
   }
 }
 
@@ -353,7 +486,7 @@ export async function softDeleteCategory(id: string, deletedAt: string): Promise
   )
 }
 
-export async function exportFinanceData(userId: string | null): Promise<{ transactions: TransactionRow[]; categories: CategoryRow[]; rules: TransactionRuleRow[]; planItems: PlanItemRow[] }> {
+export async function exportFinanceData(userId: string | null): Promise<{ transactions: TransactionRow[]; categories: CategoryRow[]; rules: TransactionRuleRow[]; planItems: PlanItemRow[]; debts: DebtRow[] }> {
   const db = await getDb()
   const transactions = await db.getAllAsync<TransactionRow>(
     'SELECT * FROM finance_transaction WHERE deleted_at IS NULL AND user_id = ? ORDER BY occurred_at DESC',
@@ -371,5 +504,9 @@ export async function exportFinanceData(userId: string | null): Promise<{ transa
     'SELECT * FROM finance_plan_item WHERE deleted_at IS NULL AND user_id = ? ORDER BY kind, due_day, name',
     [userId]
   )
-  return { transactions, categories, rules, planItems }
+  const debts = await db.getAllAsync<DebtRow>(
+    'SELECT * FROM finance_debt WHERE deleted_at IS NULL AND user_id = ? ORDER BY status, occurred_at DESC',
+    [userId]
+  )
+  return { transactions, categories, rules, planItems, debts }
 }

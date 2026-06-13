@@ -12,6 +12,7 @@ import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved } from '@store/toastStore'
 import { useFinanceBootstrap, useCategories, useCategoryActions } from '../hooks/useFinance'
 import { translateKind } from '../i18n'
+import { parseAmountInput } from '../services'
 import { displayToCents, centsToDisplay } from '@services/ai/aiLanguage'
 import type { CategoryKind } from '../types'
 
@@ -61,13 +62,12 @@ export function CategoryFormScreen() {
   const onSave = async () => {
     const trimmed = name.trim()
     if (!trimmed) {
-      Alert.alert(t.invalid_amount, t.category_name_placeholder)
+      Alert.alert(t.could_not_save, t.category_name_required)
       return
     }
-    const budgetRaw = budgetText.trim()
-    const budgetNum = budgetRaw ? parseInt(budgetRaw.replace(/[^0-9]/g, ''), 10) : null
-    const monthly_budget_cents = budgetNum && budgetNum > 0
-      ? displayToCents(budgetNum, currency)
+    const budgetNum = parseAmountInput(budgetText)
+    const monthly_budget_cents = budgetNum !== null
+      ? Math.round(displayToCents(budgetNum, currency))
       : null
 
     setSubmitting(true)
@@ -166,13 +166,13 @@ export function CategoryFormScreen() {
       </View>
 
       {/* Budget */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.budget_monthly.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.budget_monthly}</Text>
       <TextInput
         value={budgetText}
         onChangeText={setBudgetText}
         placeholder={t.budget_unlimited}
         placeholderTextColor={theme.text.muted}
-        keyboardType="numeric"
+        keyboardType="decimal-pad"
         style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
       />
       <Text style={[styles.hint, { color: theme.text.muted }]}>{t.budget_optional} ({currency})</Text>

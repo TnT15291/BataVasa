@@ -145,6 +145,20 @@ describe('parseUniversalEntry', () => {
     expect(entry.category_hint).toBe('Other Income')
   })
 
+  it('does not keep an income category_hint for expense direction', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
+      { confidence: 0.9, reason: 'x', selectedByDefault: true, entry: {
+        module: 'finance', amount_cents: 100000, direction: 'expense',
+        category_hint: 'Other Income', merchant: '', note: '', occurred_at: '2099-01-01T00:00:00Z',
+      }},
+    ]}))
+    const result = await parseUniversalCandidates('chi tieu 100k')
+    expect(result.length).toBe(1)
+    const entry = result[0]!.entry as any
+    expect(entry.direction).toBe('expense')
+    expect(entry.category_hint).toBe('Shopping')
+  })
+
   it('normalizeEntry falls back for invalid reminder remind_at', async () => {
     mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
       { confidence: 0.8, reason: 'x', selectedByDefault: true, entry: {
@@ -168,14 +182,43 @@ describe('parseUniversalEntry', () => {
     expect(entry.recurrence).toBe('none')
   })
 
-  it('normalizeEntry returns null for habits with no title', async () => {
+  it('falls back to the user text for habits with no title and flags it as missing', async () => {
     mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
       { confidence: 0.7, reason: 'x', selectedByDefault: true, entry: {
         module: 'habits', title: '', frequency: 'daily',
       }},
     ]}))
     const result = await parseUniversalCandidates('tap the duc')
-    expect(result).toEqual([])
+    expect(result).toHaveLength(1)
+    expect(result[0]?.entry).toMatchObject({ module: 'habits', title: 'tap the duc' })
+    expect(result[0]?.missing).toContain('title')
+    expect(result[0]?.missing).toContain('target')
+  })
+
+  it('flags missing counterparty and due date on debt candidates instead of erroring', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
+      { confidence: 0.9, reason: 'debt', selectedByDefault: true, entry: {
+        module: 'finance_debt', amount_cents: 500000, debt_direction: 'lent', counterparty: '', due_at: null, note: '',
+      }},
+    ]}))
+    const result = await parseUniversalCandidates('cho vay 500k')
+    expect(result).toHaveLength(1)
+    expect(result[0]?.entry.module).toBe('finance_debt')
+    expect(result[0]?.missing).toContain('counterparty')
+    expect(result[0]?.missing).toContain('due_date')
+  })
+
+  it('falls back to the user text for reminders with no title and flags missing date', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
+      { confidence: 0.8, reason: 'x', selectedByDefault: true, entry: {
+        module: 'reminder', title: '', remind_at: '', recurrence: 'none', note: '',
+      }},
+    ]}))
+    const result = await parseUniversalCandidates('hop voi team')
+    expect(result).toHaveLength(1)
+    expect(result[0]?.entry).toMatchObject({ module: 'reminder', title: 'hop voi team' })
+    expect(result[0]?.missing).toContain('title')
+    expect(result[0]?.missing).toContain('date')
   })
 
   it('preserves short Vietnamese habit title from user input when AI damages tone marks', async () => {
@@ -254,6 +297,23 @@ describe('parseUniversalEntry', () => {
       const entry = finance.entry as any
       expect(entry.direction).toBe('income')
     }
+  })
+
+  it('converts borrowing wording to debt candidate even when AI returns a normal finance entry', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
+      { confidence: 0.9, reason: 'money', selectedByDefault: true, entry: {
+        module: 'finance', amount_cents: -17000000, direction: 'expense',
+        category_hint: 'Other Income', merchant: '', note: '', occurred_at: '2099-01-01T00:00:00Z',
+      }},
+    ]}))
+    const result = await parseUniversalCandidates('Vay anh Hung 17m ngay 19 tra')
+    expect(result).toHaveLength(1)
+    expect(result[0]?.entry).toMatchObject({
+      module: 'finance_debt',
+      amount_cents: 17000000,
+      debt_direction: 'borrowed',
+      counterparty: 'anh Hung',
+    })
   })
 
   it('salary keyword maps to Salary category in income guard', async () => {

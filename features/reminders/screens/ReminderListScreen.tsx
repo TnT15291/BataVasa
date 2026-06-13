@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  View, Text, Pressable, ScrollView, StyleSheet,
-  TextInput, Modal, ActivityIndicator, Alert,
+  View, Text, Pressable, ScrollView, StyleSheet, Alert,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -19,12 +18,10 @@ import { ScreenTransition } from '@components/ScreenTransition'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
-import { getProviderKey } from '@services/ai/openai'
-import { parseReminderEntry, type ParsedReminder } from '../aiParser'
-import { VoiceButton } from '@components/VoiceButton'
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Reminder } from '../types'
+import { toast } from '@store/toastStore'
 
 type ReminderFilter = 'all' | 'today' | 'important' | 'inbox'
 
@@ -93,7 +90,6 @@ function ReminderRow({ reminder, onPress, onToggle, onSkip }: {
       accessibilityRole="button"
       accessibilityLabel={reminder.title}
     >
-      <View style={[styles.rowAccent, { backgroundColor: statusColor }]} />
       <Pressable
         onPress={onToggle}
         style={[styles.checkbox, {
@@ -326,55 +322,13 @@ export function ReminderListScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const reminders = useReminders()
-  const { createReminder, updateReminder, skipReminder, deleteReminder } = useReminderActions()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
+  const { updateReminder, skipReminder, deleteReminder, restoreReminder } = useReminderActions()
   const language = useSettingsStore((s) => s.language)
 
-  const [nlText, setNlText] = useState('')
-  const [parsing, setParsing] = useState(false)
-  const [parsedReminder, setParsedReminder] = useState<ParsedReminder | null>(null)
-  const [originalNlText, setOriginalNlText] = useState('')
   const [activeFilter, setActiveFilter] = useState<ReminderFilter>('all')
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [calendarMonth, setCalendarMonth] = useState(() => new Date())
-
-  const handleNlParse = async (override?: string) => {
-    const input = (override ?? nlText).trim()
-    if (!input) return
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
-    if (override) setNlText(override)
-    setParsing(true)
-    try {
-      const result = await parseReminderEntry(input)
-      if (!result) { Alert.alert(t.ai_error, t.parse_failed); return }
-      setOriginalNlText(input)
-      setParsedReminder(result)
-    } catch { Alert.alert(t.ai_error, t.parse_failed) }
-    finally { setParsing(false) }
-  }
-
-  const handleNlConfirm = async () => {
-    if (!parsedReminder) return
-    const adv = parsedReminder.advance_minutes ?? 0
-    const notifyAt = new Date(new Date(parsedReminder.remind_at).getTime() - adv * 60000)
-    await createReminder({
-      title: parsedReminder.title,
-      note: parsedReminder.note || undefined,
-      remind_at: notifyAt.toISOString(),
-      advance_minutes: adv,
-      recurrence: parsedReminder.recurrence,
-    })
-    setParsedReminder(null)
-    setNlText('')
-  }
-
-  const handleNlEdit = () => {
-    const p = parsedReminder
-    setParsedReminder(null)
-    setNlText('')
-    router.push({ pathname: '/reminder', params: p ? { prefill: JSON.stringify(p) } : {} })
-  }
+  const [showDetails, setShowDetails] = useState(false)
 
   const { overdue, today, next7Days, nextMonth, later, completed, inbox } = useMemo(() => {
     const now = new Date()
@@ -451,16 +405,32 @@ export function ReminderListScreen() {
 
         <View style={styles.listStack}>
           {items.map((r) => (
+            (() => {
+              const confirmDelete = () => Alert.alert(t.delete, t.confirm_delete_item, [
+                { text: t.cancel, style: 'cancel' },
+                {
+                  text: t.delete,
+                  style: 'destructive',
+                  onPress: () => {
+                    void (async () => {
+                      const result = await deleteReminder(r.id)
+                      if (!result.ok) {
+                        Alert.alert(t.could_not_save, result.error ?? '')
+                        return
+                      }
+                      toast.undo(t.toast_deleted, t.undo, () => { void restoreReminder(r.id) })
+                    })()
+                  },
+                },
+              ])
+              return (
             <ReanimatedSwipeable
               key={r.id}
               renderRightActions={(_p, _d, swipeable) => (
                 <Pressable
                   onPress={() => {
                     swipeable.close()
-                    Alert.alert(t.delete, t.confirm_delete_item, [
-                      { text: t.cancel, style: 'cancel' },
-                      { text: t.delete, style: 'destructive', onPress: () => deleteReminder(r.id) },
-                    ])
+                    confirmDelete()
                   }}
                   style={[styles.swipeDelete, { backgroundColor: theme.semantic.danger }]}
                 >
@@ -476,6 +446,8 @@ export function ReminderListScreen() {
                 onSkip={() => skip(r)}
               />
             </ReanimatedSwipeable>
+              )
+            })()
           ))}
         </View>
       </View>
@@ -502,6 +474,18 @@ export function ReminderListScreen() {
               <Feather name="bell" size={28} color={MODULE_COLORS.tasks} />
             </View>
           </View>
+          <Pressable
+            onPress={() => setShowDetails((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showDetails }}
+            style={[styles.detailToggle, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}
+          >
+            <Text style={[styles.detailToggleText, { color: MODULE_COLORS.tasks }]}>
+              {showDetails ? t.home_hide_details : t.home_show_details}
+            </Text>
+            <Feather name={showDetails ? 'chevron-up' : 'chevron-down'} size={16} color={theme.text.muted} />
+          </Pressable>
+          {showDetails ? (
           <View style={styles.statGrid}>
             <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
               <Text style={[styles.statValue, { color: theme.semantic.danger }]}>{overdue.length}</Text>
@@ -520,6 +504,7 @@ export function ReminderListScreen() {
               <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.reminder_completed}</Text>
             </View>
           </View>
+          ) : null}
         </View>
 
         <View style={styles.analysisRow}>
@@ -577,6 +562,10 @@ export function ReminderListScreen() {
           </View>
         )}
 
+        {viewMode === 'list' && reminders.length > 0 ? (
+          <Text style={[styles.swipeHint, { color: theme.text.muted }]}>{t.swipe_delete_hint}</Text>
+        ) : null}
+
         {viewMode === 'calendar' ? (
           <ReminderCalendarView
             reminders={reminders}
@@ -617,45 +606,6 @@ export function ReminderListScreen() {
       >
         <Feather name="plus" size={28} color="#fff" />
       </FAB>
-
-      <Modal visible={!!parsedReminder} transparent animationType="slide" onRequestClose={() => setParsedReminder(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setParsedReminder(null)} />
-        <View style={[styles.sheet, { backgroundColor: theme.bg.elevated }]}>
-          <View style={[styles.sheetHandle, { backgroundColor: theme.border.strong }]} />
-          <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.ai_confirm_title}</Text>
-
-          <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_you_said}</Text>
-            <Text style={[styles.infoValue, { color: theme.text.primary }]}>{originalNlText}</Text>
-          </View>
-
-          <View style={[styles.infoRow, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
-            <Text style={[styles.infoLabel, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
-            <Text style={[styles.infoValue, { color: theme.text.primary }]}>
-              {parsedReminder ? (() => {
-                const adv = parsedReminder.advance_minutes ?? 0
-                const advStr = adv === 0 ? '' : ` / ${adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} ${t.remind_before.toLowerCase()}`
-                return `${parsedReminder.title}${advStr}${parsedReminder.note ? ' / ' + parsedReminder.note : ''}`
-              })() : ''}
-            </Text>
-          </View>
-
-          <View style={styles.sheetActions}>
-            <Pressable
-              onPress={handleNlEdit}
-              style={[styles.sheetBtn, { backgroundColor: theme.bg.secondary, borderColor: theme.border.strong }]}
-            >
-              <Text style={[styles.sheetBtnText, { color: theme.text.secondary }]}>{t.nl_reject_to_form}</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleNlConfirm}
-              style={[styles.sheetBtn, { backgroundColor: theme.brand.primary }]}
-            >
-              <Text style={[styles.sheetBtnText, { color: '#fff' }]}>{t.ai_confirm_save}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </ScreenTransition>
   )
 }
@@ -680,6 +630,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  detailToggle: {
+    minHeight: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  detailToggleText: { fontSize: 13, fontWeight: '700' },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   statChip: {
     width: '48%',
@@ -715,12 +675,11 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     overflow: 'hidden',
   },
-  rowAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-  checkbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  checkbox: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   skipBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -742,6 +701,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: '700' },
   rowAdvance: { fontSize: 12, fontWeight: '500' },
   rowNote: { fontSize: 12 },
+  swipeHint: { fontSize: 12, lineHeight: 16, paddingHorizontal: spacing[1] },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
   badgeText: { fontSize: 12, fontWeight: '600' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: spacing[3] },
@@ -766,31 +726,6 @@ const styles = StyleSheet.create({
     width: 56, height: 56, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center',
     elevation: 4, shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
-  nlInput: {
-    minHeight: 42,
-    fontSize: 14,
-    lineHeight: 19,
-  },
-  nlBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: {
-    borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
-    padding: spacing[4], paddingBottom: spacing[8], gap: spacing[3],
-  },
-  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: spacing[2] },
-  sheetTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
-  infoRow: { borderRadius: radius.md, borderWidth: 1, padding: spacing[3], gap: spacing[1] },
-  infoLabel: { fontSize: 12, fontWeight: '600' },
-  infoValue: { fontSize: 15 },
-  sheetActions: { flexDirection: 'row', gap: spacing[3], marginTop: spacing[2] },
-  sheetBtn: { flex: 1, paddingVertical: spacing[3], borderRadius: radius.md, alignItems: 'center', borderWidth: 1 },
-  sheetBtnText: { fontSize: 15, fontWeight: '600' },
   viewToggle: {
     flexDirection: 'row',
     borderRadius: radius.md,
@@ -819,7 +754,7 @@ const styles = StyleSheet.create({
   calNavBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   calMonthTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
   calWeekRow: { flexDirection: 'row', paddingHorizontal: spacing[2], paddingBottom: spacing[1] },
-  calWeekDay: { textAlign: 'center', fontSize: 11, fontWeight: '600' },
+  calWeekDay: { textAlign: 'center', fontSize: 12, fontWeight: '600' },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing[2], paddingBottom: spacing[2] },
   calCell: { aspectRatio: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
   calDayNum: { fontSize: 13 },

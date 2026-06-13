@@ -261,9 +261,11 @@ export function AssistantScreen() {
           <Pressable
             onPress={send}
             disabled={loading || !input.trim()}
+            accessibilityRole="button"
+            accessibilityLabel={t.type_message}
             style={[styles.sendBtn, { backgroundColor: !input.trim() || loading ? theme.border.strong : theme.brand.primary }]}
           >
-            <Text style={styles.sendIcon}>↑</Text>
+            <Feather name="arrow-up" size={20} color="#fff" />
           </Pressable>
         </View>
       </View>
@@ -310,7 +312,6 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   sendBtn: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  sendIcon: { color: '#fff', fontSize: 18, fontWeight: '700' },
   welcomeHeader: { alignItems: 'center', paddingTop: spacing[8], paddingBottom: spacing[4], paddingHorizontal: spacing[2], gap: spacing[2] },
   welcomeIcon: { width: 56, height: 56, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   welcomeTitle: { fontSize: 18, fontWeight: '700', marginBottom: spacing[2], textAlign: 'center' },

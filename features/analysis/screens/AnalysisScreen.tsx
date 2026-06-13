@@ -9,9 +9,11 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getProviderKey } from '@services/ai/openai'
 import { generateCrossModuleInsights } from '@services/ai/crossModuleInsight'
-import { useFinanceBootstrap, useTransactions, useCategories } from '@features/finance/hooks/useFinance'
+import { useFinanceBootstrap, useTransactions, useCategories, useDebts } from '@features/finance/hooks/useFinance'
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
 import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJournals'
+import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
+import { listRecentLogs } from '@features/habits/services'
 import { calculateSafeToSpend, formatAmount } from '@features/finance/services'
 import { translateCategoryName } from '@features/finance/i18n'
 import { convertMinorAmount, getRates } from '@services/fx'
@@ -22,6 +24,7 @@ export function AnalysisScreen() {
   useFinanceBootstrap()
   useHabitsBootstrap()
   useJournalsBootstrap()
+  useRemindersBootstrap()
 
   const theme = useTheme()
   const cardStyle = getCardStyle(theme)
@@ -31,11 +34,14 @@ export function AnalysisScreen() {
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const language = useSettingsStore((s) => s.language)
   const currency = useSettingsStore((s) => s.currency)
+  const cycleStartDay = useSettingsStore((s) => s.financeCycleStartDay)
 
   const transactions = useTransactions()
   const categories = useCategories()
+  const debts = useDebts()
   const habits = useHabits()
   const journals = useJournals()
+  const reminders = useReminders()
 
   // Mirror ReportsScreen: show amounts in the user's display currency when FX
   // rates are available, falling back to the storage currency otherwise.
@@ -66,7 +72,11 @@ export function AnalysisScreen() {
     setLoading(true)
     setResult(null)
     try {
-      const text = await generateCrossModuleInsights({ transactions, categories, habits, journals })
+      // Per-day habit logs unlock the kept-vs-missed correlation block; the
+      // analysis still works without them if the load fails.
+      const logsResult = await listRecentLogs(30)
+      const habitLogs = logsResult.ok ? logsResult.value : []
+      const text = await generateCrossModuleInsights({ transactions, categories, habits, journals, habitLogs, reminders })
       setResult(text)
     } catch (e: any) {
       if (e?.message === 'NO_DATA') {
@@ -77,7 +87,7 @@ export function AnalysisScreen() {
     } finally {
       setLoading(false)
     }
-  }, [aiProvider, transactions, categories, habits, journals, t, router])
+  }, [aiProvider, transactions, categories, habits, journals, reminders, t, router])
 
   const moduleCount = [
     transactions.length > 0,
@@ -124,12 +134,15 @@ export function AnalysisScreen() {
     const safeToSpend = calculateSafeToSpend({
       transactions,
       categories,
-      currency,
+      debts,
+      currency: reportCurrency,
+      fxRates,
+      cycleStartDay,
       now: today,
     })
 
     return { totalExpense, topCat, bestStreak, journalCount: last30Journals.length, avgMood, safeToSpend: safeToSpend.safeToSpend }
-  }, [transactions, categories, habits, journals, currency, amountInReportCurrency])
+  }, [transactions, categories, debts, habits, journals, reportCurrency, fxRates, cycleStartDay, amountInReportCurrency])
 
   const comparison = useMemo(() => {
     // Compare like-for-like: month-to-date vs the SAME elapsed window last month.
@@ -216,7 +229,7 @@ export function AnalysisScreen() {
                 <HighlightItem
                   icon="shield"
                   label={t.safe_to_spend}
-                  value={formatAmount(highlights.safeToSpend, currency, language)}
+                  value={`${highlights.safeToSpend < 0 ? '-' : ''}${formatAmount(highlights.safeToSpend, reportCurrency, language)}`}
                   theme={theme}
                 />
               )}

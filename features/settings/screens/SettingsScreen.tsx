@@ -41,7 +41,7 @@ function SettingRow({ label, value, onPress, last }: RowProps) {
 function SectionHeader({ label }: { label: string }) {
   const theme = useTheme()
   return (
-    <Text style={[styles.sectionHeader, { color: theme.text.muted }]}>{label.toUpperCase()}</Text>
+    <Text style={[styles.sectionHeader, { color: theme.text.muted }]}>{label}</Text>
   )
 }
 
@@ -58,6 +58,8 @@ export function SettingsScreen() {
   const theme = useTheme()
   const router = useRouter()
   const { t } = useTranslation()
+  // Default platform switch colors ignore the active theme — tint the on-state.
+  const switchTrack = { false: theme.border.strong, true: theme.brand.primary }
   const currency = useSettingsStore((s) => s.currency)
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const locationAccess = useSettingsStore((s) => s.locationAccess)
@@ -72,6 +74,8 @@ export function SettingsScreen() {
   const setSyncHabits = useSettingsStore((s) => s.setSyncHabits)
   const syncJournals = useSettingsStore((s) => s.syncJournals)
   const setSyncJournals = useSettingsStore((s) => s.setSyncJournals)
+  const financeCycleStartDay = useSettingsStore((s) => s.financeCycleStartDay)
+  const setFinanceCycleStartDay = useSettingsStore((s) => s.setFinanceCycleStartDay)
   const biometricLock = useSettingsStore((s) => s.biometricLock)
   const setBiometricLock = useSettingsStore((s) => s.setBiometricLock)
   const authConfigured = useAuthStore((s) => s.configured)
@@ -174,149 +178,6 @@ export function SettingsScreen() {
         <SettingRow label={t.language} onPress={() => router.push('/language')} last />
       </View>
 
-      <SectionHeader label={t.finance_settings} />
-      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
-          </View>
-          <Switch value={syncFinance} onValueChange={setSyncFinance} />
-        </View>
-        <SettingRow label={t.currency} value={currency} onPress={() => router.push('/currency')} />
-        <SettingRow label={t.display_currency} value={displayCurrency} onPress={() => router.push('/display-currency')} />
-        <SettingRow label={t.categories} onPress={() => router.push('/categories')} />
-        <Pressable
-          onPress={() => router.push('/data-management?module=finance')}
-          style={({ pressed }) => [
-            styles.row,
-            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
-          ]}
-        >
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.data_management}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.data_management_hint}</Text>
-          </View>
-        </Pressable>
-        <Pressable
-          onPress={() => router.push('/data-management?module=finance')}
-          style={({ pressed }) => [
-            styles.row,
-            styles.rowLast,
-            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
-          ]}
-        >
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_data}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.data_management_delete_hint}</Text>
-          </View>
-        </Pressable>
-      </View>
-
-      <SectionHeader label={t.nav_reminders} />
-      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
-          </View>
-          <Switch value={syncReminders} onValueChange={setSyncReminders} />
-        </View>
-        <SettingRow label={t.reminders} onPress={() => router.push('/reminders')} />
-        <Pressable
-          onPress={() => router.push('/data-management?module=reminders')}
-          style={({ pressed }) => [
-            styles.row,
-            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
-          ]}
-        >
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_reminders}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_reminders_hint}</Text>
-          </View>
-        </Pressable>
-        <Pressable
-          onPress={() => router.push('/data-management?module=reminders')}
-          style={({ pressed }) => [
-            styles.row,
-            styles.rowLast,
-            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
-          ]}
-        >
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_reminders}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_reminders_hint}</Text>
-          </View>
-        </Pressable>
-      </View>
-
-      <SectionHeader label={t.habits} />
-      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
-          </View>
-          <Switch value={syncHabits} onValueChange={setSyncHabits} />
-        </View>
-        <SettingRow label={t.habits} onPress={() => router.push('/habits')} />
-        <Pressable
-          onPress={() => router.push('/data-management?module=habits')}
-          style={({ pressed }) => [styles.row, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
-        >
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_habits}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_habits_hint}</Text>
-          </View>
-        </Pressable>
-        <Pressable
-          onPress={() => router.push('/data-management?module=habits')}
-          style={({ pressed }) => [styles.row, styles.rowLast, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
-        >
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_habits}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_habits_hint}</Text>
-          </View>
-        </Pressable>
-      </View>
-
-      <SectionHeader label={t.nav_journal} />
-      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
-          </View>
-          <Switch value={syncJournals} onValueChange={setSyncJournals} />
-        </View>
-        <SettingRow label={t.journals} onPress={() => router.push('/journals')} />
-        <Pressable
-          onPress={() => router.push('/data-management?module=journals')}
-          style={({ pressed }) => [
-            styles.row,
-            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
-          ]}
-        >
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_journals}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_journals_hint}</Text>
-          </View>
-        </Pressable>
-        <Pressable
-          onPress={() => router.push('/data-management?module=journals')}
-          style={({ pressed }) => [
-            styles.row,
-            styles.rowLast,
-            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
-          ]}
-        >
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_journals}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_journals_hint}</Text>
-          </View>
-        </Pressable>
-      </View>
-
       <SectionHeader label={t.privacy} />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <View style={[styles.row, { borderColor: theme.border.subtle }]}>
@@ -324,14 +185,14 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.biometric_lock}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.biometric_lock_hint}</Text>
           </View>
-          <Switch value={biometricLock} onValueChange={toggleBiometric} />
+          <Switch value={biometricLock} onValueChange={toggleBiometric} trackColor={switchTrack} />
         </View>
         <View style={[styles.row, { borderColor: theme.border.subtle }]}>
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.location_access}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.location_access_hint}</Text>
           </View>
-          <Switch value={locationAccess} onValueChange={toggleLocation} />
+          <Switch value={locationAccess} onValueChange={toggleLocation} trackColor={switchTrack} />
         </View>
         <Pressable
           onPress={requestMicrophone}
@@ -368,9 +229,178 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.ai_auto_confirm}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.ai_auto_confirm_hint}</Text>
           </View>
-          <Switch value={aiAutoConfirm} onValueChange={setAIAutoConfirm} />
+          <Switch value={aiAutoConfirm} onValueChange={setAIAutoConfirm} trackColor={switchTrack} />
         </View>
       </View>
+
+      <SectionHeader label={t.finance_settings} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <Switch value={syncFinance} onValueChange={setSyncFinance} trackColor={switchTrack} />
+        </View>
+        <SettingRow label={t.currency} value={currency} onPress={() => router.push('/currency')} />
+        <SettingRow label={t.display_currency} value={displayCurrency} onPress={() => router.push('/display-currency')} />
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.finance_cycle_start}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.finance_cycle_start_hint}</Text>
+          </View>
+          <View style={styles.stepper}>
+            <Pressable
+              onPress={() => { void setFinanceCycleStartDay(financeCycleStartDay - 1) }}
+              accessibilityRole="button"
+              hitSlop={8}
+              style={[styles.stepBtn, { borderColor: theme.border.strong, backgroundColor: theme.bg.secondary }]}
+            >
+              <Text style={[styles.stepBtnText, { color: theme.text.primary }]}>−</Text>
+            </Pressable>
+            <Text style={[styles.stepValue, { color: theme.text.primary }]}>{financeCycleStartDay}</Text>
+            <Pressable
+              onPress={() => { void setFinanceCycleStartDay(financeCycleStartDay + 1) }}
+              accessibilityRole="button"
+              hitSlop={8}
+              style={[styles.stepBtn, { borderColor: theme.border.strong, backgroundColor: theme.bg.secondary }]}
+            >
+              <Text style={[styles.stepBtnText, { color: theme.text.primary }]}>+</Text>
+            </Pressable>
+          </View>
+        </View>
+        <SettingRow label={t.categories} onPress={() => router.push('/categories')} />
+        <Pressable
+          onPress={() => router.push('/data-management?module=finance')}
+          style={({ pressed }) => [
+            styles.row,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.data_management}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.data_management_hint}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/data-management?module=finance')}
+          style={({ pressed }) => [
+            styles.row,
+            styles.rowLast,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.data_management_delete_hint}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      <SectionHeader label={t.nav_reminders} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <Switch value={syncReminders} onValueChange={setSyncReminders} trackColor={switchTrack} />
+        </View>
+        <SettingRow label={t.reminders} onPress={() => router.push('/reminders')} />
+        <Pressable
+          onPress={() => router.push('/data-management?module=reminders')}
+          style={({ pressed }) => [
+            styles.row,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_reminders}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_reminders_hint}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/data-management?module=reminders')}
+          style={({ pressed }) => [
+            styles.row,
+            styles.rowLast,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_reminders}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_reminders_hint}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      <SectionHeader label={t.habits} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <Switch value={syncHabits} onValueChange={setSyncHabits} trackColor={switchTrack} />
+        </View>
+        <SettingRow label={t.habits} onPress={() => router.push('/habits')} />
+        <Pressable
+          onPress={() => router.push('/data-management?module=habits')}
+          style={({ pressed }) => [styles.row, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_habits}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_habits_hint}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/data-management?module=habits')}
+          style={({ pressed }) => [styles.row, styles.rowLast, { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated }]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_habits}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_habits_hint}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      <SectionHeader label={t.nav_journal} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <Switch value={syncJournals} onValueChange={setSyncJournals} trackColor={switchTrack} />
+        </View>
+        <SettingRow label={t.journals} onPress={() => router.push('/journals')} />
+        <Pressable
+          onPress={() => router.push('/data-management?module=journals')}
+          style={({ pressed }) => [
+            styles.row,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.export_journals}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.export_journals_hint}</Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/data-management?module=journals')}
+          style={({ pressed }) => [
+            styles.row,
+            styles.rowLast,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_journals}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_journals_hint}</Text>
+          </View>
+        </Pressable>
+      </View>
+
     </ScrollView>
   )
 }
@@ -402,4 +432,15 @@ const styles = StyleSheet.create({
   rowHint: { fontSize: 12, marginTop: 4 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   rowValue: { fontSize: 15 },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  stepBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepBtnText: { fontSize: 18, fontWeight: '400' },
+  stepValue: { fontSize: 16, fontWeight: '700', minWidth: 26, textAlign: 'center' },
 })

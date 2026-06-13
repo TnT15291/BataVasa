@@ -50,6 +50,8 @@ const makeTx = (amount_cents: number): Transaction => ({
   location_lat: null,
   location_lng: null,
   location_label: null,
+  plan_item_id: null,
+  plan_match_dismissed: 0,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
   deleted_at: null,

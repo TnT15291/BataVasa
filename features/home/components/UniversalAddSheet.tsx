@@ -22,13 +22,15 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
-import { parseUniversalCandidates, type UniversalCandidate, type UniversalEntry } from '@services/ai/universalEntry'
+import { parseUniversalCandidates, type UniversalCandidate, type UniversalEntry, type MissingField } from '@services/ai/universalEntry'
 import { getProviderKey } from '@services/ai/openai'
 import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved } from '@store/toastStore'
 import { VoiceButton } from '@components/VoiceButton'
 import { matchCategory } from '@features/finance/i18n'
 import { useCategories } from '@features/finance/hooks/useFinance'
+import { maybeConfirmPlanItemMatch } from '@features/finance/planMatch'
+import type { Category, Transaction } from '@features/finance/types'
 import { useFinanceStore } from '@store/financeStore'
 import { useRemindersStore } from '@store/remindersStore'
 import { useHabitsStore } from '@store/habitsStore'
@@ -38,9 +40,10 @@ import { MODULE_COLORS } from '@design/moduleColors'
 
 type IconName = keyof typeof Feather.glyphMap
 
-function getModuleMeta(theme: ReturnType<typeof useTheme>): Record<string, { icon: IconName; color: string }> {
+function getModuleMeta(): Record<string, { icon: IconName; color: string }> {
   return {
-    finance:  { icon: 'dollar-sign', color: theme.finance.income },
+    finance:  { icon: 'dollar-sign', color: MODULE_COLORS.finance },
+    finance_debt: { icon: 'users', color: MODULE_COLORS.finance },
     reminder: { icon: 'bell', color: MODULE_COLORS.tasks },
     habits:   { icon: 'check-circle', color: MODULE_COLORS.habits },
     journal:  { icon: 'book-open', color: MODULE_COLORS.journal },
@@ -72,6 +75,18 @@ type Props = {
   autoAnalyzeToken?: number
 }
 
+function missingFieldLabel(field: MissingField, t: ReturnType<typeof useTranslation>['t']): string {
+  const map: Record<MissingField, string> = {
+    category: t.field_category,
+    date: t.field_date,
+    due_date: t.field_due_date,
+    counterparty: t.field_counterparty,
+    title: t.field_title,
+    target: t.field_target,
+  }
+  return map[field]
+}
+
 type SheetStep = 'input' | 'confirm'
 
 type CandidateCardProps = {
@@ -87,7 +102,7 @@ type CandidateCardProps = {
 
 function CandidateCard({ candidate, selected, onToggle, index, language, currency, t, theme }: CandidateCardProps) {
   const result = candidate.entry
-  const meta = getModuleMeta(theme)[result.module]!
+  const meta = getModuleMeta()[result.module]!
   const locale = getDateFnsLocale(language)
   const scale = useSharedValue(1)
 
@@ -111,6 +126,14 @@ function CandidateCard({ candidate, selected, onToggle, index, language, currenc
       result.merchant || '',
       result.occurred_at ? format(new Date(result.occurred_at), 'dd/MM/yyyy', { locale }) : '',
     ].filter(Boolean)
+  } else if (result.module === 'finance_debt') {
+    const sign = result.debt_direction === 'lent' ? '- ' : '+ '
+    lines = [
+      `${sign}${formatAmount(result.amount_cents, currency, language)}`,
+      result.debt_direction === 'borrowed' ? t.debt_borrowed : t.debt_lent,
+      result.counterparty,
+      result.due_at ? format(new Date(result.due_at), 'dd/MM/yyyy', { locale }) : '',
+    ].filter(Boolean)
   } else if (result.module === 'reminder') {
     lines = [
       result.title,
@@ -126,6 +149,7 @@ function CandidateCard({ candidate, selected, onToggle, index, language, currenc
 
   const moduleLabel: Record<string, string> = {
     finance: t.classified_finance,
+    finance_debt: t.debt_book,
     reminder: t.classified_reminder,
     habits: t.classified_habits,
     journal: t.classified_journal,
@@ -163,6 +187,17 @@ function CandidateCard({ candidate, selected, onToggle, index, language, currenc
             {line}
           </Text>
         ))}
+        {candidate.missing.length > 0 ? (
+          <View style={styles.missingRow}>
+            <Feather name="alert-circle" size={13} color="#D97706" />
+            <Text style={[styles.missingText, { color: '#D97706' }]} numberOfLines={2}>
+              {t.smart_missing_fields.replace(
+                '{{fields}}',
+                candidate.missing.map((f) => missingFieldLabel(f, t)).join(', ')
+              )}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
     </Animated.View>
   )
@@ -176,6 +211,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   const currency = useSettingsStore((s) => s.currency)
   const cats = useCategories()
   const createTransaction = useFinanceStore((s) => s.createTransaction)
+  const createDebt = useFinanceStore((s) => s.createDebt)
   const createReminder = useRemindersStore((s) => s.createReminder)
   const createHabit = useHabitsStore((s) => s.createHabit)
   const createJournal = useJournalsStore((s) => s.createJournal)
@@ -260,11 +296,25 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   }))
 
   const quickModules: { route: string; icon: IconName; color: string; label: string }[] = [
-    { route: '/new', icon: 'dollar-sign', color: theme.finance.income, label: t.nav_new_transaction },
+    { route: '/new', icon: 'dollar-sign', color: MODULE_COLORS.finance, label: t.nav_new_transaction },
     { route: '/reminder', icon: 'bell', color: MODULE_COLORS.tasks, label: t.new_reminder },
     { route: '/habit', icon: 'check-circle', color: MODULE_COLORS.habits, label: t.new_habit },
     { route: '/journal', icon: 'book-open', color: MODULE_COLORS.journal, label: t.new_journal },
   ]
+
+  const categoryMatchesDirection = (cat: Category, direction: 'expense' | 'income'): boolean =>
+    direction === 'income' ? cat.kind === 'income' : cat.kind !== 'income'
+
+  const fallbackCategoryForDirection = (direction: 'expense' | 'income'): Category | null => {
+    if (direction === 'income') return cats.find((c) => c.kind === 'income') ?? null
+    return cats.find((c) => c.name === 'Shopping') ?? cats.find((c) => c.kind !== 'income') ?? null
+  }
+
+  const matchFinanceCategoryForDirection = (entry: Extract<UniversalEntry, { module: 'finance' }>): Category | null => {
+    const matched = matchCategory(cats, entry.category_hint, t)
+    if (matched && categoryMatchesDirection(matched, entry.direction)) return matched
+    return fallbackCategoryForDirection(entry.direction)
+  }
 
   const onAnalyze = async (override?: string) => {
     const input = (override ?? text).trim()
@@ -308,14 +358,40 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initialText, autoAnalyzeToken])
 
-  const onSave = async () => {
+  const onSave = () => {
+    const selectedCandidates = candidates.filter((c) => selectedIds.includes(c.id))
+    if (selectedCandidates.length === 0) return
+
+    // Rule 5 extension: incomplete parses prompt for the missing fields first.
+    // "Save anyway" fills sensible defaults (unknown person, today, 1×/day, …).
+    const missingLabels = [...new Set(selectedCandidates.flatMap((c) => c.missing))]
+      .map((f) => missingFieldLabel(f, t))
+    if (missingLabels.length > 0) {
+      Alert.alert(
+        t.smart_missing_title,
+        `${t.smart_missing_fields.replace('{{fields}}', missingLabels.join(', '))}\n\n${t.smart_missing_prompt}`,
+        [
+          { text: t.cancel, style: 'cancel' },
+          {
+            text: t.smart_fill_more,
+            onPress: () => { analyzeRunRef.current += 1; setCandidates([]); setSelectedIds([]); setStep('input') },
+          },
+          { text: t.smart_save_defaults, onPress: () => { void persistSelected() } },
+        ]
+      )
+      return
+    }
+    void persistSelected()
+  }
+
+  const persistSelected = async () => {
     const selected = candidates.filter((c) => selectedIds.includes(c.id)).map((c) => c.entry)
     if (selected.length === 0) return
     setSaving(true)
 
     const financeEntries = selected.filter((entry): entry is Extract<UniversalEntry, { module: 'finance' }> => entry.module === 'finance')
     for (const entry of financeEntries) {
-      const cat = matchCategory(cats, entry.category_hint, t)
+      const cat = matchFinanceCategoryForDirection(entry)
       if (!cat) {
         Alert.alert(t.pick_category, t.pick_category_msg)
         setSaving(false)
@@ -323,9 +399,10 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
       }
     }
 
+    const createdFinanceTxs: Transaction[] = []
     for (const entry of selected) {
       if (entry.module === 'finance') {
-        const cat = matchCategory(cats, entry.category_hint, t)
+        const cat = matchFinanceCategoryForDirection(entry)
         const res = await createTransaction({
           amount_cents: entry.direction === 'expense' ? -Math.abs(entry.amount_cents) : Math.abs(entry.amount_cents),
           currency,
@@ -335,6 +412,28 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
           occurred_at: entry.occurred_at,
           source: 'voice',
         })
+        if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
+        if (res.tx) createdFinanceTxs.push(res.tx)
+      } else if (entry.module === 'finance_debt') {
+        // Missing counterparty saves as "unknown" instead of failing validation.
+        const counterparty = entry.counterparty.trim() || t.unknown_person
+        const labels = {
+          reminderTitle: (entry.debt_direction === 'lent' ? t.debt_reminder_title_lent : t.debt_reminder_title_borrowed)
+            .replace('{{name}}', counterparty),
+          reminderNote: entry.note || undefined,
+          settleNote: (entry.debt_direction === 'lent' ? t.debt_settle_tx_note_lent : t.debt_settle_tx_note_borrowed)
+            .replace('{{name}}', counterparty),
+        }
+        const res = await createDebt({
+          direction: entry.debt_direction,
+          counterparty,
+          amount_cents: entry.amount_cents,
+          currency,
+          note: entry.note || undefined,
+          occurred_at: new Date().toISOString(),
+          due_at: entry.due_at,
+          remind_days_before: 1,
+        }, labels)
         if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
       } else if (entry.module === 'reminder') {
         const res = await createReminder({
@@ -373,12 +472,17 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
     const s = useSettingsStore.getState()
     const anySynced = selected.some((e) =>
       (e.module === 'finance' && s.syncFinance) ||
+      (e.module === 'finance_debt' && s.syncFinance) ||
       (e.module === 'reminder' && s.syncReminders) ||
       (e.module === 'habits' && s.syncHabits) ||
       (e.module === 'journal' && s.syncJournals)
     )
     notifySaved(t, anySynced)
     handleClose()
+    // Sequentially, so multiple matches prompt one at a time over the home screen.
+    for (const tx of createdFinanceTxs) {
+      await maybeConfirmPlanItemMatch(tx, t)
+    }
   }
 
   const toggleCandidate = (id: string) => {
@@ -389,7 +493,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   }
 
   return (
-    <Modal visible={show} transparent animationType="none" onRequestClose={handleClose}>
+    <Modal visible={visible && show} transparent animationType="none" onRequestClose={handleClose}>
       <View style={{ flex: 1 }}>
         <Animated.View style={[StyleSheet.absoluteFillObject, styles.backdrop, backdropStyle]}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={handleClose} />
@@ -418,7 +522,6 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
                   multiline
                   numberOfLines={3}
                   style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
-                  autoFocus={!analyzing}
                 />
                 <Text style={[styles.examples, { color: theme.text.muted }]}>{t.universal_add_examples}</Text>
                 <View style={styles.analyzeRow}>
@@ -568,6 +671,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   resultLine: { fontSize: 15 },
+  missingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  missingText: { fontSize: 12, fontWeight: '600', flex: 1 },
   actionRow: { flexDirection: 'row', gap: spacing[2] },
   actionBtn: {
     flex: 1, paddingVertical: spacing[3], borderRadius: radius.md,

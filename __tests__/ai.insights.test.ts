@@ -198,6 +198,67 @@ describe('AI insight builders', () => {
     expect(messages[1].content).toContain('JOURNALS')
   })
 
+  it('builds habit-impact, spending-timing, and reminder blocks when richer data is provided', async () => {
+    mockedChatCompletion.mockResolvedValueOnce('rich insight')
+
+    const day = (offset: number, time = 'T10:00:00.000Z') => {
+      const d = new Date(Date.now() - offset * 24 * 60 * 60 * 1000)
+      return d.toISOString().split('T')[0] + time
+    }
+
+    // 10 days of data: habit kept on even days (cheap + happy), missed on odd
+    // days (expensive + low mood) — a clean correlation the block must surface.
+    const transactions: any[] = []
+    const journals: any[] = []
+    const habitLogs: any[] = []
+    for (let i = 1; i <= 10; i++) {
+      const kept = i % 2 === 0
+      // 12h apart so the two groups always land in different time-of-day
+      // slots regardless of the machine's timezone.
+      const txTime = kept ? 'T02:00:00.000Z' : 'T14:00:00.000Z'
+      transactions.push({ ...baseTx, id: `tx-${i}`, amount_cents: kept ? -100000 : -300000, occurred_at: day(i, txTime) })
+      journals.push({ ...baseJournal, id: `j-${i}`, mood: kept ? 5 : 2, occurred_at: day(i) })
+      if (kept) habitLogs.push({ ...baseHabitLog, id: `log-${i}`, habit_id: baseHabit.id, occurred_at: day(i) })
+    }
+    const reminders = [1, 2, 3, 4].map((i) => ({
+      id: `rem-${i}`,
+      user_id: 'user-1',
+      title: 'task',
+      note: null,
+      remind_at: day(i),
+      advance_minutes: 0,
+      recurrence: 'none',
+      priority: 'medium',
+      is_inbox: 0,
+      completed: i % 2 === 0 ? 1 : 0,
+      location_lat: null,
+      location_lng: null,
+      location_label: null,
+      created_at: day(i),
+      updated_at: day(i),
+      deleted_at: null,
+      synced_at: null,
+    }))
+
+    await generateCrossModuleInsights({
+      transactions,
+      categories: [baseCategory as any],
+      habits: [{ ...baseHabit, todayCount: 1, streak: 5 } as any],
+      journals,
+      habitLogs: habitLogs as any,
+      reminders: reminders as any,
+    })
+
+    const prompt = mockedChatCompletion.mock.calls[0][0][1].content
+    expect(prompt).toContain('HABIT IMPACT')
+    expect(prompt).toContain('mood:')
+    expect(prompt).toContain('avg daily spend:')
+    expect(prompt).toContain('SPENDING TIMING')
+    expect(prompt).toContain('By time of day')
+    expect(prompt).toContain('REMINDERS/TASKS')
+    expect(prompt).toContain('SPENDING BY JOURNAL ACTIVITY')
+  })
+
   it('includes income transactions in finance summary', async () => {
     mockedChatCompletion.mockResolvedValueOnce('ok')
     const incomeTx = { ...baseTx, amount_cents: 5000000 }

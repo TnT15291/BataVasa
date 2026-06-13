@@ -12,7 +12,7 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
-import { notifySaved } from '@store/toastStore'
+import { notifySaved, toast } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseJournalEntry } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
@@ -35,12 +35,14 @@ const ACTIVITY_TAGS = [
 ] as const
 type ActivityTag = typeof ACTIVITY_TAGS[number]
 
+// Template bodies live in the translation files (journal_template_*_content)
+// so prompts appear in the user's language — never hardcode user-facing text.
 const JOURNAL_TEMPLATES = [
-  { key: 'checkin',  mood: 3, content: 'Today I noticed...\n\nI felt...\n\nOne thing I want to remember is...' },
-  { key: 'gratitude', mood: 4, content: 'Three things I am grateful for:\n1. \n2. \n3. \n\nWhy this mattered today...' },
-  { key: 'stress',   mood: 2, content: 'What stressed me today...\n\nWhat triggered it...\n\nWhat helped, or could help next time...' },
-  { key: 'money',    mood: 3, content: 'A spending or money moment I noticed today...\n\nHow I felt about it...\n\nOne adjustment I want to try...' },
-  { key: 'habit',    mood: 3, content: 'A habit I kept or missed today...\n\nWhat made it easier or harder...\n\nOne small next step...' },
+  { key: 'checkin',   mood: 3 },
+  { key: 'gratitude', mood: 4 },
+  { key: 'stress',    mood: 2 },
+  { key: 'money',     mood: 3 },
+  { key: 'habit',     mood: 3 },
 ] as const
 
 export function JournalFormScreen() {
@@ -50,7 +52,7 @@ export function JournalFormScreen() {
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const journals = useJournals()
-  const { createJournal, updateJournal, deleteJournal } = useJournalActions()
+  const { createJournal, updateJournal, deleteJournal, restoreJournal } = useJournalActions()
   const { createReminder } = useReminderActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
@@ -143,8 +145,8 @@ export function JournalFormScreen() {
       const anniversary = addYears(new Date(res.journal.occurred_at), 1)
       anniversary.setHours(9, 0, 0, 0)
       const reminder = await createReminder({
-        title: `Remember: ${trimmed.slice(0, 80)}`,
-        note: `One year since this journal entry.${trimmed.length > 120 ? ` ${trimmed.slice(0, 120)}...` : ` ${trimmed}`}`,
+        title: t.journal_anniversary_reminder_title.replace('{{text}}', trimmed.slice(0, 80)),
+        note: t.journal_anniversary_reminder_note.replace('{{text}}', trimmed.length > 120 ? `${trimmed.slice(0, 120)}...` : trimmed),
         remind_at: anniversary.toISOString(),
         advance_minutes: 0,
         recurrence: 'none',
@@ -165,9 +167,11 @@ export function JournalFormScreen() {
       {
         text: t.delete, style: 'destructive',
         onPress: async () => {
-          const r = await deleteJournal(editingId!)
+          const id = editingId!
+          const r = await deleteJournal(id)
           if (r.ok) router.back()
           else Alert.alert(t.could_not_save, r.error ?? '')
+          if (r.ok) toast.undo(t.toast_deleted, t.undo, () => { void restoreJournal(id) })
         },
       },
     ])
@@ -224,8 +228,8 @@ export function JournalFormScreen() {
         const anniversary = addYears(new Date(res.journal.occurred_at), 1)
         anniversary.setHours(9, 0, 0, 0)
         await createReminder({
-          title: `Remember: ${content.slice(0, 80)}`,
-          note: `One year since this journal entry.${content.length > 120 ? ` ${content.slice(0, 120)}...` : ` ${content}`}`,
+          title: t.journal_anniversary_reminder_title.replace('{{text}}', content.slice(0, 80)),
+          note: t.journal_anniversary_reminder_note.replace('{{text}}', content.length > 120 ? `${content.slice(0, 120)}...` : content),
           remind_at: anniversary.toISOString(),
           advance_minutes: 0,
           recurrence: 'none',
@@ -279,8 +283,17 @@ export function JournalFormScreen() {
     habit: t.journal_template_habit,
   }
 
+  const templateContents: Record<string, string> = {
+    checkin: t.journal_template_checkin_content,
+    gratitude: t.journal_template_gratitude_content,
+    stress: t.journal_template_stress_content,
+    money: t.journal_template_money_content,
+    habit: t.journal_template_habit_content,
+  }
+
   const applyTemplate = (template: typeof JOURNAL_TEMPLATES[number]) => {
-    setContent((current) => current.trim() ? `${current.trim()}\n\n${template.content}` : template.content)
+    const body = templateContents[template.key]!
+    setContent((current) => current.trim() ? `${current.trim()}\n\n${body}` : body)
     setMood((current) => current ?? template.mood)
   }
 
@@ -331,7 +344,7 @@ export function JournalFormScreen() {
       </View>
 
       {/* Date */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.date.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.date}</Text>
       <Pressable
         onPress={() => setShowDatePicker(true)}
         style={[styles.datePill, { backgroundColor: theme.bg.elevated, borderColor: theme.border.strong }]}
@@ -352,7 +365,7 @@ export function JournalFormScreen() {
       )}
 
       {/* Mood */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_mood_label.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_mood_label}</Text>
       <View style={styles.moodRow}>
         {MOODS.map(({ value, emoji }) => {
           const active = mood === value
@@ -374,7 +387,7 @@ export function JournalFormScreen() {
         })}
       </View>
 
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_tags_label.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_tags_label}</Text>
       <View style={styles.templateGrid}>
         {ACTIVITY_TAGS.map((tag) => {
           const active = selectedTags.includes(tag)
@@ -397,7 +410,7 @@ export function JournalFormScreen() {
         })}
       </View>
 
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_templates_label.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_templates_label}</Text>
       <View style={styles.templateGrid}>
         {JOURNAL_TEMPLATES.map((template) => (
           <Pressable
@@ -448,7 +461,7 @@ export function JournalFormScreen() {
       ) : null}
 
       {/* Content */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_journal.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_journal}</Text>
       <TextInput
         value={content}
         onChangeText={setContent}

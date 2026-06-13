@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { useTranslation } from '@services/i18n'
 import { authenticate, getBiometricSupport } from '@services/biometric'
+import { BrandLogo } from '@components/BrandLogo'
 
 type Props = {
   onUnlocked: () => void
@@ -36,10 +36,7 @@ export function BiometricLockScreen({ onUnlocked }: Props) {
 
   return (
     <View style={s.container}>
-      <View style={s.iconWrap}>
-        <Ionicons name="shield-checkmark" size={56} color={theme.brand.primary} />
-      </View>
-      <Text style={s.appName}>BataVasa</Text>
+      <BrandLogo size={88} />
       <Text style={s.subtitle}>{t.biometric_locked}</Text>
 
       {busy ? (
@@ -71,27 +68,11 @@ function styles(theme: ReturnType<typeof useTheme>) {
       justifyContent: 'center',
       padding: 32,
     },
-    iconWrap: {
-      width: 88,
-      height: 88,
-      borderRadius: 44,
-      backgroundColor: theme.bg.elevated,
-      borderWidth: 1,
-      borderColor: theme.border.subtle,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 16,
-    },
-    appName: {
-      fontSize: 28,
-      fontWeight: '700',
-      color: theme.text.primary,
-      marginBottom: 8,
-    },
     subtitle: {
       fontSize: 16,
       color: theme.text.muted,
       textAlign: 'center',
+      marginTop: 8,
       marginBottom: 8,
     },
     button: {

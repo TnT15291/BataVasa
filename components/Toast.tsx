@@ -27,6 +27,8 @@ export function ToastHost() {
   const message = useToastStore((s) => s.message)
   const detail = useToastStore((s) => s.detail)
   const kind = useToastStore((s) => s.kind)
+  const actionLabel = useToastStore((s) => s.actionLabel)
+  const onAction = useToastStore((s) => s.onAction)
   const token = useToastStore((s) => s.token)
   const hide = useToastStore((s) => s.hide)
 
@@ -39,7 +41,7 @@ export function ToastHost() {
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => {
       Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => hide())
-    }, VISIBLE_MS)
+    }, actionLabel ? 5000 : VISIBLE_MS)
     return () => { if (timer.current) clearTimeout(timer.current) }
     // token forces re-trigger even when the same message repeats
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,6 +81,20 @@ export function ToastHost() {
             <Text style={[styles.detail, { color: theme.text.muted }]} numberOfLines={2}>{detail}</Text>
           ) : null}
         </View>
+        {actionLabel && onAction ? (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation()
+              onAction()
+              hide()
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={actionLabel}
+            style={[styles.actionBtn, { backgroundColor: accent + '1A' }]}
+          >
+            <Text style={[styles.actionText, { color: accent }]}>{actionLabel}</Text>
+          </Pressable>
+        ) : null}
       </Pressable>
     </Animated.View>
   )
@@ -117,4 +133,12 @@ const styles = StyleSheet.create({
   textWrap: { flex: 1 },
   message: { fontSize: 14, fontWeight: '700' },
   detail: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+  actionBtn: {
+    minHeight: 36,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionText: { fontSize: 13, fontWeight: '700' },
 })

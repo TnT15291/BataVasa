@@ -11,6 +11,7 @@ import { useAuthStore } from '@store/authStore'
 import { useSettingsStore } from '@store/settingsStore'
 import { toast } from '@store/toastStore'
 import { KeyboardAvoider } from '@components/KeyboardAvoider'
+import { BrandLogo } from '@components/BrandLogo'
 
 type Mode = 'signin' | 'signup'
 
@@ -95,7 +96,7 @@ export function AuthScreen() {
     return (
       <View style={[styles.center, { backgroundColor: theme.bg.primary }]}>
         <LanguageCombo />
-        <Text style={[styles.logo, { color: theme.brand.primary }]}>BataVasa</Text>
+        <BrandLogo />
         <Text style={[styles.title, { color: theme.text.primary, marginTop: spacing[4] }]}>
           {t.auth_not_configured_title}
         </Text>
@@ -144,7 +145,7 @@ export function AuthScreen() {
     <KeyboardAvoider style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <LanguageCombo />
-        <Text style={[styles.logo, { color: theme.brand.primary }]}>BataVasa</Text>
+        <BrandLogo />
         <Text style={[styles.tagline, { color: theme.text.secondary }]}>{t.auth_tagline}</Text>
         <Text style={[styles.subtitle, { color: theme.text.muted }]}>
           {mode === 'signin' ? t.auth_subtitle_signin : t.auth_subtitle_signup}
@@ -267,7 +268,6 @@ const styles = StyleSheet.create({
   comboItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
   comboItemText: { fontSize: 15 },
   comboCheck: { marginLeft: 'auto' },
-  logo: { fontSize: 34, fontWeight: '700', textAlign: 'center' },
   tagline: { fontSize: 14, textAlign: 'center', marginTop: spacing[2], lineHeight: 20 },
   subtitle: { fontSize: 14, textAlign: 'center', marginTop: spacing[4], marginBottom: spacing[4] },
   benefits: {

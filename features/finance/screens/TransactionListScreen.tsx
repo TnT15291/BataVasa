@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator, Alert, TextInput } from 'react-native'
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { FlashList } from '@shopify/flash-list'
 import { Feather } from '@expo/vector-icons'
@@ -19,23 +19,27 @@ import {
   useCategories,
   useTransactions,
   usePlanItems,
+  useDebts,
   useFinanceActions,
   usePlanItemActions,
+  useDebtActions,
 } from '../hooks/useFinance'
 import { TransactionRow } from '../components/TransactionRow'
 import { AmountText } from '../components/AmountText'
+import { PlanItemSheet } from '../components/PlanItemSheet'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
-import { getRates, convertMinorAmount, summarizeInCurrency } from '@services/fx'
-import { calculateSafeToSpend, formatAmount } from '@features/finance/services'
+import { getRates, convertMinorAmount } from '@services/fx'
+import { calculateSafeToSpend, getSettledPlanItemIds, summarizeDebts, formatAmount } from '@features/finance/services'
 import { translateCategoryName } from '../i18n'
 import { getDateFnsLocale } from '@services/locale'
-import type { PlanItem, Transaction } from '../types'
+import type { Debt, PlanItem, Transaction } from '../types'
 import { SkeletonTransactionList } from '@components/SkeletonBox'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
+import { toast } from '@store/toastStore'
 
 type Period = 'today' | 'week' | 'month' | 'all'
 type CurrencyTotals = { income: number; expense: number }
@@ -75,14 +79,21 @@ export function TransactionListScreen() {
   const txs = useTransactions()
   const cats = useCategories()
   const planItems = usePlanItems()
-  const { remove, refresh, loadMore, hasMore, loadingMore } = useFinanceActions()
-  const { createPlanItem, deletePlanItem } = usePlanItemActions()
+  const debts = useDebts()
+  const { remove, restore, refresh, loadMore, hasMore, loadingMore } = useFinanceActions()
+  const { createPlanItem, deletePlanItem, restorePlanItem } = usePlanItemActions()
+  const { deleteDebt, restoreDebt } = useDebtActions()
   const [refreshing, setRefreshing] = useState(false)
   const [activePeriod, setActivePeriod] = useState<Period>('month')
   const [reviewOnly, setReviewOnly] = useState(false)
+  const [showFinanceDetails, setShowFinanceDetails] = useState(false)
+  const [showAllMonthlyPlanRows, setShowAllMonthlyPlanRows] = useState(false)
+  const [planSheet, setPlanSheet] = useState<{ item: PlanItem | null } | null>(null)
+  const [search, setSearch] = useState('')
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const currency = useSettingsStore((s) => s.currency)
   const language = useSettingsStore((s) => s.language)
+  const cycleStartDay = useSettingsStore((s) => s.financeCycleStartDay)
   const locale = getDateFnsLocale(language)
 
   const [fxRates, setFxRates] = useState<Record<string, number> | null>(null)
@@ -159,8 +170,19 @@ export function TransactionListScreen() {
           const r = ranges[activePeriod]
           return d >= r.from && d <= r.to
         })
-    return reviewOnly ? periodTxs.filter((tx) => tx.needs_review === 1) : periodTxs
-  }, [txs, ranges, activePeriod, reviewOnly])
+    const reviewTxs = reviewOnly ? periodTxs.filter((tx) => tx.needs_review === 1) : periodTxs
+    const q = search.trim().toLowerCase()
+    if (!q) return reviewTxs
+    return reviewTxs.filter((tx) => {
+      const cat = catById.get(tx.category_id)
+      return [
+        tx.merchant,
+        tx.note,
+        cat ? translateCategoryName(cat, t) : '',
+        tx.currency,
+      ].some((value) => value?.toLowerCase().includes(q))
+    })
+  }, [txs, ranges, activePeriod, reviewOnly, search, catById, t])
 
   const periodReviewCount = useMemo(() => {
     const periodTxs = activePeriod === 'all'
@@ -193,14 +215,18 @@ export function TransactionListScreen() {
   const incomePct = Math.max(6, (overviewIncome / chartMax) * 100)
   const expensePct = Math.max(6, (overviewExpense / chartMax) * 100)
 
+  const safeCurrency = fxRates ? displayCurrency : currency
   const safeToSpend = useMemo(
     () => calculateSafeToSpend({
       transactions: txs,
       categories: cats,
       planItems,
-      currency,
+      debts,
+      currency: safeCurrency,
+      fxRates,
+      cycleStartDay,
     }),
-    [txs, cats, planItems, currency]
+    [txs, cats, planItems, debts, safeCurrency, fxRates, cycleStartDay]
   )
 
   const topCategory = useMemo(() => {
@@ -235,16 +261,16 @@ export function TransactionListScreen() {
       list.push(tx)
       groups.set(key, list)
     }
-    return Array.from(groups.entries())
-      .map(([key, list]) => list.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()))
+    return Array.from(groups.values())
+      .map((list) => list.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()))
       .filter((list) => list.length >= 2)
       .map((list) => {
         const latest = list[0]!
         const category = catById.get(latest.category_id)
         return {
           key: `${latest.merchant}-${latest.category_id}-${latest.currency}-${Math.abs(latest.amount_cents)}`,
-          title: latest.merchant ?? category?.name ?? 'Recurring bill',
-          categoryName: category?.name ?? t.category_others,
+          title: latest.merchant ?? (category ? translateCategoryName(category, t) : t.category_others),
+          categoryName: category ? translateCategoryName(category, t) : t.category_others,
           kind: latest.amount_cents > 0 ? 'income' as const : 'expense' as const,
           categoryId: latest.category_id,
           amount: Math.abs(latest.amount_cents),
@@ -263,16 +289,68 @@ export function TransactionListScreen() {
     [planItems]
   )
 
+  // Paid/received this cycle: badge instead of listing as still-to-pay.
+  const settledPlanIds = useMemo(
+    () => getSettledPlanItemIds({ planItems: activePlanItems, transactions: txs, cycleStartDay }),
+    [activePlanItems, txs, cycleStartDay]
+  )
+
+  // Unpaid first (what still needs money this month), settled items sink down.
+  const sortedPlanItems = useMemo(() => {
+    return [...activePlanItems].sort((a, b) => {
+      const aSettled = settledPlanIds.has(a.id) ? 1 : 0
+      const bSettled = settledPlanIds.has(b.id) ? 1 : 0
+      return aSettled - bSettled || a.due_day - b.due_day
+    })
+  }, [activePlanItems, settledPlanIds])
+
+  // Header totals = what is still expected/owed this cycle (settled items excluded).
   const plannedTotal = useMemo(() => {
     let income = 0
     let expense = 0
     for (const item of activePlanItems) {
       if (item.currency !== currency) continue
+      if (settledPlanIds.has(item.id)) continue
       if (item.kind === 'income') income += item.amount_cents
       else expense += item.amount_cents
     }
+    for (const debt of debts) {
+      if (debt.deleted_at || debt.status !== 'open' || !debt.due_at || debt.currency !== currency) continue
+      const due = new Date(debt.due_at)
+      if (due < safeToSpend.cycleFrom || due >= safeToSpend.cycleTo) continue
+      if (debt.direction === 'borrowed') expense += debt.amount_cents
+      else income += debt.amount_cents
+    }
     return { income, expense }
-  }, [activePlanItems, currency])
+  }, [activePlanItems, settledPlanIds, debts, currency, safeToSpend.cycleFrom, safeToSpend.cycleTo])
+
+  const dueDebtPlanRows = useMemo(() => {
+    const from = safeToSpend.cycleFrom
+    const to = safeToSpend.cycleTo
+    return debts
+      .filter((debt) => {
+        if (debt.deleted_at || debt.status !== 'open' || !debt.due_at) return false
+        const due = new Date(debt.due_at)
+        return due >= from && due < to
+      })
+      .sort((a, b) => new Date(a.due_at!).getTime() - new Date(b.due_at!).getTime())
+  }, [debts, safeToSpend.cycleFrom, safeToSpend.cycleTo])
+
+  const monthlyPlanRows = useMemo(
+    () => [
+      ...sortedPlanItems.map((item) => ({ type: 'plan' as const, id: item.id, item })),
+      ...dueDebtPlanRows.map((debt) => ({ type: 'debt' as const, id: `debt:${debt.id}`, debt })),
+    ].sort((a, b) => {
+      const aDay = a.type === 'plan' ? a.item.due_day : new Date(a.debt.due_at!).getDate()
+      const bDay = b.type === 'plan' ? b.item.due_day : new Date(b.debt.due_at!).getDate()
+      return aDay - bDay
+    }),
+    [sortedPlanItems, dueDebtPlanRows]
+  )
+  const visibleMonthlyPlanRows = showAllMonthlyPlanRows ? monthlyPlanRows : monthlyPlanRows.slice(0, 4)
+  const hiddenMonthlyPlanCount = Math.max(0, monthlyPlanRows.length - visibleMonthlyPlanRows.length)
+
+  const debtSummary = useMemo(() => summarizeDebts(debts, currency), [debts, currency])
 
   const candidateInPlan = useCallback((candidate: RecurringCandidate) => {
     const normalized = candidate.title.trim().toLowerCase()
@@ -296,13 +374,6 @@ export function TransactionListScreen() {
     })
     if (!result.ok) Alert.alert(t.ai_error, result.error ?? t.no_transactions)
   }, [createPlanItem, t])
-
-  const removePlanItem = useCallback((item: PlanItem) => {
-    Alert.alert(t.delete, item.name, [
-      { text: t.cancel, style: 'cancel' },
-      { text: t.delete, style: 'destructive', onPress: () => { void deletePlanItem(item.id) } },
-    ])
-  }, [deletePlanItem, t])
 
   const createBillReminder = (candidate: RecurringCandidate) => {
     router.push({
@@ -367,6 +438,66 @@ export function TransactionListScreen() {
     setRefreshing(false)
   }, [refresh])
 
+  const deleteTransactionWithUndo = useCallback((id: string) => {
+    Alert.alert(t.delete, t.confirm_delete_msg, [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete,
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const result = await remove(id)
+            if (!result.ok) {
+              Alert.alert(t.could_not_save, result.error ?? '')
+              return
+            }
+            toast.undo(t.toast_deleted, t.undo, () => { void restore(id) })
+          })()
+        },
+      },
+    ])
+  }, [remove, restore, t])
+
+  const deletePlanItemWithUndo = useCallback((item: PlanItem) => {
+    Alert.alert(t.delete, item.name, [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete,
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const result = await deletePlanItem(item.id)
+            if (!result.ok) {
+              Alert.alert(t.could_not_save, result.error ?? '')
+              return
+            }
+            toast.undo(t.toast_deleted, t.undo, () => { void restorePlanItem(item.id) })
+          })()
+        },
+      },
+    ])
+  }, [deletePlanItem, restorePlanItem, t])
+
+  const deleteDebtWithUndo = useCallback((debt: Debt) => {
+    Alert.alert(t.debt_book, `${debt.counterparty} · ${formatAmount(debt.amount_cents, debt.currency, language)}\n\n${t.debt_delete_msg}`, [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: t.delete,
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const result = await deleteDebt(debt.id)
+            if (!result.ok) {
+              Alert.alert(t.could_not_save, result.error ?? '')
+              return
+            }
+            toast.undo(t.toast_deleted, t.undo, () => { void restoreDebt(debt.id) })
+          })()
+        },
+      },
+    ])
+  }, [deleteDebt, language, restoreDebt, t])
+
   const PERIOD_ROWS: { key: Period; label: string }[] = [
     { key: 'today', label: t.today },
     { key: 'week', label: t.this_week },
@@ -380,7 +511,14 @@ export function TransactionListScreen() {
         data={activityItems}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.brand.primary}
+            colors={[theme.brand.primary]}
+          />
+        }
         ListHeaderComponent={
           <View style={styles.headerContent}>
             <View style={[styles.overviewCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
@@ -452,58 +590,241 @@ export function TransactionListScreen() {
               })}
             </View>
 
+            <View style={[styles.searchBox, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+              <Feather name="search" size={16} color={theme.text.muted} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder={t.finance_search_placeholder}
+                placeholderTextColor={theme.text.muted}
+                accessibilityLabel={t.finance_search_placeholder}
+                style={[styles.searchInput, { color: theme.text.primary }]}
+                returnKeyType="search"
+              />
+              {search.trim() ? (
+                <Pressable
+                  onPress={() => setSearch('')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.cancel}
+                  hitSlop={8}
+                >
+                  <Feather name="x" size={16} color={theme.text.muted} />
+                </Pressable>
+              ) : null}
+            </View>
+
             <View style={[styles.safePanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
               <View style={styles.safeLine}>
                 <View style={styles.safeTitleRow}>
-                  <Feather name="shield" size={15} color={theme.brand.primary} />
+                  <Feather
+                    name={safeToSpend.safeToSpend < 0 ? 'alert-triangle' : 'shield'}
+                    size={15}
+                    color={safeToSpend.safeToSpend < 0 ? theme.semantic.danger : theme.brand.primary}
+                  />
                   <Text style={[styles.safeLabel, { color: theme.text.secondary }]}>{t.safe_to_spend}</Text>
                 </View>
-                <AmountText cents={safeToSpend.safeToSpend} currency={currency} showSign={false} color={theme.brand.primary} style={styles.safeAmount} />
+                <AmountText
+                  cents={safeToSpend.safeToSpend}
+                  currency={safeCurrency}
+                  showSign={safeToSpend.safeToSpend < 0}
+                  color={safeToSpend.safeToSpend < 0 ? theme.semantic.danger : theme.brand.primary}
+                  style={styles.safeAmount}
+                />
               </View>
-              <View style={styles.safeBreakdown}>
-                <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
-                  {t.safe_income}: {formatAmount(safeToSpend.income, currency, language)}
-                </Text>
-                <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
-                  {t.safe_planned_income}: {formatAmount(safeToSpend.plannedIncome, currency, language)}
-                </Text>
-                <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
-                  {t.safe_regular_expense}: {formatAmount(safeToSpend.nonFundExpense, currency, language)}
-                </Text>
-                <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
-                  {t.safe_planned_expense}: {formatAmount(safeToSpend.plannedExpense, currency, language)}
-                </Text>
-              </View>
-              <Text style={[styles.safeFormula, { color: theme.text.muted }]}>{t.safe_to_spend_formula}</Text>
+              {showFinanceDetails ? (
+                <>
+                  <View style={styles.safeBreakdown}>
+                    <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                      {t.safe_income}: {formatAmount(safeToSpend.income, safeCurrency, language)}
+                    </Text>
+                    <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                      {t.safe_planned_income}: {formatAmount(safeToSpend.plannedIncome, safeCurrency, language)}
+                    </Text>
+                    <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                      {t.safe_regular_expense}: {formatAmount(safeToSpend.nonFundExpense, safeCurrency, language)}
+                    </Text>
+                    {safeToSpend.savingsSetAside > 0 ? (
+                      <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                        {t.safe_savings}: {formatAmount(safeToSpend.savingsSetAside, safeCurrency, language)}
+                      </Text>
+                    ) : null}
+                    <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                      {t.safe_planned_expense}: {formatAmount(safeToSpend.plannedExpense, safeCurrency, language)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.safeFormula, { color: theme.text.muted }]}>{t.safe_to_spend_formula}</Text>
+                </>
+              ) : null}
             </View>
 
             <View style={[styles.planCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
               <View style={styles.recurringHeader}>
                 <View style={styles.recurringTitleRow}>
                   <Feather name="calendar" size={16} color={theme.brand.primary} />
-                  <Text style={[styles.recurringTitle, { color: theme.text.primary }]}>{t.monthly_plan}</Text>
+                  <Text style={[styles.recurringTitle, { color: theme.text.primary }]} numberOfLines={1}>{t.monthly_plan}</Text>
                 </View>
-                <Text style={[styles.recurringMeta, { color: theme.text.muted }]}>
-                  {formatAmount(plannedTotal.income, currency, language)} / {formatAmount(plannedTotal.expense, currency, language)}
-                </Text>
+                <View style={styles.recurringHeaderRight}>
+                  <Pressable
+                    onPress={() => setPlanSheet({ item: null })}
+                    accessibilityRole="button"
+                    accessibilityLabel={t.plan_add_title}
+                    hitSlop={6}
+                    style={[styles.recurringBtn, { borderColor: theme.border.strong }]}
+                  >
+                    <Feather name="plus" size={14} color={theme.brand.primary} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      if (showFinanceDetails) setShowAllMonthlyPlanRows(false)
+                      setShowFinanceDetails((v) => !v)
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={showFinanceDetails ? t.finance_hide_details : t.finance_show_details}
+                    accessibilityState={{ expanded: showFinanceDetails }}
+                    hitSlop={6}
+                    style={[styles.recurringBtn, { borderColor: theme.border.strong }]}
+                  >
+                    <Feather name={showFinanceDetails ? 'chevron-up' : 'chevron-down'} size={15} color={theme.text.muted} />
+                  </Pressable>
+                </View>
               </View>
-              {activePlanItems.length > 0 ? activePlanItems.slice(0, 4).map((item) => (
-                <Pressable key={item.id} onLongPress={() => removePlanItem(item)} style={[styles.planRow, { borderColor: theme.border.subtle }]}>
-                  <View style={styles.planIcon}>
-                    <Feather name={item.kind === 'income' ? 'arrow-down-left' : 'arrow-up-right'} size={13} color={item.kind === 'income' ? theme.finance.income : theme.finance.expense} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.recurringName, { color: theme.text.primary }]} numberOfLines={1}>{item.name}</Text>
-                    <Text style={[styles.recurringMeta, { color: theme.text.muted }]} numberOfLines={1}>
-                      {t.plan_due_day.replace('{{day}}', String(item.due_day))}
-                    </Text>
-                  </View>
-                  <AmountText cents={item.amount_cents} currency={item.currency} showSign={false} color={item.kind === 'income' ? theme.finance.income : theme.finance.expense} style={styles.recurringAmount} />
+              <View style={styles.planTotalsRow}>
+                <View style={[styles.planTotalPill, { backgroundColor: theme.finance.income + '14', borderColor: theme.finance.income + '44' }]}>
+                  <Feather name="arrow-down-left" size={13} color={theme.finance.income} />
+                  <Text style={[styles.planTotalLabel, { color: theme.text.muted }]} numberOfLines={1}>{t.income}</Text>
+                  <AmountText cents={plannedTotal.income} currency={currency} showSign={false} color={theme.finance.income} style={styles.planTotalAmount} />
+                </View>
+                <View style={[styles.planTotalPill, { backgroundColor: theme.finance.expense + '14', borderColor: theme.finance.expense + '44' }]}>
+                  <Feather name="arrow-up-right" size={13} color={theme.finance.expense} />
+                  <Text style={[styles.planTotalLabel, { color: theme.text.muted }]} numberOfLines={1}>{t.expense}</Text>
+                  <AmountText cents={plannedTotal.expense} currency={currency} showSign={false} color={theme.finance.expense} style={styles.planTotalAmount} />
+                </View>
+              </View>
+              {showFinanceDetails ? monthlyPlanRows.length > 0 ? (
+                <>
+              {visibleMonthlyPlanRows.map((row) => {
+                if (row.type === 'debt') {
+                  const debt = row.debt
+                  const dueAt = new Date(debt.due_at!)
+                  const planKind = debt.direction === 'borrowed' ? 'expense' : 'income'
+                  return (
+                    <ReanimatedSwipeable
+                      key={row.id}
+                      renderRightActions={(_progress, _drag, swipeable) => (
+                        <Pressable
+                          onPress={() => {
+                            swipeable.close()
+                            deleteDebtWithUndo(debt)
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={t.delete}
+                          style={[styles.swipeDelete, styles.planSwipeDelete, { backgroundColor: theme.semantic.danger }]}
+                        >
+                          <Feather name="trash-2" size={20} color="#fff" />
+                        </Pressable>
+                      )}
+                      overshootRight={false}
+                    >
+                      <Pressable
+                        onPress={() => router.push({ pathname: '/debt' as any, params: { id: debt.id } })}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${debt.counterparty} · ${t.debt_book} · ${formatAmount(debt.amount_cents, debt.currency, language)}`}
+                        style={({ pressed }) => [styles.planRow, { backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary, borderColor: theme.border.subtle }]}
+                      >
+                        <View style={[styles.planIcon, { backgroundColor: (planKind === 'income' ? theme.finance.income : theme.finance.expense) + '1F' }]}>
+                          <Feather name={planKind === 'income' ? 'arrow-down-left' : 'arrow-up-right'} size={14} color={planKind === 'income' ? theme.finance.income : theme.finance.expense} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.recurringName, { color: theme.text.primary }]} numberOfLines={1}>
+                            {debt.direction === 'borrowed' ? t.debt_settle_tx_note_borrowed.replace('{{name}}', debt.counterparty) : t.debt_settle_tx_note_lent.replace('{{name}}', debt.counterparty)}
+                          </Text>
+                          <Text style={[styles.recurringMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                            {t.debt_due_date}: {format(dueAt, 'dd/MM', { locale })}
+                          </Text>
+                        </View>
+                        <AmountText cents={debt.amount_cents} currency={debt.currency} showSign={false} color={planKind === 'income' ? theme.finance.income : theme.finance.expense} style={styles.recurringAmount} />
+                      </Pressable>
+                    </ReanimatedSwipeable>
+                  )
+                }
+                const item = row.item
+                const settled = settledPlanIds.has(item.id)
+                return (
+                  <ReanimatedSwipeable
+                    key={item.id}
+                    renderRightActions={(_progress, _drag, swipeable) => (
+                      <Pressable
+                        onPress={() => {
+                          swipeable.close()
+                          deletePlanItemWithUndo(item)
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t.delete}
+                        style={[styles.swipeDelete, styles.planSwipeDelete, { backgroundColor: theme.semantic.danger }]}
+                      >
+                        <Feather name="trash-2" size={20} color="#fff" />
+                      </Pressable>
+                    )}
+                    overshootRight={false}
+                  >
+                  <Pressable
+                    onPress={() => setPlanSheet({ item })}
+                    accessibilityRole="button"
+                    accessibilityLabel={settled ? `${item.name} · ${t.plan_paid} · ${formatAmount(item.amount_cents, item.currency, language)}` : `${item.name} · ${formatAmount(item.amount_cents, item.currency, language)}`}
+                    style={({ pressed }) => [styles.planRow, { backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary, borderColor: theme.border.subtle, opacity: settled ? 0.55 : 1 }]}
+                  >
+                    <View style={[styles.planIcon, { backgroundColor: (settled ? theme.semantic.success : item.kind === 'income' ? theme.finance.income : theme.finance.expense) + '1F' }]}>
+                      {settled ? (
+                        <Feather name="check-circle" size={14} color={theme.semantic.success} />
+                      ) : (
+                        <Feather name={item.kind === 'income' ? 'arrow-down-left' : 'arrow-up-right'} size={14} color={item.kind === 'income' ? theme.finance.income : theme.finance.expense} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.recurringName, { color: theme.text.primary }]} numberOfLines={1}>{item.name}</Text>
+                      <Text style={[styles.recurringMeta, { color: settled ? theme.semantic.success : theme.text.muted }]} numberOfLines={1}>
+                        {settled ? t.plan_paid : t.plan_due_day.replace('{{day}}', String(item.due_day))}
+                      </Text>
+                    </View>
+                    <AmountText cents={item.amount_cents} currency={item.currency} showSign={false} color={settled ? theme.text.muted : item.kind === 'income' ? theme.finance.income : theme.finance.expense} style={styles.recurringAmount} />
+                  </Pressable>
+                  </ReanimatedSwipeable>
+                )
+              })}
+              {hiddenMonthlyPlanCount > 0 ? (
+                <Pressable
+                  onPress={() => setShowAllMonthlyPlanRows(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t.load_more} ${hiddenMonthlyPlanCount}`}
+                  style={({ pressed }) => [styles.planMoreRow, { backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary, borderColor: theme.border.subtle }]}
+                >
+                  <Feather name="more-horizontal" size={16} color={theme.brand.primary} />
+                  <Text style={[styles.planMoreText, { color: theme.brand.primary }]}>
+                    {t.load_more} ({hiddenMonthlyPlanCount})
+                  </Text>
                 </Pressable>
-              )) : (
+              ) : null}
+                </>
+              ) : (
                 <Text style={[styles.safeFormula, { color: theme.text.muted }]}>{t.monthly_plan_empty}</Text>
-              )}
+              ) : null}
             </View>
+
+            <Pressable
+              onPress={() => router.push('/debts' as any)}
+              accessibilityRole="button"
+              accessibilityLabel={t.debt_book}
+              style={[styles.reviewFilter, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
+            >
+              <Feather name="users" size={16} color={debtSummary.overdueCount > 0 ? theme.semantic.danger : theme.brand.primary} />
+              <Text style={[styles.reviewFilterText, { color: theme.text.secondary }]}>{t.debt_book}</Text>
+              <Text style={[styles.reviewFilterCount, { color: theme.text.muted }]} numberOfLines={1}>
+                {debtSummary.openCount > 0
+                  ? `${formatAmount(debtSummary.lentOutstanding, currency, language)} / ${formatAmount(debtSummary.borrowedOutstanding, currency, language)}`
+                  : ''}
+              </Text>
+              <Feather name="chevron-right" size={16} color={theme.text.muted} />
+            </Pressable>
 
             <Pressable
               onPress={() => setReviewOnly((v) => !v)}
@@ -523,7 +844,7 @@ export function TransactionListScreen() {
               )}
             </Pressable>
 
-            {recurringCandidates.length > 0 ? (
+            {showFinanceDetails && recurringCandidates.length > 0 ? (
               <View style={[styles.recurringCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
                 <View style={styles.recurringHeader}>
                   <View style={styles.recurringTitleRow}>
@@ -596,10 +917,7 @@ export function TransactionListScreen() {
                 <Pressable
                   onPress={() => {
                     swipeable.close()
-                    Alert.alert(t.delete, t.confirm_delete_msg, [
-                      { text: t.cancel, style: 'cancel' },
-                      { text: t.delete, style: 'destructive', onPress: () => remove(item.tx.id) },
-                    ])
+                    deleteTransactionWithUndo(item.tx.id)
                   }}
                   style={[styles.swipeDelete, { backgroundColor: theme.semantic.danger }]}
                 >
@@ -612,12 +930,6 @@ export function TransactionListScreen() {
                 tx={item.tx}
                 category={catById.get(item.tx.category_id)}
                 onPress={() => router.push({ pathname: '/new', params: { id: item.tx.id } })}
-                onLongPress={() => {
-                  Alert.alert(t.delete, t.confirm_delete_msg, [
-                    { text: t.cancel, style: 'cancel' },
-                    { text: t.delete, style: 'destructive', onPress: () => remove(item.tx.id) },
-                  ])
-                }}
               />
             </ReanimatedSwipeable>
           )
@@ -647,6 +959,20 @@ export function TransactionListScreen() {
               </View>
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_review_items}</Text>
             </View>
+          ) : search.trim() ? (
+            <View style={styles.empty}>
+              <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
+                <Feather name="search" size={34} color={theme.brand.primary} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_matching_transactions}</Text>
+              <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{search.trim()}</Text>
+              <Pressable
+                onPress={() => setSearch('')}
+                style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
+              >
+                <Text style={styles.emptyBtnText}>{t.clear_search}</Text>
+              </Pressable>
+            </View>
           ) : (
             <View style={styles.empty}>
               <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
@@ -673,6 +999,11 @@ export function TransactionListScreen() {
         <Feather name="plus" size={28} color="#fff" />
       </FAB>
 
+      <PlanItemSheet
+        visible={planSheet !== null}
+        item={planSheet?.item ?? null}
+        onClose={() => setPlanSheet(null)}
+      />
     </ScreenTransition>
   )
 }
@@ -713,7 +1044,7 @@ const styles = StyleSheet.create({
   safeAmount: { fontSize: 17, fontWeight: '700' },
   safeMeta: { fontSize: 12 },
   safeBreakdown: { gap: 2, paddingTop: spacing[1] },
-  safeFormula: { fontSize: 11, lineHeight: 15, paddingTop: spacing[1] },
+  safeFormula: { fontSize: 12, lineHeight: 16, paddingTop: spacing[1] },
   segmented: {
     flexDirection: 'row',
     borderRadius: radius.md,
@@ -723,6 +1054,16 @@ const styles = StyleSheet.create({
   },
   segment: { flex: 1, alignItems: 'center', borderRadius: radius.sm, paddingVertical: spacing[2] },
   segmentText: { fontSize: 13, fontWeight: '700' },
+  searchBox: {
+    minHeight: 46,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: spacing[2] },
   analysisRow: { flexDirection: 'row', gap: spacing[2] },
   reviewFilter: {
     minHeight: 44,
@@ -748,8 +1089,23 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   recurringHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  recurringTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  recurringTitle: { fontSize: 14, fontWeight: '700' },
+  recurringHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  recurringTitleRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  recurringTitle: { flexShrink: 1, fontSize: 14, fontWeight: '700' },
+  planTotalsRow: { flexDirection: 'row', gap: spacing[2] },
+  planTotalPill: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[2],
+  },
+  planTotalLabel: { fontSize: 12, fontWeight: '600' },
+  planTotalAmount: { marginLeft: 'auto', fontSize: 12, fontWeight: '700' },
   recurringRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -761,28 +1117,41 @@ const styles = StyleSheet.create({
   recurringMeta: { fontSize: 12 },
   recurringAmount: { fontSize: 12, fontWeight: '700' },
   recurringBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   planRow: {
-    minHeight: 48,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
   },
   planIcon: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  planMoreRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+  },
+  planMoreText: { fontSize: 13, fontWeight: '700' },
   analysisBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -830,6 +1199,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     marginBottom: spacing[2],
   },
+  planSwipeDelete: { marginBottom: 0 },
   fab: {
     position: 'absolute',
     right: spacing[6],

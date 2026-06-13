@@ -1,8 +1,9 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency } from './aiLanguage'
 import { extractAmount, hasMultipleAmounts } from './smartEntry'
+import type { DebtDirection } from '@features/finance/types'
 
-export type UniversalModule = 'finance' | 'reminder' | 'habits' | 'journal'
+export type UniversalModule = 'finance' | 'finance_debt' | 'reminder' | 'habits' | 'journal'
 
 export type FinanceEntry = {
   module: 'finance'
@@ -12,6 +13,15 @@ export type FinanceEntry = {
   merchant: string
   note: string
   occurred_at: string
+}
+
+export type DebtEntry = {
+  module: 'finance_debt'
+  amount_cents: number
+  debt_direction: DebtDirection
+  counterparty: string
+  due_at: string | null
+  note: string
 }
 
 export type ReminderEntry = {
@@ -34,7 +44,12 @@ export type JournalEntry = {
   content: string
 }
 
-export type UniversalEntry = FinanceEntry | ReminderEntry | HabitsEntry | JournalEntry
+export type UniversalEntry = FinanceEntry | DebtEntry | ReminderEntry | HabitsEntry | JournalEntry
+
+// Fields the parse could not extract: the entry carries a sensible default
+// instead (or stays empty for counterparty), and the UI must tell the user
+// before saving — never silently drop the candidate or error out.
+export type MissingField = 'category' | 'date' | 'due_date' | 'counterparty' | 'title' | 'target'
 
 export type UniversalCandidate = {
   id: string
@@ -42,7 +57,10 @@ export type UniversalCandidate = {
   confidence: number
   reason: string
   selectedByDefault: boolean
+  missing: MissingField[]
 }
+
+type NormalizedEntry = { entry: UniversalEntry; missing: MissingField[] }
 
 function getLocalTzOffset(): string {
   const offsetMin = -new Date().getTimezoneOffset()
@@ -117,6 +135,62 @@ function foldText(text: string): string {
     .toLowerCase()
 }
 
+function hasDebtIntent(text: string): boolean {
+  const t = foldText(text)
+  return /\b(vay cua|di vay|muon cua|borrowed from|borrow from|cho .+ vay|lend|lent)\b/.test(t) ||
+    /\bvay\s+(?!cua\b)(?=[^\d]{1,80}\d)/.test(t)
+}
+
+function debtDirectionFromText(text: string): DebtDirection {
+  const t = foldText(text)
+  if (/\b(vay cua|di vay|muon cua|borrowed from|borrow from)\b/.test(t) || /\bvay\s+(?!cua\b)(?=[^\d]{1,80}\d)/.test(t)) return 'borrowed'
+  return 'lent'
+}
+
+function sanitizeFinanceCategoryHint(direction: 'expense' | 'income', hint: string): string {
+  const trimmed = hint.trim()
+  if (!trimmed) return direction === 'income' ? 'Other Income' : 'Shopping'
+
+  const folded = foldText(trimmed)
+  const incomeCategoryHints = new Set(['salary', 'freelance', 'other income', 'borrowing'])
+  if (direction === 'expense' && incomeCategoryHints.has(folded)) return 'Shopping'
+  return trimmed
+}
+
+function extractCounterpartyFromDebtText(text: string): string {
+  const amountStart = text.search(/\d/)
+  const beforeAmount = amountStart >= 0 ? text.slice(0, amountStart) : text
+  const normalizedBeforeAmount = foldText(beforeAmount)
+  let candidate: string
+  if (/^\s*vay\s+/.test(normalizedBeforeAmount)) {
+    const offset = normalizedBeforeAmount.indexOf('vay') + 3
+    candidate = beforeAmount.slice(offset).replace(/^\s+của\s+/i, '').replace(/^\s+cua\s+/i, '').trim()
+  } else {
+    candidate = beforeAmount
+      .replace(/^\s*(vay\s+của|vay\s+cua|đi\s+vay|di\s+vay|mượn\s+của|muon\s+cua|cho)\s+/i, '')
+      .replace(/\s+vay\s*$/i, '')
+      .trim()
+  }
+  // "cho vay 500k" leaves only the verb behind — that's no name at all.
+  return /^(vay|cho vay|di vay|muon|cua)$/.test(foldText(candidate)) ? '' : candidate
+}
+
+function extractDebtDueAt(text: string, now: Date): string | null {
+  const t = foldText(text)
+  const nextMonth = t.match(/\b(?:ngay\s+)?([1-9]|[12]\d|3[01])\s+thang\s+sau\b/)
+  const target = new Date(now)
+  if (nextMonth) {
+    target.setMonth(now.getMonth() + 1, Number(nextMonth[1]))
+  } else {
+    const dayOnly = t.match(/\b(?:ngay\s+)?([1-9]|[12]\d|3[01])\s*(?:tra|thanh toan|repay|pay back)\b/)
+    if (!dayOnly) return null
+    target.setDate(Number(dayOnly[1]))
+    if (target < now) target.setMonth(target.getMonth() + 1)
+  }
+  target.setHours(9, 0, 0, 0)
+  return target.toISOString()
+}
+
 // When the AI returns a merchant/note/title that doesn't appear verbatim in the
 // user's original text, the model likely corrupted a diacritic or swapped a vowel
 // (e.g. "lý lịch" → "lý lệch"). For optional fields (merchant, note) we can safely
@@ -177,19 +251,49 @@ function inferHabitTargetFromText(text: string): number {
   return normalizeHabitTarget(match[1])
 }
 
-function normalizeEntry(entry: any, now: Date, localAmount: number | null, originalText: string): UniversalEntry | null {
+function normalizeDebtEntry(entry: any, now: Date, localAmount: number | null, originalText: string): NormalizedEntry | null {
+  const amount = Math.abs(Number(entry.amount_cents))
+  const amountCents = localAmount ?? Math.round(amount)
+  if (!amountCents || amountCents <= 0) return null
+  const missing: MissingField[] = []
+  const counterparty = String(entry.counterparty || '').trim() || extractCounterpartyFromDebtText(originalText)
+  if (!counterparty) missing.push('counterparty')
+  const dueAt = entry.due_at ? normalizeAIISOString(entry.due_at, now) : extractDebtDueAt(originalText, now)
+  if (!dueAt) missing.push('due_date')
+  return {
+    entry: {
+      module: 'finance_debt',
+      amount_cents: amountCents,
+      debt_direction: hasDebtIntent(originalText)
+        ? debtDirectionFromText(originalText)
+        : entry.debt_direction === 'lent' ? 'lent' : 'borrowed',
+      counterparty,
+      due_at: dueAt,
+      note: restoreVerbatim(originalText, String(entry.note || ''), String(entry.note || '')),
+    },
+    missing,
+  }
+}
+
+function normalizeEntry(entry: any, now: Date, localAmount: number | null, originalText: string): NormalizedEntry | null {
   if (!entry?.module) return null
 
   if (entry.module === 'finance') {
     const amount = Math.abs(Number(entry.amount_cents))
+    // Without an amount there is no transaction to record — not a finance candidate at all.
     if (!amount || amount <= 0) return null
+    if (hasDebtIntent(originalText)) return normalizeDebtEntry(entry, now, localAmount, originalText)
+    const missing: MissingField[] = []
+    if (!String(entry.category_hint || '').trim()) missing.push('category')
+    if (!entry.occurred_at) missing.push('date')
     const aiMerchant = String(entry.merchant || '')
     const aiNote = String(entry.note || '')
+    const direction = entry.direction === 'income' ? 'income' : 'expense'
     const normalized: FinanceEntry = {
       module: 'finance',
       amount_cents: Math.round(amount),
-      direction: entry.direction === 'income' ? 'income' : 'expense',
-      category_hint: String(entry.category_hint || (entry.direction === 'income' ? 'Other Income' : 'Shopping')),
+      direction,
+      category_hint: sanitizeFinanceCategoryHint(direction, String(entry.category_hint || '')),
       // Restore verbatim from original to prevent AI diacritic corruption (e.g. lý lịch→lý lệch).
       // merchant falls back to '' (optional); note falls back to AI value (may be valid paraphrase).
       merchant: restoreVerbatim(originalText, aiMerchant, ''),
@@ -200,42 +304,60 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
       const ratio = normalized.amount_cents / localAmount
       if (ratio >= 10 || ratio <= 0.1) normalized.amount_cents = localAmount
     }
-    return normalized
+    return { entry: normalized, missing }
+  }
+
+  if (entry.module === 'finance_debt' || entry.intent === 'debt') {
+    return normalizeDebtEntry(entry, now, localAmount, originalText)
   }
 
   if (entry.module === 'reminder') {
-    if (!entry.title) return null
+    const missing: MissingField[] = []
+    const aiTitle = String(entry.title || '')
+    // Missing title: the user's own words are the best default.
+    const title = aiTitle ? restoreVerbatim(originalText, aiTitle, aiTitle) : originalText.trim().slice(0, 200)
+    if (!aiTitle) missing.push('title')
+    if (!title) return null
     const remindAt = fixReminderTimezone(String(entry.remind_at || ''))
+    if (!entry.remind_at || isNaN(remindAt.getTime())) missing.push('date')
     const fallback = new Date(now)
     fallback.setDate(fallback.getDate() + 1)
     fallback.setHours(9, 0, 0, 0)
-    const aiTitle = String(entry.title)
     const aiNote = String(entry.note || '')
     const normalized: ReminderEntry = {
       module: 'reminder',
-      // Title is required — fall back to AI value if not verbatim (better than empty).
-      title: restoreVerbatim(originalText, aiTitle, aiTitle),
+      title,
       remind_at: isNaN(remindAt.getTime()) || remindAt < now ? fallback.toISOString() : remindAt.toISOString(),
       recurrence: ['none', 'daily', 'weekly', 'monthly'].includes(entry.recurrence) ? entry.recurrence : 'none',
       note: restoreVerbatim(originalText, aiNote, aiNote),
     }
-    return normalized
+    return { entry: normalized, missing }
   }
 
   if (entry.module === 'habits') {
-    if (!entry.title) return null
+    const missing: MissingField[] = []
+    // Missing title: derive one from the user's text instead of dropping the candidate.
+    const title = String(entry.title || '') || cleanHabitTitleFromInput(originalText) || originalText.trim().slice(0, 100)
+    if (!entry.title) missing.push('title')
+    if (!title) return null
+    if (!isFinite(Number(entry.target_per_period)) && inferHabitTargetFromText(originalText) <= 1) {
+      missing.push('target')
+    }
     return {
-      module: 'habits',
-      title: String(entry.title),
-      frequency: String(entry.frequency || 'daily'),
-      target_per_period: normalizeHabitTarget(entry.target_per_period),
+      entry: {
+        module: 'habits',
+        title,
+        frequency: String(entry.frequency || 'daily'),
+        target_per_period: normalizeHabitTarget(entry.target_per_period),
+      },
+      missing,
     }
   }
 
   if (entry.module === 'journal') {
-    const content = String(entry.content || '').trim()
+    const content = String(entry.content || '').trim() || originalText.trim()
     if (!content) return null
-    return { module: 'journal', content }
+    return { entry: { module: 'journal', content }, missing: [] }
   }
 
   return null
@@ -243,6 +365,7 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
 
 function candidateId(entry: UniversalEntry): string {
   if (entry.module === 'finance') return `finance:${entry.direction}:${entry.amount_cents}:${entry.merchant}`
+  if (entry.module === 'finance_debt') return `finance_debt:${entry.debt_direction}:${entry.amount_cents}:${entry.counterparty}`
   if (entry.module === 'reminder') return `reminder:${entry.title}:${entry.remind_at}`
   if (entry.module === 'habits') return `habits:${entry.title}`
   return `journal:${entry.content.slice(0, 48)}`
@@ -253,7 +376,7 @@ function dedupeCandidates(candidates: UniversalCandidate[]): UniversalCandidate[
   const seenIds = new Set<string>()
   const result: UniversalCandidate[] = []
   for (const c of candidates) {
-    if (c.entry.module === 'finance') {
+    if (c.entry.module === 'finance' || c.entry.module === 'finance_debt') {
       // Finance allows multiple entries (different transactions); dedupe by id only
       if (seenIds.has(c.id)) continue
       seenIds.add(c.id)
@@ -289,12 +412,14 @@ ${localAmount !== null ? `Pre-computed amount: ${localAmount} ${currency} - use 
 IMPORTANT: All datetime values MUST use the user's timezone offset (UTC${tzOffset}), NOT UTC. Example: "18:00" in the user's time -> "2026-05-18T18:00:00${tzOffset}"
 
 Classification rules:
-- finance: mentions money/amount/spent/bought/received/sold/chi/mua/tieu/thu
+- finance: mentions one-time money/amount/spent/bought/received/sold/chi/mua/tieu/thu
+- finance_debt: mentions borrowing or lending money (Vietnamese: vay cua, vay anh Hung, cho ... vay, di vay, muon cua)
 - reminder: mentions future time/date + task/meeting/appointment/hop/nhac/lich/remind
 - habits: recurring behavior goal without specific time (exercise/eat/sleep/read/thoi quen/tap/uong)
 - journal: reflection/diary/memory/feeling without action items (nho/cam xuc/ghi lai/ky niem)
 - MULTIPLE TRANSACTIONS: If the input contains multiple separate finance events (e.g. "ăn cơm 15k và uống nước 20k", "coffee 30k and taxi 50k"), return ONE finance candidate PER transaction, each with its own amount_cents, category_hint, and merchant. Do NOT merge them or pick only the first.
 - If the input clearly contains both a financial event and a personal feeling/reflection, also add a journal candidate.
+- For finance expense entries, never use Salary, Freelance, Borrowing, or Other Income. If unsure, use Shopping.
 - If the input is ambiguous between modules, return multiple candidates with confidence scores.
 - Do not create duplicate candidates for non-finance modules.
 
@@ -304,6 +429,7 @@ Return this JSON shape:
 {"candidates":[{"confidence":0.0-1.0,"reason":"short reason","selectedByDefault":true|false,"entry":<one entry>}]}
 
 Finance entry: {"module":"finance","amount_cents":<positive int>,"direction":"expense|income","category_hint":"<english category name>","merchant":"<verbatim from input, or ''>","note":"<verbatim from input, or ''>","occurred_at":"<ISO datetime with UTC${tzOffset} offset>"}
+Debt entry: {"module":"finance_debt","amount_cents":<positive int>,"debt_direction":"lent|borrowed","counterparty":"<person name>","due_at":"<ISO datetime with UTC${tzOffset} offset or null>","note":"<verbatim from input, or ''>"}
 Reminder entry: {"module":"reminder","title":"<verbatim from input, or short extracted task>","remind_at":"<ISO datetime with UTC${tzOffset} offset>","recurrence":"none|daily|weekly|monthly","note":"<verbatim from input, or ''>"}
 Habits entry: {"module":"habits","title":"<habit name>","frequency":"daily|weekly|custom","target_per_period":<integer 1-99, e.g. 5 for "5 times per day">}
 Journal entry: {"module":"journal","content":"<full text>"}
@@ -333,8 +459,9 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
 
     const candidates: UniversalCandidate[] = []
     for (const rawCandidate of rawCandidates) {
-      const entry = normalizeEntry(rawCandidate.entry ?? rawCandidate, now, localAmount, text)
-      if (!entry) continue
+      const normalized = normalizeEntry(rawCandidate.entry ?? rawCandidate, now, localAmount, text)
+      if (!normalized) continue
+      const { entry, missing } = normalized
       // Journal content must always equal the user's exact original text — AI output
       // often corrupts tonal-language diacritics (e.g. Vietnamese ấ→á, ồ→ổ) when
       // paraphrasing, and the raw input is always the correct source of truth here.
@@ -352,11 +479,28 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
         confidence: normalizeConfidence(rawCandidate.confidence, 0.7),
         reason: String(rawCandidate.reason || ''),
         selectedByDefault: rawCandidate.selectedByDefault !== false,
+        missing,
       })
     }
 
     const hasFinance = candidates.some((c) => c.entry.module === 'finance')
     const hasJournal = candidates.some((c) => c.entry.module === 'journal')
+    const hasDebt = candidates.some((c) => c.entry.module === 'finance_debt')
+
+    if (localAmount !== null && hasDebtIntent(text) && !hasDebt) {
+      const entry: DebtEntry = {
+        module: 'finance_debt',
+        amount_cents: localAmount,
+        debt_direction: debtDirectionFromText(text),
+        counterparty: extractCounterpartyFromDebtText(text),
+        due_at: extractDebtDueAt(text, now),
+        note: '',
+      }
+      const missing: MissingField[] = []
+      if (!entry.counterparty) missing.push('counterparty')
+      if (!entry.due_at) missing.push('due_date')
+      candidates.push({ id: candidateId(entry), entry, confidence: 0.86, reason: 'Detected debt book entry', selectedByDefault: true, missing })
+    }
 
     if (localAmount !== null && textHasFinanceIntent(text) && !hasFinance && textHasIncomeIntent(text)) {
       const entry: FinanceEntry = {
@@ -368,13 +512,13 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
         note: text,
         occurred_at: now.toISOString(),
       }
-      candidates.push({ id: candidateId(entry), entry, confidence: 0.75, reason: 'Detected income amount', selectedByDefault: true })
+      candidates.push({ id: candidateId(entry), entry, confidence: 0.75, reason: 'Detected income amount', selectedByDefault: true, missing: [] })
     }
 
     const hasFinanceAfterGuard = candidates.some((c) => c.entry.module === 'finance')
     if (localAmount !== null && textHasEmotion(text) && hasFinanceAfterGuard && !hasJournal) {
       const entry: JournalEntry = { module: 'journal', content: text }
-      candidates.push({ id: candidateId(entry), entry, confidence: 0.72, reason: 'Detected personal feeling with financial event', selectedByDefault: true })
+      candidates.push({ id: candidateId(entry), entry, confidence: 0.72, reason: 'Detected personal feeling with financial event', selectedByDefault: true, missing: [] })
     }
 
     return dedupeCandidates(candidates)

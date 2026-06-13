@@ -39,7 +39,9 @@ export function fmtAI(cents: number, currency: string): string {
 // Currencies without minor units store raw whole units in amount_cents.
 export function centsToDisplay(cents: number, currency: string): number {
   if (NO_MINOR_UNIT.has(currency)) return cents
-  return Math.round(cents / 100)
+  // Exact division — rounding here would silently drop cents when an existing
+  // transaction is opened for editing (e.g. $12.50 becoming $13).
+  return cents / 100
 }
 
 // Convert display number from input fields into storage amount.

@@ -12,7 +12,7 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
-import { notifySaved } from '@store/toastStore'
+import { notifySaved, toast } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseHabitLog } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
@@ -38,7 +38,7 @@ export function HabitFormScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const habits = useHabits()
-  const { createHabit, updateHabit, deleteHabit } = useHabitActions()
+  const { createHabit, updateHabit, deleteHabit, restoreHabit } = useHabitActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
   const language = useSettingsStore((s) => s.language)
@@ -128,12 +128,12 @@ export function HabitFormScreen() {
   const onSave = async () => {
     const trimmed = name.trim()
     if (!trimmed) {
-      Alert.alert(t.invalid_amount, t.habit_name_placeholder)
+      Alert.alert(t.could_not_save, t.habit_name_required)
       return
     }
     const targetNum = parseInt(target, 10)
     if (isNaN(targetNum) || targetNum < 1) {
-      Alert.alert(t.invalid_amount, t.habit_target)
+      Alert.alert(t.invalid_amount, t.invalid_amount_msg)
       return
     }
     setSubmitting(true)
@@ -157,9 +157,11 @@ export function HabitFormScreen() {
       {
         text: t.delete, style: 'destructive',
         onPress: async () => {
-          const r = await deleteHabit(editingId!)
+          const id = editingId!
+          const r = await deleteHabit(id)
           if (r.ok) router.back()
           else Alert.alert(t.could_not_save, r.error ?? '')
+          if (r.ok) toast.undo(t.toast_deleted, t.undo, () => { void restoreHabit(id) })
         },
       },
     ])
@@ -272,7 +274,7 @@ export function HabitFormScreen() {
       </View>
 
       {/* Name */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_habit.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_habit}</Text>
       <TextInput
         value={name}
         onChangeText={setName}
@@ -283,7 +285,7 @@ export function HabitFormScreen() {
       />
 
       {/* Icon */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_icon.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_icon}</Text>
       <View style={styles.grid}>
         {PRESET_ICONS.map((ic) => (
           <Pressable
@@ -300,7 +302,7 @@ export function HabitFormScreen() {
       </View>
 
       {/* Color */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.category_color.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.category_color}</Text>
       <View style={styles.colorRow}>
         {PRESET_COLORS.map((c, index) => (
           <Pressable
@@ -312,7 +314,7 @@ export function HabitFormScreen() {
       </View>
 
       {/* Cadence */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_cadence.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_cadence}</Text>
       <View style={styles.cadenceRow}>
         {CADENCES.map((c) => {
           const active = cadence === c
@@ -335,7 +337,7 @@ export function HabitFormScreen() {
 
       {cadence === 'custom' ? (
         <>
-          <Text style={[styles.label, { color: theme.text.muted }]}>{t.schedule_days_label.toUpperCase()}</Text>
+          <Text style={[styles.label, { color: theme.text.muted }]}>{t.schedule_days_label}</Text>
           <View style={styles.weekdayRow}>
             {WEEKDAYS.map((day) => {
               const active = scheduleDays.includes(day.value)
@@ -359,7 +361,7 @@ export function HabitFormScreen() {
       ) : null}
 
       {/* Target */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_target.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_target}</Text>
       <View style={styles.targetRow}>
         <Pressable
           onPress={() => setTarget(String(Math.max(1, parseInt(target, 10) - 1)))}
@@ -377,7 +379,7 @@ export function HabitFormScreen() {
       </View>
 
       {/* Notifications */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_notifications.toUpperCase()}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_notifications}</Text>
       {notificationTimes.length === 0 ? (
         <Text style={[styles.emptyNote, { color: theme.text.muted }]}>{t.habit_no_notifications}</Text>
       ) : (

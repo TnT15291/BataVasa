@@ -18,6 +18,7 @@ const TABLE_MODULE: Record<string, keyof SyncToggles> = {
   finance_transaction: 'syncFinance',
   finance_rule:       'syncFinance',
   finance_plan_item:  'syncFinance',
+  finance_debt:       'syncFinance',
   habit:              'syncHabits',
   habit_log:          'syncHabits',
   journal:            'syncJournals',

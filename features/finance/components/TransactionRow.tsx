@@ -11,10 +11,9 @@ type Props = {
   tx: Transaction
   category: Category | undefined
   onPress?: () => void
-  onLongPress?: () => void
 }
 
-export function TransactionRow({ tx, category, onPress, onLongPress }: Props) {
+export function TransactionRow({ tx, category, onPress }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
   const rawCategoryName = category ? translateCategoryName(category, t) : '?'
@@ -35,7 +34,6 @@ export function TransactionRow({ tx, category, onPress, onLongPress }: Props) {
   return (
     <Pressable
       onPress={onPress}
-      onLongPress={onLongPress}
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       accessibilityHint={t.edit_transaction}

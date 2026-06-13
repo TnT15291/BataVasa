@@ -68,7 +68,7 @@ function ReviewInboxRow({ item, onPress }: { item: ReviewInboxItem; onPress: () 
   const theme = useTheme()
   const { t } = useTranslation()
   const meta: Record<ReviewInboxItem['kind'], { icon: IconName; color: string }> = {
-    finance: { icon: 'alert-circle', color: theme.finance.expense },
+    finance: { icon: 'alert-circle', color: MODULE_COLORS.finance },
     task: { icon: 'bell', color: MODULE_COLORS.tasks },
     habit: { icon: 'check-circle', color: MODULE_COLORS.habits },
     journal: { icon: 'star', color: MODULE_COLORS.journal },
@@ -133,7 +133,7 @@ function TimelineRow({ item, onPress }: { item: DailyTimelineItem; onPress: () =
   const language = useSettingsStore((s) => s.language)
   const locale = getDateFnsLocale(language)
   const meta: Record<DailyTimelineItem['kind'], { icon: IconName; color: string; label: string }> = {
-    finance: { icon: 'dollar-sign', color: theme.finance.expense, label: t.nav_finance },
+    finance: { icon: 'dollar-sign', color: MODULE_COLORS.finance, label: t.nav_finance },
     task: { icon: 'check-square', color: MODULE_COLORS.tasks, label: t.nav_reminders },
     habit: { icon: 'check-circle', color: MODULE_COLORS.habits, label: t.habits },
     journal: { icon: 'book-open', color: MODULE_COLORS.journal, label: t.nav_journal },
@@ -243,6 +243,7 @@ export function DailyDigestScreen() {
   const language = useSettingsStore((s) => s.language)
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding)
   const [showAdd, setShowAdd] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
 
   const {
     todayExpense,
@@ -277,7 +278,14 @@ export function DailyDigestScreen() {
     <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
       <ScrollView
         contentContainerStyle={[styles.content, { backgroundColor: theme.bg.primary }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.brand.primary}
+            colors={[theme.brand.primary]}
+          />
+        }
       >
         {shouldWarnAboutWebSQLitePersistence() ? (
           <View
@@ -350,58 +358,74 @@ export function DailyDigestScreen() {
             </CircularProgress>
           </View>
 
-          <View
-            style={[
-              styles.heroMetricBlock,
-              {
-                backgroundColor: theme.bg.secondary,
-                borderColor: theme.border.subtle,
-              },
-            ]}
+          <Pressable
+            onPress={() => setShowDetails((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showDetails }}
+            style={[styles.heroDetailsToggle, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}
           >
-            <View style={styles.heroMetricText}>
-              <Text style={[styles.heroMetricLabel, { color: theme.text.muted }]}>{t.today_spent}</Text>
-              <Text
-                style={[
-                  styles.heroMetricValue,
-                  { color: todayExpense > 0 ? theme.finance.expense : theme.text.primary },
-                ]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.72}
-              >
-                {formatAmount(todayExpense, todayExpenseCurrency, language)}
-              </Text>
-            </View>
-            <View style={[styles.heroMetricIcon, { backgroundColor: theme.bg.elevated }]}>
-              <Feather
-                name={todayExpense > 0 ? 'trending-up' : 'check-circle'}
-                size={22}
-                color={todayExpense > 0 ? theme.finance.expense : theme.semantic.success}
-              />
-            </View>
-          </View>
+            <Text style={[styles.heroDetailsText, { color: theme.brand.primary }]}>
+              {showDetails ? t.home_hide_details : t.home_show_details}
+            </Text>
+            <Feather name={showDetails ? 'chevron-up' : 'chevron-down'} size={16} color={theme.text.muted} />
+          </Pressable>
 
-          <View style={styles.summaryStrip}>
-            <SummaryChip
-              icon="check-square"
-              label={t.nav_reminders}
-              value={nextReminder ? format(new Date(nextReminder.remind_at), 'HH:mm', { locale }) : '—'}
-              color={MODULE_COLORS.tasks}
-            />
-            <SummaryChip
-              icon="check-circle"
-              label={t.habits}
-              value={habitsTotal === 0 ? '—' : `${habitsDoneCount}/${habitsTotal}`}
-              color={MODULE_COLORS.habits}
-            />
-            <SummaryChip
-              icon="book-open"
-              label={t.nav_journal}
-              value={todayJournalCount > 0 ? String(todayJournalCount) : '—'}
-              color={MODULE_COLORS.journal}
-            />
-          </View>
+          {showDetails ? (
+            <>
+              <View
+                style={[
+                  styles.heroMetricBlock,
+                  {
+                    backgroundColor: theme.bg.secondary,
+                    borderColor: theme.border.subtle,
+                  },
+                ]}
+              >
+                <View style={styles.heroMetricText}>
+                  <Text style={[styles.heroMetricLabel, { color: theme.text.muted }]}>{t.today_spent}</Text>
+                  <Text
+                    style={[
+                      styles.heroMetricValue,
+                      { color: todayExpense > 0 ? theme.finance.expense : theme.text.primary },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.72}
+                  >
+                    {formatAmount(todayExpense, todayExpenseCurrency, language)}
+                  </Text>
+                </View>
+                <View style={[styles.heroMetricIcon, { backgroundColor: theme.bg.elevated }]}>
+                  <Feather
+                    name={todayExpense > 0 ? 'trending-up' : 'check-circle'}
+                    size={22}
+                    color={todayExpense > 0 ? theme.finance.expense : theme.semantic.success}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.summaryStrip}>
+                <SummaryChip
+                  icon="check-square"
+                  label={t.nav_reminders}
+                  value={nextReminder ? format(new Date(nextReminder.remind_at), 'HH:mm', { locale }) : '-'}
+                  color={MODULE_COLORS.tasks}
+                />
+                <SummaryChip
+                  icon="check-circle"
+                  label={t.habits}
+                  value={habitsTotal === 0 ? '-' : `${habitsDoneCount}/${habitsTotal}`}
+                  color={MODULE_COLORS.habits}
+                />
+                <SummaryChip
+                  icon="book-open"
+                  label={t.nav_journal}
+                  value={todayJournalCount > 0 ? String(todayJournalCount) : '-'}
+                  color={MODULE_COLORS.journal}
+                />
+              </View>
+            </>
+          ) : null}
         </View>
 
         {/* ── Review panel — only when items exist ── */}
@@ -561,6 +585,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  heroDetailsToggle: {
+    minHeight: 42,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[2],
+  },
+  heroDetailsText: { fontSize: 13, fontWeight: '700' },
 
   // ── Summary chips
   summaryStrip: { flexDirection: 'row', gap: spacing[2] },

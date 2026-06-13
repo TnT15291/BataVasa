@@ -32,10 +32,25 @@ export async function softDeleteJournal(id: string, deletedAt: string): Promise<
   )
 }
 
+export async function restoreJournal(id: string, restoredAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    `UPDATE journal SET deleted_at = NULL, updated_at = ? WHERE id = ?`,
+    [restoredAt, id]
+  )
+}
+
 export async function getJournal(id: string, userId: string | null): Promise<Journal | null> {
   const db = await getDb()
   return db.getFirstAsync<Journal>(
     `SELECT * FROM journal WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [id, userId]
+  )
+}
+
+export async function getJournalIncludingDeleted(id: string, userId: string | null): Promise<Journal | null> {
+  const db = await getDb()
+  return db.getFirstAsync<Journal>(
+    `SELECT * FROM journal WHERE id = ? AND user_id = ?`, [id, userId]
   )
 }
 

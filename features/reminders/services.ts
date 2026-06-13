@@ -42,6 +42,26 @@ async function cancelPendingNotifications(reminderId: string): Promise<void> {
   await cancelReminderNotifications(reminderId)
 }
 
+/**
+ * Schedule the reminder's push notifications: one at `remind_at` (the advance
+ * warning) and — when an advance window exists — a second one at the event
+ * time itself, so the user is pinged both ahead of AND at the deadline.
+ * Past trigger times are skipped inside scheduleReminderNotification, so a
+ * reminder created mid-window still gets its at-event ping.
+ */
+async function scheduleNotificationsFor(reminder: Reminder): Promise<void> {
+  await scheduleReminderNotification(
+    reminder.id, reminder.title, reminder.note ?? '', new Date(reminder.remind_at), reminder.priority
+  )
+  const advance = reminder.advance_minutes ?? 0
+  if (advance > 0) {
+    const eventAt = new Date(new Date(reminder.remind_at).getTime() + advance * 60000)
+    await scheduleReminderNotification(
+      reminder.id, reminder.title, reminder.note ?? '', eventAt, reminder.priority
+    )
+  }
+}
+
 export async function createReminder(
   input: CreateReminderInput
 ): Promise<Result<Reminder, AppError>> {
@@ -76,9 +96,7 @@ export async function createReminder(
     await q.insertReminder(reminder)
 
     if (!reminder.is_inbox) {
-      await scheduleReminderNotification(
-        reminder.id, reminder.title, reminder.note ?? '', new Date(reminder.remind_at), reminder.priority
-      )
+      await scheduleNotificationsFor(reminder)
     }
     void enqueue('reminder', reminder.id, 'upsert')
     track('feature_used', { feature_name: 'reminder_created' })
@@ -123,9 +141,7 @@ export async function updateReminder(
       await cancelPendingNotifications(data.id)
       const fresh = await q.getReminder(data.id, getCurrentUserId())
       if (fresh && !fresh.completed && !fresh.is_inbox) {
-        await scheduleReminderNotification(
-          fresh.id, fresh.title, fresh.note ?? '', new Date(fresh.remind_at), fresh.priority
-        )
+        await scheduleNotificationsFor(fresh)
       }
     }
 
@@ -157,9 +173,7 @@ export async function skipReminder(id: string): Promise<Result<Reminder, AppErro
     const fresh = await q.getReminder(id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Skipped reminder vanished')
     if (!fresh.completed && !fresh.is_inbox) {
-      await scheduleReminderNotification(
-        fresh.id, fresh.title, fresh.note ?? '', new Date(fresh.remind_at), fresh.priority
-      )
+      await scheduleNotificationsFor(fresh)
     }
 
     void enqueue('reminder', id, 'upsert')
@@ -184,6 +198,27 @@ export async function deleteReminder(id: string): Promise<Result<void, AppError>
   } catch (e) {
     logger.error(MODULE, 'deleteReminder failed', { error: String(e) })
     return appErr('DB_ERROR', 'Failed to delete reminder', e)
+  }
+}
+
+export async function restoreReminder(id: string): Promise<Result<Reminder, AppError>> {
+  try {
+    const existing = await q.getReminderIncludingDeleted(id, getCurrentUserId())
+    if (!existing) return appErr('NOT_FOUND', 'Reminder not found')
+
+    const restoredAt = nowIso()
+    await q.restoreReminder(id, restoredAt)
+    const fresh = await q.getReminder(id, getCurrentUserId())
+    if (!fresh) return appErr('INTERNAL', 'Restored reminder vanished')
+    if (!fresh.completed && !fresh.is_inbox) {
+      await scheduleNotificationsFor(fresh)
+    }
+    void enqueue('reminder', id, 'upsert')
+    logger.info(MODULE, 'reminder restored', { id })
+    return ok(fresh)
+  } catch (e) {
+    logger.error(MODULE, 'restoreReminder failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to restore reminder', e)
   }
 }
 

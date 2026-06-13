@@ -242,7 +242,7 @@ export default function TabsLayout() {
           options={{
             title: t.nav_finance,
             tabBarLabel: t.nav_finance,
-            tabBarActiveTintColor: theme.finance.expense,
+            tabBarActiveTintColor: MODULE_COLORS.finance,
             tabBarIcon: ({ color, focused }) => (
               <AnimatedTabIcon name="dollar-sign" color={color} focused={focused} />
             ),

@@ -103,6 +103,22 @@ export async function deleteJournal(id: string): Promise<Result<void, AppError>>
   }
 }
 
+export async function restoreJournal(id: string): Promise<Result<Journal, AppError>> {
+  try {
+    const existing = await q.getJournalIncludingDeleted(id, getCurrentUserId())
+    if (!existing) return appErr('NOT_FOUND', 'Journal entry not found')
+    await q.restoreJournal(id, nowIso())
+    void enqueue('journal', id, 'upsert')
+    const fresh = await q.getJournal(id, getCurrentUserId())
+    if (!fresh) return appErr('INTERNAL', 'Restored journal entry vanished')
+    logger.info(MODULE, 'journal restored', { id })
+    return ok(fresh)
+  } catch (e) {
+    logger.error(MODULE, 'restoreJournal failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to restore journal entry', e)
+  }
+}
+
 export async function loadJournals(): Promise<Result<Journal[], AppError>> {
   try {
     const journals = await q.listJournals(getCurrentUserId())

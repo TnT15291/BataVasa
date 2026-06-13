@@ -1,6 +1,6 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-05-28.
+> Single source of truth for project status. Last updated: 2026-06-13.
 
 ## Overall
 
@@ -10,7 +10,7 @@
 | Closed beta | Ready |
 | Public launch | Blocked by verification, tests, and store submission work |
 
-**Production score: 6.5/10.** Architecture and UX are strong enough for closed beta. Public launch should wait until Auth/Sync are verified end to end, test coverage is raised, and fresh store screenshots are captured after the latest UI polish pass.
+**Production score: 7/10.** Architecture, UX, and business-logic coverage are strong enough for closed beta. Public launch should still wait until Auth/Sync are verified end to end on a native build, CI stays clean, and fresh store screenshots are captured after the latest UI polish pass.
 
 ## What Is Built
 
@@ -43,6 +43,8 @@
 - Finance reports avoid labeling income categories as normal expense categories in category breakdowns.
 - Merchant/category rules are stored in `finance_rule`, learned from manual/reviewed transactions, and applied to future smart/voice/OCR/import transactions.
 - Recurring bill/subscription candidates are detected from repeated merchant/category/amount patterns and can prefill a monthly reminder.
+- Monthly plan items settled this cycle show a green "paid" badge, sink below unpaid items, and drop out of the remaining planned totals (`getSettledPlanItemIds`).
+- Debt book (sổ nợ, 2026-06-12): `finance_debt` table (migration v19) tracks lent/borrowed money per counterparty. Creating a debt records the money movement (lent = expense via the `Lending` system category, borrowed = income via `Borrowing`), optional due date creates a high-priority reminder that notifies `remind_days_before` days ahead. Settling records the opposite transaction and completes the reminder; deleting removes debt + linked transactions + reminder. Screens: `DebtListScreen` (`/debts`, entry card on the finance list) + shared create/edit `DebtFormScreen` (`/debt?id=`). Synced, exported, and wiped with the finance module.
 
 ### Reminders
 
@@ -51,6 +53,7 @@
 - Today, Important, Inbox, and All filters on the reminder list.
 - Priority-aware notification wording.
 - Skip action advances recurring reminders to the next occurrence; one-off skips complete the reminder.
+- Reminders with an advance window fire TWO notifications: one at `remind_at` (the early warning) and one at the event time itself (`scheduleNotificationsFor` in `features/reminders/services.ts`). Cancellation sweeps all notifications by reminder id, so both are cleaned up together. Applies to debts, bills, and any reminder with `advance_minutes > 0`.
 - Completing, deleting, skipping, or changing scheduled reminder fields cancels stale scheduled notifications by reminder id.
 - Local push notifications via `expo-notifications`.
 - Smart add form with text/voice parse and preview-oriented layout.
@@ -82,6 +85,7 @@
 - Daily Digest home with compact summary hero, unified Today Timeline read model, module cards, analysis entry, assistant entry, and safe-area-aware FAB.
 - Universal Add Sheet opens from the `+` button only. The direct quick-entry box was removed from the home screen.
 - Universal Add uses candidate-based parsing: AI can propose multiple module entries, the app validates them, and the user selects which candidates to save. Money + reflection can save as Finance + Journal after confirmation.
+- Smart-entry missing-field policy (2026-06-13, all smart windows): incomplete parses are never silently dropped or errored. Each `UniversalCandidate` carries `missing: MissingField[]`; cards show an amber "Còn thiếu: …" line and saving prompts "Bổ sung / Lưu với mặc định". Defaults: missing reminder/habit title → the user's own text; missing habit target → 1×; missing date → today/tomorrow 09:00; missing debt counterparty → "Không xác định" (`t.unknown_person`); missing reminder date → offer to save as unscheduled inbox item. Finance smart entry with no recognizable amount prompts specifically for the amount instead of a generic AI error.
 - Smart Entry lives inside add/edit forms for modules, not in list/dashboard screens.
 - Voice input remains available in form/add flows and force-confirms before save where applicable.
 - Voice microphone privacy prompt is shown only from voice buttons and can be dismissed permanently with "Do not show again".
@@ -89,6 +93,7 @@
 - Journal list keeps only the primary create FAB floating; reflection and report actions live in the content action row.
 - Report and AI output uses `components/InsightText.tsx` to render concise markdown as section cards instead of raw markdown text.
 - Main-screen FABs and report footers use safe-area bottom spacing.
+- Cross-module AI analysis (2026-06-12): `services/ai/crossModuleInsight.ts` now computes rule-based correlation blocks locally and asks the model only to explain them: per-habit kept-vs-missed comparison (mood, avg daily spend with "notable" flag at ≥15% delta, reminder completion rate, other-habit completion), spending by time-of-day and weekday, spending on journal-tagged activity days, and a reminders completion summary. AnalysisScreen feeds it habit logs (`listRecentLogs(30)` via new `listLogsSince` query) and reminders. Prompt requests 6 sections incl. habit impact, when/at-which-activities spending peaks, and recommendations for finance + mood; phrased as observations, not causation.
 
 ## Key Files
 
@@ -116,7 +121,7 @@
 
 Code is implemented, but public launch still needs manual verification:
 
-- Run `docs/supabase-setup.sql` in the Supabase dashboard for the production project.
+- Run `docs/supabase-setup.sql` in the Supabase dashboard for the production project. (Re-run after 2026-06-12: adds the `finance_debt` table + RLS.)
 - Follow `docs/b1-b2-verification.md` for the full command/manual checklist.
 - Verify sign up, sign in, sign out, session restore, and login wall on a real device or emulator.
 - Verify create/update/delete/wipe for Finance, Reminders, Habits, and Journals sync from SQLite to Supabase.
@@ -127,11 +132,11 @@ Code is implemented, but public launch still needs manual verification:
 
 Current test infrastructure is ready, but global coverage is still below the public-launch target.
 
-- Latest automated run on 2026-05-23: `npm test -- --runInBand` passed.
-- Current status: 233 tests across 28 suites.
-- Current coverage: 49.40% statements / 49.10% branches / 47.89% functions / 50.72% lines.
+- Latest automated run on 2026-06-13: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
+- Current status: 463 tests across 31 suites.
+- Current coverage: 70.08% statements / 64.04% branches / 71.81% functions / 72.41% lines.
 - Current CI floor: 37% statements / 35% branches / 31% functions / 39% lines.
-- Target before public launch: raise toward 70% global coverage.
+- Target before public launch: keep statements/functions/lines above 70% and continue raising branch coverage toward 70%.
 - Completed in this pass:
   - Habits DB query tests.
   - Journals DB query tests.
@@ -179,7 +184,10 @@ Work in this order:
    - **DONE:** Journal templates.
    - **DONE MVP:** Habit custom schedule with selected weekdays.
    - **DONE MVP:** Finance recurring bills/subscriptions detection with reminder prefill.
-   - Remaining: reminder calendar, habit strength score, and journal tags.
+   - **DONE MVP:** Reminder calendar view.
+   - **DONE MVP:** Habit strength score.
+   - **DONE MVP:** Journal tag/activity chips.
+   - Remaining: continue hardening and visual QA before broader beta.
 5. **UI polish follow-up**
    - **DONE:** AI/report markdown is rendered as section cards via `InsightText`.
    - **DONE:** Assistant quick prompts added.
@@ -241,15 +249,17 @@ These make each module stronger and prepare cross-module insight work.
    - Detect repeated transactions and offer a reminder/bill calendar item.
    - Strong fit because Finance and Reminders already exist.
 
-2. **Finance safe-to-spend**
+2. **Finance safe-to-spend - DONE MVP**
    - Show remaining spendable amount after budgets and recurring bills.
    - This gives a clearer daily answer than charts alone.
+   - Implemented: `calculateSafeToSpend` (cycle-aware, fx-aware, plan items), shown on the finance overview.
+   - Plan-match confirm (2026-06-12): a new expense that resembles a monthly plan item prompts the user to confirm ("is this your planned điện bill?"). Confirming links the transaction (`finance_transaction.plan_item_id`), settling the item for the cycle so the unspent remainder returns to safe-to-spend; declining is remembered (`plan_match_dismissed`) so the heuristic never silently re-matches. See `findMatchingPlanItem` / `maybeConfirmPlanItemMatch`.
 
 3. **Reminder inbox - DONE**
    - Allow reminders without a scheduled time.
    - Add an "unscheduled" view to clean them up later.
 
-4. **Reminder calendar view**
+4. **Reminder calendar view - DONE MVP**
    - Day/week/month view for reminders.
    - Reuse existing date picker/report patterns where possible.
 
@@ -257,7 +267,7 @@ These make each module stronger and prepare cross-module insight work.
    - Support daily, weekdays, selected days, and x times per week.
    - Required before habit insights become trustworthy.
 
-6. **Habit strength score**
+6. **Habit strength score - DONE MVP**
    - Score stability over 30 days, not only current streak.
    - Better for AI summaries and Weekly Life Review.
 
@@ -265,7 +275,7 @@ These make each module stronger and prepare cross-module insight work.
    - Daily check-in, gratitude, stress log, spending reflection, habit reflection.
    - Helps users write more consistently.
 
-8. **Journal tag/activity chips**
+8. **Journal tag/activity chips - DONE MVP**
    - Preset tags like work, family, health, money, sleep, exercise, stress.
    - Avoid complex free-form tagging until the UX is proven.
 
@@ -278,7 +288,7 @@ Ordered priority list — make all module reports and the analysis screen both c
    - Green if improvement, red if decline. Hidden for custom date ranges and when previous period has no data.
    - Best streak (Habits) is excluded — streaks are continuous, not period-bound.
 
-2. **R2 — Finance category donut**
+2. **R2 — Finance category donut — DONE**
    - Donut/pie chart of top 5 spending categories + "others" below the column chart.
    - Most common first question after seeing a total expense number.
 
@@ -336,7 +346,7 @@ These are the features that make BataVasa meaningfully different from single-pur
 - Category names use canonical DB values and translate at display time.
 - Locale-aware formatting must use `getDateFnsLocale(language)` and `getIntlLocale(language)`.
 - Create and edit screens are shared via route params.
-- Latest local migration is v12 for reminder inbox and habit selected-day schedules.
+- Latest local migration is v19: `finance_debt` table + Lending/Borrowing system categories (system-category seeding is now idempotent by name, so older installs pick up new seed rows).
 - `enqueue()` is try/catch wrapped for test compatibility.
 - Cross-module timeline/life stream is a presentation/read-model layer over domain tables, not a unified `life_events` source-of-truth table.
 - Reminders/notifications are treated as a capability attached to tasks/habits where appropriate; the current Reminders UI is task-oriented.
@@ -353,6 +363,17 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-06-13 follow-up pass (dual notifications, smart-entry missing fields):
+  - Reminders now schedule a second notification at the event time when `advance_minutes > 0` (early warning + at-deadline ping). Covers debts, recurring bills, and manual reminders.
+  - Smart entry across modules: missing fields prompt the user ("Bổ sung / Lưu với mặc định") instead of silent drops or validation errors. `universalEntry.ts` tracks `missing` per candidate; `aiParser.ts` (reminders) falls back title→input text and flags missing dates; missing reminder date can save to the unscheduled inbox; missing debt counterparty saves as "Không xác định"; finance smart entry without an amount asks for the amount specifically.
+  - Fixed debt counterparty extractor leaving the verb "vay" as a person name for inputs like "cho vay 500k".
+  - 16 new i18n keys ×6 languages (`smart_missing_*`, `field_*`, `unknown_person`, `reminder_save_inbox`).
+  - Verification: `npx tsc --noEmit` clean; 463 tests across 31 suites pass.
+- 2026-06-12 feature pass (safe-to-spend paid status, debt book, cross-module AI):
+  - Monthly plan card badges items already settled this cycle as "paid" (green check, sunk to bottom, excluded from remaining planned totals) via exported `getSettledPlanItemIds`.
+  - Debt book (sổ nợ): migration v19 `finance_debt`, debt services in `features/finance/services.ts` (create/update/settle/delete/restore + `summarizeDebts`), reminders integration for due dates, `DebtListScreen`/`DebtFormScreen` + `/debts`, `/debt` routes, entry card on the finance list, sync/wipe/export wiring, ~38 new i18n keys in all 6 languages (incl. `cat_lending`/`cat_borrowing` display translation).
+  - Cross-module AI: habit kept-vs-missed impact block (mood/spend/reminders/other habits), spending timing (time-of-day, weekday), spending by journal activity tags, reminders summary; AnalysisScreen passes habit logs + reminders.
+  - Verification: `npx tsc --noEmit` clean; 461 tests across 31 suites pass (`npm test -- --runInBand`).
 - 2026-05-28 UI polish pass:
   - Added `components/InsightText.tsx` and applied it to Finance Insights, Finance Reports, and Cross-Module Analysis.
   - Updated AI prompts to request concise, non-judgmental markdown sections.

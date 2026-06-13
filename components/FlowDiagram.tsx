@@ -58,6 +58,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  label: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
   arrow: { marginHorizontal: spacing[1] },
 })

@@ -179,6 +179,16 @@ export default function RootLayout() {
           <Stack.Screen name="chat" options={{ title: t.nav_chat }} />
           <Stack.Screen name="categories" options={{ title: t.nav_categories }} />
           <Stack.Screen name="category" options={{ title: t.new_category }} />
+          <Stack.Screen name="debts" options={{ title: t.debt_book }} />
+          <Stack.Screen
+            name="debt"
+            options={{
+              title: t.debt_new,
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              gestureDirection: 'vertical',
+            }}
+          />
           <Stack.Screen name="display-currency" options={{ title: t.display_currency }} />
           <Stack.Screen name="analysis" options={{ title: t.analysis_title }} />
           <Stack.Screen name="habits-report" options={{ title: t.habits_report_title }} />
@@ -188,6 +198,7 @@ export default function RootLayout() {
           <Stack.Screen name="journals-insights" options={{ title: t.journal_reflection_title }} />
           <Stack.Screen name="reminders-insights" options={{ title: t.reminder_insight_title }} />
           <Stack.Screen name="auth/callback" options={{ headerShown: false, animation: 'none' }} />
+          <Stack.Screen name="callback" options={{ headerShown: false, animation: 'none' }} />
         </Stack>
         )}
         {/* Auth gate: overlay covers the Stack while unauthenticated so routing

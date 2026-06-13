@@ -18,5 +18,6 @@ export function useJournalActions() {
   const createJournal = useJournalsStore((s) => s.createJournal)
   const updateJournal = useJournalsStore((s) => s.updateJournal)
   const deleteJournal = useJournalsStore((s) => s.deleteJournal)
-  return { createJournal, updateJournal, deleteJournal }
+  const restoreJournal = useJournalsStore((s) => s.restoreJournal)
+  return { createJournal, updateJournal, deleteJournal, restoreJournal }
 }

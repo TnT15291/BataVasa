@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, Text, View, StyleSheet, TextInput, ActivityIndicator } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { useTranslation } from '@services/i18n'
 import { spacing, radius } from '@design/tokens'
@@ -86,7 +87,7 @@ export function LocationRow({ value, onChange, autoFetch, label }: Props) {
             { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
           ]}
         >
-          <Text style={styles.icon}>📍</Text>
+          <Feather name="map-pin" size={18} color={theme.brand.primary} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: theme.text.muted }]}>{displayLabel}</Text>
             {fetching ? (
@@ -107,8 +108,14 @@ export function LocationRow({ value, onChange, autoFetch, label }: Props) {
             )}
           </View>
           {value.label ? (
-            <Pressable hitSlop={8} onPress={clear} style={styles.clearBtn}>
-              <Text style={{ color: theme.text.muted, fontSize: 18 }}>×</Text>
+            <Pressable
+              hitSlop={12}
+              onPress={clear}
+              accessibilityRole="button"
+              accessibilityLabel={(t as any).cancel ?? 'Clear'}
+              style={styles.clearBtn}
+            >
+              <Feather name="x" size={16} color={theme.text.muted} />
             </Pressable>
           ) : null}
         </Pressable>
@@ -126,7 +133,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing[3],
   },
-  icon: { fontSize: 18 },
   label: { fontSize: 12, fontWeight: '600' },
   value: { fontSize: 14, fontWeight: '500', marginTop: 2 },
   placeholder: { fontSize: 13, fontStyle: 'italic' },

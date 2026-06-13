@@ -7,10 +7,12 @@ type ToastState = {
   message: string | null
   detail?: string
   kind: ToastKind
+  actionLabel?: string
+  onAction?: () => void
   // Incremented on every show() so the host can re-trigger its animation
   // even when the same message is shown twice in a row.
   token: number
-  show: (message: string, opts?: { detail?: string; kind?: ToastKind }) => void
+  show: (message: string, opts?: { detail?: string; kind?: ToastKind; actionLabel?: string; onAction?: () => void }) => void
   hide: () => void
 }
 
@@ -18,15 +20,19 @@ export const useToastStore = create<ToastState>((set) => ({
   message: null,
   detail: undefined,
   kind: 'success',
+  actionLabel: undefined,
+  onAction: undefined,
   token: 0,
   show: (message, opts) =>
     set((s) => ({
       message,
       detail: opts?.detail,
       kind: opts?.kind ?? 'success',
+      actionLabel: opts?.actionLabel,
+      onAction: opts?.onAction,
       token: s.token + 1,
     })),
-  hide: () => set({ message: null }),
+  hide: () => set({ message: null, actionLabel: undefined, onAction: undefined }),
 }))
 
 /**
@@ -40,6 +46,8 @@ export const toast = {
     useToastStore.getState().show(message, { detail, kind: 'error' }),
   info: (message: string, detail?: string) =>
     useToastStore.getState().show(message, { detail, kind: 'info' }),
+  undo: (message: string, actionLabel: string, onAction: () => void) =>
+    useToastStore.getState().show(message, { actionLabel, onAction, kind: 'info' }),
 }
 
 /**

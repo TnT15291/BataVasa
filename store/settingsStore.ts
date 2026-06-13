@@ -24,6 +24,8 @@ type SettingsState = {
   hasSeenOnboarding: boolean
   biometricLock: boolean
   hideMicPermissionPrompt: boolean
+  /** Day of month (1-28) the budget cycle starts — e.g. 25 for a salary paid on the 25th. */
+  financeCycleStartDay: number
   loaded: boolean
 
   loadSettings: () => Promise<void>
@@ -42,6 +44,12 @@ type SettingsState = {
   setHasSeenOnboarding: (value: boolean) => Promise<void>
   setBiometricLock: (enabled: boolean) => Promise<void>
   setHideMicPermissionPrompt: (hidden: boolean) => Promise<void>
+  setFinanceCycleStartDay: (day: number) => Promise<void>
+}
+
+function clampCycleDay(day: number): number {
+  if (!Number.isFinite(day)) return 1
+  return Math.min(28, Math.max(1, Math.round(day)))
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -60,6 +68,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   hasSeenOnboarding: false,
   biometricLock: false,
   hideMicPermissionPrompt: false,
+  financeCycleStartDay: 1,
   loaded: false,
 
   async loadSettings() {
@@ -83,6 +92,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       hasSeenOnboarding: all['has_seen_onboarding'] === 'true',
       biometricLock: all['biometric_lock'] === 'true',
       hideMicPermissionPrompt: all['hide_mic_permission_prompt'] === 'true',
+      financeCycleStartDay: clampCycleDay(Number(all['finance_cycle_start_day'] ?? '1')),
       loaded: true,
     })
   },
@@ -163,5 +173,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   async setHideMicPermissionPrompt(hidden) {
     set({ hideMicPermissionPrompt: hidden })
     await db.setSetting('hide_mic_permission_prompt', hidden ? 'true' : 'false')
+  },
+
+  async setFinanceCycleStartDay(day) {
+    const clamped = clampCycleDay(day)
+    set({ financeCycleStartDay: clamped })
+    await db.setSetting('finance_cycle_start_day', String(clamped))
   },
 }))

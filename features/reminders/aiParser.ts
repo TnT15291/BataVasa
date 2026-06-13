@@ -4,9 +4,13 @@ import { getAILanguage } from '@services/ai/aiLanguage'
 export type ParsedReminder = {
   title: string
   note: string
-  remind_at: string         // the event/appointment datetime
+  remind_at: string         // the event/appointment datetime ('' when the input had no date)
   advance_minutes: number   // minutes before the event to notify (0 = at event time)
   recurrence: 'none' | 'daily' | 'weekly' | 'monthly'
+  // Fields the parse could not extract. The caller prompts the user instead of
+  // erroring: missing title falls back to the raw input, missing date can save
+  // as an unscheduled inbox item.
+  missing: ('title' | 'date')[]
 }
 
 export async function parseReminderEntry(text: string): Promise<ParsedReminder | null> {
@@ -42,15 +46,22 @@ Return JSON:
     const json = raw.match(/\{[\s\S]*\}/)?.[0]
     if (!json) return null
     const parsed = JSON.parse(json)
-    if (!parsed.title || !parsed.remind_at) return null
+    const missing: ('title' | 'date')[] = []
+    // Missing title: the user's own words are the best default.
+    const title = parsed.title ? String(parsed.title) : text.trim().slice(0, 200)
+    if (!parsed.title) missing.push('title')
+    if (!title) return null
+    const remindAt = parsed.remind_at ? String(parsed.remind_at) : ''
+    if (!remindAt || isNaN(new Date(remindAt).getTime())) missing.push('date')
     const validRecurrence = ['none', 'daily', 'weekly', 'monthly']
     const advMins = Number(parsed.advance_minutes ?? 0)
     return {
-      title: String(parsed.title),
+      title,
       note: String(parsed.note ?? ''),
-      remind_at: String(parsed.remind_at),
+      remind_at: missing.includes('date') ? '' : remindAt,
       advance_minutes: isNaN(advMins) || advMins < 0 ? 0 : Math.round(advMins),
       recurrence: validRecurrence.includes(parsed.recurrence) ? parsed.recurrence : 'none',
+      missing,
     }
   } catch {
     return null

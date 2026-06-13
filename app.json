@@ -5,11 +5,11 @@
     "scheme": "batavasa",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/brand-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/brand-splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#F7F4EE"
     },
@@ -22,7 +22,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/brand-adaptive-icon.png",
         "backgroundColor": "#2F6F73"
       },
       "edgeToEdgeEnabled": true,
@@ -62,7 +62,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/brand-favicon.png"
     },
     "plugins": [
       "expo-sqlite",

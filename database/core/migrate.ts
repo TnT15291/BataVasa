@@ -141,6 +141,16 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
         WHERE deleted_at IS NULL AND active = 1;
     `)
   },
+  // v18 - explicit transaction ↔ plan-item link (safe-to-spend confirm prompt)
+  async (db) => {
+    await safeAddColumn(db, 'finance_transaction', 'plan_item_id', 'TEXT')
+    await safeAddColumn(db, 'finance_transaction', 'plan_match_dismissed', 'INTEGER NOT NULL DEFAULT 0')
+  },
+  // v19 - debt book (sổ nợ): finance_debt table + Lending/Borrowing system
+  // categories. initFinanceSchema is idempotent and seeds missing categories.
+  async (db) => {
+    await initFinanceSchema(db)
+  },
 ]
 
 async function safeAddColumn(

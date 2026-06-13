@@ -20,6 +20,7 @@ type HabitsState = {
   createHabit: (input: CreateHabitInput) => Promise<{ ok: boolean; error?: string }>
   updateHabit: (input: UpdateHabitInput) => Promise<{ ok: boolean; error?: string }>
   deleteHabit: (id: string) => Promise<{ ok: boolean; error?: string }>
+  restoreHabit: (id: string) => Promise<{ ok: boolean; error?: string }>
   toggleTodayLog: (habitId: string) => Promise<{ ok: boolean; error?: string }>
   skipToday: (habitId: string) => Promise<{ ok: boolean; error?: string }>
   wipeAll: () => Promise<{ ok: boolean; deleted?: number; error?: string }>
@@ -71,6 +72,14 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
     const r = await svc.deleteHabit(id)
     if (!r.ok) return { ok: false, error: r.error.message }
     set((s) => ({ habits: s.habits.filter((h) => h.id !== id) }))
+    return { ok: true }
+  },
+
+  async restoreHabit(id) {
+    const r = await svc.restoreHabit(id)
+    if (!r.ok) return { ok: false, error: r.error.message }
+    const withStats = await hydrateStats(r.value)
+    set((s) => ({ habits: [...s.habits, withStats].sort((a, b) => a.created_at.localeCompare(b.created_at)) }))
     return { ok: true }
   },
 

@@ -32,10 +32,25 @@ export async function softDeleteReminder(id: string, deletedAt: string): Promise
   )
 }
 
+export async function restoreReminder(id: string, restoredAt: string): Promise<void> {
+  const db = await getDb()
+  await db.runAsync(
+    `UPDATE reminder SET deleted_at = NULL, updated_at = ? WHERE id = ?`,
+    [restoredAt, id]
+  )
+}
+
 export async function getReminder(id: string, userId: string | null): Promise<Reminder | null> {
   const db = await getDb()
   return db.getFirstAsync<Reminder>(
     `SELECT * FROM reminder WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [id, userId]
+  )
+}
+
+export async function getReminderIncludingDeleted(id: string, userId: string | null): Promise<Reminder | null> {
+  const db = await getDb()
+  return db.getFirstAsync<Reminder>(
+    `SELECT * FROM reminder WHERE id = ? AND user_id = ?`, [id, userId]
   )
 }
 

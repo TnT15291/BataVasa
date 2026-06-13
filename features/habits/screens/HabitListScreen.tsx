@@ -17,6 +17,7 @@ import { CircularProgress } from '@components/CircularProgress'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
 import * as Haptics from 'expo-haptics'
+import { toast } from '@store/toastStore'
 
 function HabitRow({
   habit,
@@ -36,7 +37,6 @@ function HabitRow({
 
   return (
     <Pressable
-      onLongPress={onEdit}
       onPress={onToggle}
       accessibilityRole="button"
       accessibilityLabel={habit.name}
@@ -48,7 +48,6 @@ function HabitRow({
         },
       ]}
     >
-      <View style={[styles.rowAccent, { backgroundColor: habit.color }]} />
       <View style={[styles.rowIconWrap, { backgroundColor: habit.color + '1F' }]}>
         {(habit.icon?.codePointAt(0) ?? 0) > 127
           ? <Text style={styles.rowEmoji}>{habit.icon}</Text>
@@ -103,9 +102,10 @@ export function HabitListScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const habits = useHabits()
-  const { toggleTodayLog, skipToday, deleteHabit } = useHabitActions()
+  const { toggleTodayLog, skipToday, deleteHabit, restoreHabit } = useHabitActions()
   const language = useSettingsStore((s) => s.language)
   const isFirstRender = useRef(true)
+  const [showDetails, setShowDetails] = useState(false)
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return }
     void rescheduleAllHabitNotifications()
@@ -149,16 +149,32 @@ export function HabitListScreen() {
         </View>
         <View style={styles.listStack}>
           {items.map((habit) => (
+            (() => {
+              const confirmDelete = () => Alert.alert(t.delete, t.confirm_delete_item, [
+                { text: t.cancel, style: 'cancel' },
+                {
+                  text: t.delete,
+                  style: 'destructive',
+                  onPress: () => {
+                    void (async () => {
+                      const result = await deleteHabit(habit.id)
+                      if (!result.ok) {
+                        Alert.alert(t.could_not_save, result.error ?? '')
+                        return
+                      }
+                      toast.undo(t.toast_deleted, t.undo, () => { void restoreHabit(habit.id) })
+                    })()
+                  },
+                },
+              ])
+              return (
             <ReanimatedSwipeable
               key={habit.id}
               renderRightActions={(_p, _d, swipeable) => (
                 <Pressable
                   onPress={() => {
                     swipeable.close()
-                    Alert.alert(t.delete, t.confirm_delete_item, [
-                      { text: t.cancel, style: 'cancel' },
-                      { text: t.delete, style: 'destructive', onPress: () => deleteHabit(habit.id) },
-                    ])
+                    confirmDelete()
                   }}
                   style={[styles.swipeDelete, { backgroundColor: theme.semantic.danger }]}
                 >
@@ -174,6 +190,8 @@ export function HabitListScreen() {
                 onEdit={() => router.push({ pathname: '/habit', params: { id: habit.id } })}
               />
             </ReanimatedSwipeable>
+              )
+            })()
           ))}
         </View>
       </View>
@@ -236,6 +254,18 @@ export function HabitListScreen() {
                 width: `${progress}%`,
               }]} />
             </View>
+            <Pressable
+              onPress={() => setShowDetails((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showDetails }}
+              style={[styles.detailToggle, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}
+            >
+              <Text style={[styles.detailToggleText, { color: MODULE_COLORS.habits }]}>
+                {showDetails ? t.home_hide_details : t.home_show_details}
+              </Text>
+              <Feather name={showDetails ? 'chevron-up' : 'chevron-down'} size={16} color={theme.text.muted} />
+            </Pressable>
+            {showDetails ? (
             <View style={styles.statGrid}>
               <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
                 <Text style={[styles.statValue, { color: MODULE_COLORS.habits }]}>{pendingHabits.length}</Text>
@@ -256,6 +286,7 @@ export function HabitListScreen() {
                 <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.habit_strength_score}</Text>
               </View>
             </View>
+            ) : null}
           </View>
 
           <View style={styles.analysisRow}>
@@ -273,6 +304,8 @@ export function HabitListScreen() {
               </Pressable>
             ))}
           </View>
+
+          <Text style={[styles.swipeHint, { color: theme.text.muted }]}>{t.swipe_delete_hint}</Text>
 
           {renderGroup(t.reminder_upcoming, pendingHabits)}
           {renderGroup(t.habit_not_scheduled, laterHabits)}
@@ -308,6 +341,16 @@ const styles = StyleSheet.create({
   progressLabel: { fontSize: 12, fontWeight: '500' },
   progressBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
+  detailToggle: {
+    minHeight: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  detailToggleText: { fontSize: 13, fontWeight: '700' },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   statChip: {
     width: '48%',
@@ -326,14 +369,13 @@ const styles = StyleSheet.create({
   groupCount: { fontSize: 12, fontWeight: '700' },
   listStack: { gap: spacing[2] },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderRadius: radius.lg, borderWidth: 1.5, overflow: 'hidden' },
-  rowAccent: { width: 4, alignSelf: 'stretch' },
   rowIconWrap: {
     width: 36,
     height: 36,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing[1],
+    marginLeft: spacing[3],
   },
   rowBody: { flex: 1, paddingVertical: spacing[3], gap: 3 },
   rowEmoji: { fontSize: 18 },
@@ -341,18 +383,19 @@ const styles = StyleSheet.create({
   rowName: { fontSize: 16, fontWeight: '500' },
   rowMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   rowMeta: { fontSize: 12 },
-  checkCircle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: spacing[3] },
+  checkCircle: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: spacing[3] },
   editBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing[1],
   },
-  skipBtn: { borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[2], paddingVertical: 4, marginRight: spacing[2] },
+  skipBtn: { minHeight: 36, borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: 6, marginRight: spacing[2], justifyContent: 'center' },
   skipText: { fontSize: 12, fontWeight: '700' },
+  swipeHint: { fontSize: 12, lineHeight: 16, paddingHorizontal: spacing[1] },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6], gap: spacing[3] },
   emptyIconWrap: {
     width: 72,

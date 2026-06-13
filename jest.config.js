@@ -40,6 +40,5 @@ module.exports = {
     './services/uuid.ts': { statements: 90, branches: 90, functions: 90, lines: 90 },
     './services/fx.ts': { statements: 90, branches: 90, functions: 90, lines: 90 },
     './services/ai/aiLanguage.ts': { statements: 90, branches: 90, functions: 90, lines: 90 },
-    './services/ai/reminderParser.ts': { statements: 90, branches: 90, functions: 90, lines: 90 },
   },
 }

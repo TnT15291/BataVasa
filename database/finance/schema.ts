@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS finance_transaction (
   source TEXT NOT NULL CHECK (source IN ('manual','ocr','voice','import')),
   needs_review INTEGER NOT NULL DEFAULT 0 CHECK (needs_review IN (0,1)),
   review_reason TEXT,
+  plan_item_id TEXT,
+  plan_match_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (plan_match_dismissed IN (0,1)),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
@@ -76,12 +78,37 @@ CREATE TABLE IF NOT EXISTS finance_plan_item (
 );
 `
 
+const CREATE_DEBT_SQL = `
+CREATE TABLE IF NOT EXISTS finance_debt (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT,
+  direction TEXT NOT NULL CHECK (direction IN ('lent','borrowed')),
+  counterparty TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+  currency TEXT NOT NULL DEFAULT 'VND',
+  note TEXT,
+  occurred_at TEXT NOT NULL,
+  due_at TEXT,
+  remind_days_before INTEGER NOT NULL DEFAULT 1,
+  reminder_id TEXT,
+  transaction_id TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','settled')),
+  settled_at TEXT,
+  settled_transaction_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  synced_at TEXT
+);
+`
+
 const INDEXES_SQL = `
 CREATE INDEX IF NOT EXISTS idx_tx_user_occurred ON finance_transaction(user_id, occurred_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_tx_category ON finance_transaction(category_id, occurred_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_cat_user_kind ON finance_category(user_id, kind, sort_order) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_rule_merchant ON finance_rule(merchant_pattern) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_plan_item_user_due ON finance_plan_item(user_id, due_day) WHERE deleted_at IS NULL AND active = 1;
+CREATE INDEX IF NOT EXISTS idx_debt_user_status ON finance_debt(user_id, status, due_at) WHERE deleted_at IS NULL;
 `
 
 type SystemCategory = { name: string; icon: string; color: string; kind: 'essential' | 'discretionary' | 'income' | 'savings' }
@@ -102,6 +129,10 @@ const SYSTEM_CATEGORIES: SystemCategory[] = [
   { name: 'Emergency Fund', icon: 'shield', color: '#64B5F6', kind: 'discretionary' },
   { name: 'Learning Fund', icon: 'book-open', color: '#7D5A86', kind: 'discretionary' },
   { name: 'Investments', icon: 'trending-up', color: '#4FC3F7', kind: 'discretionary' },
+  // Debt book (sổ nợ): money going out (lend out / repay what I borrowed) vs
+  // money coming in (borrow / collect what I lent). Translated at display time.
+  { name: 'Lending', icon: 'user-minus', color: '#8D6E63', kind: 'essential' },
+  { name: 'Borrowing', icon: 'user-plus', color: '#90A4AE', kind: 'income' },
 ]
 
 export async function initFinanceSchema(db: SQLiteDatabase): Promise<void> {
@@ -109,19 +140,23 @@ export async function initFinanceSchema(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(CREATE_TRANSACTION_SQL)
   await db.execAsync(CREATE_RULE_SQL)
   await db.execAsync(CREATE_PLAN_ITEM_SQL)
+  await db.execAsync(CREATE_DEBT_SQL)
   await db.execAsync(INDEXES_SQL)
   await seedSystemCategories(db)
 }
 
+// Insert any system category that is missing by name, so existing installs
+// pick up categories added in later app versions (e.g. Lending/Borrowing).
 async function seedSystemCategories(db: SQLiteDatabase): Promise<void> {
-  const row = await db.getFirstAsync<{ n: number }>(
-    'SELECT COUNT(*) AS n FROM finance_category WHERE user_id IS NULL'
+  const rows = await db.getAllAsync<{ name: string }>(
+    'SELECT name FROM finance_category WHERE user_id IS NULL'
   )
-  if (row && row.n > 0) return
+  const existing = new Set(rows.map((r) => r.name))
 
   const ts = nowIso()
   for (let i = 0; i < SYSTEM_CATEGORIES.length; i++) {
     const cat = SYSTEM_CATEGORIES[i]!
+    if (existing.has(cat.name)) continue
     await db.runAsync(
       `INSERT INTO finance_category (id, user_id, name, icon, color, kind, sort_order, created_at, updated_at)
        VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)`,

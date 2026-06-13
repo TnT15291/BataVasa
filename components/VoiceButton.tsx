@@ -213,7 +213,14 @@ export function VoiceButton({ onResult, disabled, size = 36, module = 'unknown' 
   const borderColor = isRecording ? theme.brand.primary : theme.border.strong
 
   return (
-    <Pressable onPress={handlePress} disabled={disabled} hitSlop={8}>
+    <Pressable
+      onPress={handlePress}
+      disabled={disabled}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={t.voice_input}
+      accessibilityState={{ disabled: !!disabled, busy: state !== 'idle' }}
+    >
       <Animated.View
         style={[
           styles.btn,

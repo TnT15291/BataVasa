@@ -1,4 +1,4 @@
--- BataVasa — Supabase setup (v17, 2026-06-09)
+-- BataVasa — Supabase setup (v19, 2026-06-12)
 -- Run this entire file in Supabase Dashboard → SQL Editor (idempotent).
 -- Tables mirror the local SQLite schema; RLS ensures each user sees only their own rows.
 --
@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS finance_transaction (
   location_lat   REAL,
   location_lng   REAL,
   location_label TEXT,
+  plan_item_id   TEXT,
+  plan_match_dismissed SMALLINT NOT NULL DEFAULT 0 CHECK (plan_match_dismissed IN (0,1)),
   created_at     TIMESTAMPTZ NOT NULL,
   updated_at     TIMESTAMPTZ NOT NULL,
   deleted_at     TIMESTAMPTZ,
@@ -110,6 +112,37 @@ CREATE POLICY "users own their finance plan items" ON finance_plan_item
 
 CREATE INDEX IF NOT EXISTS idx_plan_item_user_due
   ON finance_plan_item (user_id, due_day) WHERE deleted_at IS NULL AND active = 1;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS finance_debt (
+  id                     TEXT        PRIMARY KEY,
+  user_id                UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  direction              TEXT        NOT NULL CHECK (direction IN ('lent','borrowed')),
+  counterparty           TEXT        NOT NULL,
+  amount_cents           BIGINT      NOT NULL CHECK (amount_cents > 0),
+  currency               TEXT        NOT NULL DEFAULT 'VND',
+  note                   TEXT,
+  occurred_at            TIMESTAMPTZ NOT NULL,
+  due_at                 TIMESTAMPTZ,
+  remind_days_before     INTEGER     NOT NULL DEFAULT 1,
+  reminder_id            TEXT,
+  transaction_id         TEXT,
+  status                 TEXT        NOT NULL DEFAULT 'open' CHECK (status IN ('open','settled')),
+  settled_at             TIMESTAMPTZ,
+  settled_transaction_id TEXT,
+  created_at             TIMESTAMPTZ NOT NULL,
+  updated_at             TIMESTAMPTZ NOT NULL,
+  deleted_at             TIMESTAMPTZ,
+  synced_at              TIMESTAMPTZ
+);
+ALTER TABLE finance_debt ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their debts" ON finance_debt;
+CREATE POLICY "users own their debts" ON finance_debt
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+CREATE INDEX IF NOT EXISTS idx_debt_user_status
+  ON finance_debt (user_id, status, due_at) WHERE deleted_at IS NULL;
 
 -- ─── Habits ───────────────────────────────────────────────────────────────────
 
@@ -229,6 +262,8 @@ ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS review_reason  TEXT;
 ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS location_lat   REAL;
 ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS location_lng   REAL;
 ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS location_label TEXT;
+ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS plan_item_id   TEXT;
+ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS plan_match_dismissed SMALLINT NOT NULL DEFAULT 0;
 ALTER TABLE habit               ADD COLUMN IF NOT EXISTS schedule_days      TEXT;
 ALTER TABLE habit               ADD COLUMN IF NOT EXISTS notification_times TEXT;
 ALTER TABLE habit_log           ADD COLUMN IF NOT EXISTS skipped SMALLINT NOT NULL DEFAULT 0;

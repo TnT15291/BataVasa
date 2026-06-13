@@ -47,6 +47,8 @@ const baseTx: Transaction = {
   location_lat: null,
   location_lng: null,
   location_label: null,
+  plan_item_id: null,
+  plan_match_dismissed: 0,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
   deleted_at: null,
@@ -111,11 +113,12 @@ describe('finance queries', () => {
   })
 
   it('wipes finance data with counts (scoped to user)', async () => {
-    mockDb.getFirstAsync.mockResolvedValueOnce({ n: 2 }).mockResolvedValueOnce({ n: 1 }).mockResolvedValueOnce({ n: 3 }).mockResolvedValueOnce({ n: 4 })
-    await expect(wipeFinanceData('user-1')).resolves.toEqual({ transactions: 2, categories: 1, rules: 3, planItems: 4 })
+    mockDb.getFirstAsync.mockResolvedValueOnce({ n: 2 }).mockResolvedValueOnce({ n: 1 }).mockResolvedValueOnce({ n: 3 }).mockResolvedValueOnce({ n: 4 }).mockResolvedValueOnce({ n: 5 })
+    await expect(wipeFinanceData('user-1')).resolves.toEqual({ transactions: 2, categories: 1, rules: 3, planItems: 4, debts: 5 })
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_transaction WHERE user_id = ?', ['user-1'])
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_rule WHERE user_id = ?', ['user-1'])
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_plan_item WHERE user_id = ?', ['user-1'])
+    expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_debt WHERE user_id = ?', ['user-1'])
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM finance_category WHERE user_id = ?', ['user-1'])
   })
 
@@ -197,7 +200,7 @@ describe('finance queries', () => {
   it('wipeFinanceData returns 0 when counts are null', async () => {
     mockDb.getFirstAsync.mockResolvedValue(null)
     const result = await wipeFinanceData('user-1')
-    expect(result).toEqual({ transactions: 0, categories: 0, rules: 0, planItems: 0 })
+    expect(result).toEqual({ transactions: 0, categories: 0, rules: 0, planItems: 0, debts: 0 })
   })
 })
 

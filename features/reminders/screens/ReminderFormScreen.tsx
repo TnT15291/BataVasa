@@ -13,7 +13,7 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
-import { notifySaved } from '@store/toastStore'
+import { notifySaved, toast } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseReminderEntry } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
@@ -33,7 +33,7 @@ export function ReminderFormScreen() {
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const reminders = useReminders()
-  const { createReminder, updateReminder, deleteReminder } = useReminderActions()
+  const { createReminder, updateReminder, deleteReminder, restoreReminder } = useReminderActions()
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
 
@@ -158,9 +158,11 @@ export function ReminderFormScreen() {
       {
         text: t.delete, style: 'destructive',
         onPress: async () => {
-          const r = await deleteReminder(editingId!)
+          const id = editingId!
+          const r = await deleteReminder(id)
           if (r.ok) router.back()
           else Alert.alert(t.could_not_save, r.error ?? '')
+          if (r.ok) toast.undo(t.toast_deleted, t.undo, () => { void restoreReminder(id) })
         },
       },
     ])
@@ -177,6 +179,47 @@ export function ReminderFormScreen() {
       const parsed = await parseReminderEntry(input)
       if (!parsed) { Alert.alert(t.ai_error, t.parse_failed); return }
       const isVoice = override !== undefined
+      if (parsed.missing.includes('date')) {
+        // No date in the input: ask whether to add one or file it in the
+        // unscheduled inbox — the reminder equivalent of "không xác định".
+        Alert.alert(
+          t.smart_missing_title,
+          `"${parsed.title}"\n${t.smart_missing_fields.replace('{{fields}}', t.field_date)}\n\n${t.smart_missing_reminder_prompt}`,
+          [
+            { text: t.cancel, style: 'cancel' },
+            {
+              text: t.smart_fill_more,
+              onPress: () => {
+                setTitle(parsed.title)
+                setNote(parsed.note || '')
+                setIsInbox(false)
+                setSmartText('')
+                setShowDatePicker(true)
+              },
+            },
+            {
+              text: t.reminder_save_inbox,
+              onPress: () => {
+                void (async () => {
+                  const res = await createReminder({
+                    title: parsed.title,
+                    note: parsed.note || undefined,
+                    advance_minutes: 0,
+                    recurrence: 'none',
+                    priority: 'medium',
+                    is_inbox: 1,
+                  })
+                  if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
+                  void hapticSaveSuccess()
+                  notifySaved(t, useSettingsStore.getState().syncReminders)
+                  router.back()
+                })()
+              },
+            },
+          ]
+        )
+        return
+      }
       if (isVoice || aiAutoConfirm) {
         const fields: ConfirmField[] = [
           { label: t.new_reminder, value: parsed.title },
@@ -332,7 +375,6 @@ export function ReminderFormScreen() {
         </Pressable>
 
         <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          <Text style={[styles.label, { color: theme.text.muted }]}>{t.ai_confirm_parsed}</Text>
           <TextInput
             value={title}
             onChangeText={setTitle}

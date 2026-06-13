@@ -18,6 +18,8 @@ const SYSTEM_CATEGORY_KEY: Record<string, keyof Translations> = {
   'Emergency Fund': 'cat_emergency_fund',
   'Learning Fund': 'cat_learning_fund',
   'Investments': 'cat_investments',
+  'Lending': 'cat_lending',
+  'Borrowing': 'cat_borrowing',
 }
 
 const KIND_KEY: Record<CategoryKind, keyof Translations> = {
