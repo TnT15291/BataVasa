@@ -37,6 +37,7 @@ import {
   loadReminders,
   wipeAllReminders,
   exportAllReminders,
+  getReminderOccurrencesInRange,
 } from '../features/reminders/services'
 import { cancelAllNotifications, cancelReminderNotifications, scheduleReminderNotification } from '../services/notifications'
 import type { Reminder } from '../features/reminders/types'
@@ -179,11 +180,81 @@ describe('reminders service', () => {
     if (exported.ok) expect(JSON.parse(exported.value).reminders).toHaveLength(1)
   })
 
+  it('repairs completed recurring reminders on load and schedules the next cycle', async () => {
+    const completedMonthly = {
+      ...baseReminder,
+      recurrence: 'monthly' as const,
+      remind_at: '2099-01-15T09:00:00.000Z',
+      completed: 1,
+    }
+    mockQ.listReminders.mockResolvedValue([completedMonthly])
+    mockQ.updateReminder.mockResolvedValue(undefined)
+    ;(scheduleReminderNotification as jest.Mock).mockResolvedValue('notif-repaired')
+
+    const loaded = await loadReminders()
+
+    expect(loaded.ok).toBe(true)
+    if (loaded.ok) {
+      expect(loaded.value[0]).toEqual(expect.objectContaining({
+        remind_at: '2099-02-15T09:00:00.000Z',
+        completed: 0,
+      }))
+    }
+    expect(mockQ.updateReminder).toHaveBeenCalledWith(reminderId, expect.objectContaining({
+      remind_at: '2099-02-15T09:00:00.000Z',
+      completed: 0,
+    }))
+    expect(cancelReminderNotifications).toHaveBeenCalledWith(reminderId)
+    expect(scheduleReminderNotification).toHaveBeenCalledWith(reminderId, 'Dentist', 'Bring card', expect.any(Date), 'medium')
+    expect(enqueue).toHaveBeenCalledWith('reminder', reminderId, 'upsert')
+  })
+
   it('maps query exceptions to DB_ERROR', async () => {
     mockQ.listReminders.mockRejectedValue(new Error('db locked'))
     const result = await loadReminders()
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+})
+
+describe('reminder calendar occurrences', () => {
+  it('shows a monthly recurring reminder in future calendar months', () => {
+    const monthlyReminder: Reminder = {
+      ...baseReminder,
+      recurrence: 'monthly',
+      remind_at: '2026-01-15T08:30:00.000Z',
+      advance_minutes: 30,
+      completed: 0,
+    }
+
+    const occurrences = getReminderOccurrencesInRange(
+      monthlyReminder,
+      new Date('2026-03-01T00:00:00.000Z'),
+      new Date('2026-03-31T23:59:59.999Z')
+    )
+
+    expect(occurrences).toHaveLength(1)
+    expect(occurrences[0].eventAt.toISOString()).toBe('2026-03-15T09:00:00.000Z')
+    expect(occurrences[0].remindAt.toISOString()).toBe('2026-03-15T08:30:00.000Z')
+  })
+
+  it('shows future occurrences for a completed recurring reminder as incomplete', () => {
+    const completedMonthly: Reminder = {
+      ...baseReminder,
+      recurrence: 'monthly',
+      remind_at: '2026-06-10T09:00:00.000Z',
+      completed: 1,
+    }
+
+    const occurrences = getReminderOccurrencesInRange(
+      completedMonthly,
+      new Date('2026-07-01T00:00:00.000Z'),
+      new Date('2026-07-31T23:59:59.999Z')
+    )
+
+    expect(occurrences).toHaveLength(1)
+    expect(occurrences[0].eventAt.toISOString()).toBe('2026-07-10T09:30:00.000Z')
+    expect(occurrences[0].reminder.completed).toBe(0)
   })
 })
 

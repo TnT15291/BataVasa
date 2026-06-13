@@ -566,6 +566,13 @@ export const fr: Translations = {
   no_review_items: 'Aucune transaction à réviser',
   safe_to_spend: 'Safe to spend',
   safe_to_spend_formula: 'Logged income plus remaining planned income, minus logged spending and remaining planned expenses.',
+  safe_to_spend_formula_no_projected: 'Revenus enregistrés moins dépenses enregistrées et dépenses prévues restantes. Les revenus attendus sont affichés mais non comptés.',
+  safe_fx_missing: '{{count}} opérations en devise étrangère ne sont pas comptées — taux de change indisponible.',
+  safe_count_planned_income: 'Compter les revenus attendus',
+  safe_count_planned_income_hint: 'Inclure les revenus prévus et l’argent qu’on vous doit dans le Montant disponible. Désactivez pour ne dépenser que l’argent déjà en main.',
+  safe_rollover: 'Reporté du cycle précédent',
+  safe_carry_over: 'Reporter le solde précédent',
+  safe_carry_over_hint: 'Ajoute le solde restant du cycle précédent au Montant disponible de ce cycle (un excédent s’ajoute, un déficit se soustrait). Désactivé par défaut.',
   safe_income: 'Income',
   safe_planned_income: 'Planned income left',
   safe_regular_expense: 'Spent',
@@ -574,9 +581,6 @@ export const fr: Translations = {
   monthly_plan_empty: 'Save recurring items into the plan so Safe to spend can forecast more accurately.',
   plan_due_day: 'Day {{day}} monthly',
   recurring_patterns: 'Recurring patterns',
-  finance_details_title: 'Planning details',
-  finance_show_details: 'Expand',
-  finance_hide_details: 'Collapse',
 
   // Habits — schedule
   cadence_custom: 'Jours choisis',

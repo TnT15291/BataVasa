@@ -77,6 +77,7 @@ import {
   settleDebt,
   deleteDebt,
   summarizeDebts,
+  buildCategoryBreakdown,
   isExpense,
   formatAmount,
 } from '../features/finance/services'
@@ -264,6 +265,93 @@ describe('finance service categories and data management', () => {
   })
 })
 
+describe('finance report category breakdown', () => {
+  const incomeCategory: Category = {
+    ...baseCategory,
+    id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13',
+    name: 'Salary',
+    kind: 'income',
+    color: '#16A34A',
+  }
+  const transportCategory: Category = {
+    ...baseCategory,
+    id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14',
+    name: 'Transport',
+    kind: 'essential',
+    color: '#2563EB',
+  }
+  const shoppingCategory: Category = {
+    ...baseCategory,
+    id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15',
+    name: 'Shopping',
+    kind: 'discretionary',
+    color: '#DB2777',
+  }
+
+  it('calculates expense proportions from negative transactions only', () => {
+    const breakdown = buildCategoryBreakdown({
+      transactions: [
+        { ...baseTx, id: 'food', amount_cents: -5000, category_id: baseCategory.id },
+        { ...baseTx, id: 'transport', amount_cents: -3000, category_id: transportCategory.id },
+        { ...baseTx, id: 'salary', amount_cents: 20000, category_id: incomeCategory.id },
+      ],
+      categories: [baseCategory, incomeCategory, transportCategory],
+      direction: 'expense',
+    })
+
+    expect(breakdown.total).toBe(8000)
+    expect(breakdown.items.map((item) => [item.category?.name, item.amount])).toEqual([
+      ['Food', 5000],
+      ['Transport', 3000],
+    ])
+  })
+
+  it('calculates income proportions from positive transactions only', () => {
+    const breakdown = buildCategoryBreakdown({
+      transactions: [
+        { ...baseTx, id: 'salary', amount_cents: 50000, category_id: incomeCategory.id },
+        { ...baseTx, id: 'refund', amount_cents: 10000, category_id: shoppingCategory.id },
+        { ...baseTx, id: 'food', amount_cents: -5000, category_id: baseCategory.id },
+      ],
+      categories: [baseCategory, incomeCategory, shoppingCategory],
+      direction: 'income',
+    })
+
+    expect(breakdown.total).toBe(60000)
+    expect(breakdown.items.map((item) => [item.category?.name, item.amount])).toEqual([
+      ['Salary', 50000],
+      ['Shopping', 10000],
+    ])
+  })
+
+  it('groups smaller categories into others after the limit', () => {
+    const extraCategory: Category = {
+      ...baseCategory,
+      id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16',
+      name: 'Coffee',
+      color: '#92400E',
+    }
+    const breakdown = buildCategoryBreakdown({
+      transactions: [
+        { ...baseTx, id: 'food', amount_cents: -5000, category_id: baseCategory.id },
+        { ...baseTx, id: 'transport', amount_cents: -3000, category_id: transportCategory.id },
+        { ...baseTx, id: 'shopping', amount_cents: -2000, category_id: shoppingCategory.id },
+        { ...baseTx, id: 'coffee', amount_cents: -1000, category_id: extraCategory.id },
+      ],
+      categories: [baseCategory, transportCategory, shoppingCategory, extraCategory],
+      direction: 'expense',
+      limit: 2,
+    })
+
+    expect(breakdown.total).toBe(11000)
+    expect(breakdown.items.map((item) => [item.category?.name ?? 'Others', item.amount])).toEqual([
+      ['Food', 5000],
+      ['Transport', 3000],
+      ['Others', 3000],
+    ])
+  })
+})
+
 describe('safe to spend', () => {
   const now = new Date('2026-01-15T12:00:00.000Z')
   const savingsCategory = { ...baseCategory, id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', kind: 'savings' as const }
@@ -424,6 +512,63 @@ describe('safe to spend', () => {
     })
 
     expect(result.safeToSpend).toBe(-40000)
+  })
+
+  it('excludes planned income from the total when countPlannedIncome is false', () => {
+    const args = {
+      transactions: [
+        { ...baseTx, id: 'income', amount_cents: 100000, occurred_at: '2026-01-05T12:00:00.000Z' },
+      ],
+      categories: [baseCategory],
+      planItems: [{ ...basePlanItem, kind: 'income' as const, amount_cents: 40000 }],
+      currency: 'USD',
+      now,
+    }
+    // Default: expected income counts toward what is spendable.
+    expect(calculateSafeToSpend(args).safeToSpend).toBe(140000)
+    // Opt-out: the figure is still reported but not added to the total.
+    const strict = calculateSafeToSpend({ ...args, countPlannedIncome: false })
+    expect(strict.plannedIncome).toBe(40000)
+    expect(strict.safeToSpend).toBe(100000)
+  })
+
+  it('flags foreign-currency rows that cannot be converted without fx rates', () => {
+    const result = calculateSafeToSpend({
+      transactions: [
+        { ...baseTx, id: 'usd', amount_cents: -10000, occurred_at: '2026-01-06T12:00:00.000Z' },
+        { ...baseTx, id: 'vnd', currency: 'VND', amount_cents: -250000, occurred_at: '2026-01-07T12:00:00.000Z' },
+      ],
+      categories: [baseCategory],
+      currency: 'USD',
+      now,
+    })
+
+    // The VND row is left out (no fx rate), so the warning count surfaces it.
+    expect(result.nonFundExpense).toBe(10000)
+    expect(result.skippedForeign).toBe(1)
+  })
+
+  it('rolls the previous cycle leftover in only when countCarryOver is on', () => {
+    const args = {
+      transactions: [
+        // Previous cycle (Dec 1 – Jan 1): net +70000 leftover.
+        { ...baseTx, id: 'dec-income', amount_cents: 100000, occurred_at: '2025-12-10T12:00:00.000Z' },
+        { ...baseTx, id: 'dec-expense', amount_cents: -30000, occurred_at: '2025-12-15T12:00:00.000Z' },
+        // Current cycle (Jan): only an expense.
+        { ...baseTx, id: 'jan-expense', amount_cents: -20000, occurred_at: '2026-01-05T12:00:00.000Z' },
+      ],
+      categories: [baseCategory],
+      currency: 'USD',
+      now,
+    }
+    // Default: last cycle is forgotten, so this cycle starts from its own flows.
+    const off = calculateSafeToSpend(args)
+    expect(off.carryOver).toBe(0)
+    expect(off.safeToSpend).toBe(-20000)
+    // On: December's 70000 surplus rolls into January.
+    const on = calculateSafeToSpend({ ...args, countCarryOver: true })
+    expect(on.carryOver).toBe(70000)
+    expect(on.safeToSpend).toBe(50000)
   })
 
   it('respects a custom cycle start day', () => {

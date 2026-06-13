@@ -566,6 +566,13 @@ export const ja: Translations = {
   no_review_items: '確認が必要な取引はありません',
   safe_to_spend: 'Safe to spend',
   safe_to_spend_formula: 'Logged income plus remaining planned income, minus logged spending and remaining planned expenses.',
+  safe_to_spend_formula_no_projected: '記録した収入から、記録した支出と残りの予定支出を引いた額。予定収入は表示のみで計算には含めません。',
+  safe_fx_missing: '為替レートがないため、外貨の{{count}}件は計算に含まれていません。',
+  safe_count_planned_income: '予定収入を含める',
+  safe_count_planned_income_hint: '予定収入や未回収の貸付金を「安心して使える額」に含めます。オフにすると、今ある残高だけで計算します。',
+  safe_rollover: '前サイクルからの繰り越し',
+  safe_carry_over: '前サイクルの残りを繰り越す',
+  safe_carry_over_hint: '前サイクルの残額を今サイクルの「安心して使える額」に加えます（黒字は加算、赤字は減算）。初期設定はオフです。',
   safe_income: 'Income',
   safe_planned_income: 'Planned income left',
   safe_regular_expense: 'Spent',
@@ -574,9 +581,6 @@ export const ja: Translations = {
   monthly_plan_empty: 'Save recurring items into the plan so Safe to spend can forecast more accurately.',
   plan_due_day: 'Day {{day}} monthly',
   recurring_patterns: 'Recurring patterns',
-  finance_details_title: 'Planning details',
-  finance_show_details: 'Expand',
-  finance_hide_details: 'Collapse',
 
   // Habits — schedule
   cadence_custom: '曜日を選択',

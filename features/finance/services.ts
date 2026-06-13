@@ -445,6 +445,15 @@ export function calculateSafeToSpend(input: {
   currency: string
   fxRates?: Record<string, number> | null
   cycleStartDay?: number
+  // When false, expected-but-not-yet-received income (income plan items, money
+  // owed to you) is shown in the breakdown but NOT added to the spendable total
+  // — for users who only want to spend money they actually hold. Default true.
+  countPlannedIncome?: boolean
+  // When true, the previous cycle's leftover (its own safeToSpend) is rolled
+  // into this cycle — surplus adds, deficit subtracts. Looks back exactly one
+  // cycle (non-recursive), so the carried figure equals what the user saw last
+  // cycle. Default false. See safeToSpendCarryOver setting.
+  countCarryOver?: boolean
   now?: Date
 }): {
   income: number
@@ -452,19 +461,35 @@ export function calculateSafeToSpend(input: {
   nonFundExpense: number
   savingsSetAside: number
   plannedExpense: number
+  // Leftover rolled in from the previous cycle (0 unless countCarryOver).
+  carryOver: number
   safeToSpend: number
+  // Rows in this cycle that could not be converted to `currency` (foreign
+  // currency with no FX rate available) and were therefore left out. When > 0
+  // the total understates real spending — surface a warning, don't hide it.
+  skippedForeign: number
   cycleFrom: Date
   cycleTo: Date
 } {
   const now = input.now ?? new Date()
   const { from, to } = getCycleRange(now, input.cycleStartDay ?? 1)
+  const countPlannedIncome = input.countPlannedIncome ?? true
+  // One cycle back, non-recursive: the previous window ends the instant before
+  // this one starts. countCarryOver:false on the inner call prevents recursion.
+  const carryOver = (input.countCarryOver ?? false)
+    ? calculateSafeToSpend({ ...input, countCarryOver: false, now: new Date(from.getTime() - 1) }).safeToSpend
+    : 0
   const savingsCategoryIds = new Set(
     input.categories.filter((c) => c.kind === 'savings').map((c) => c.id)
   )
+  let skippedForeign = 0
   const inTarget = (amount: number, currency: string): number | null => {
     if (currency === input.currency) return amount
-    if (input.fxRates) return convertMinorAmount(amount, currency, input.currency, input.fxRates)
-    return null
+    const converted = input.fxRates
+      ? convertMinorAmount(amount, currency, input.currency, input.fxRates)
+      : null
+    if (converted === null) skippedForeign += 1
+    return converted
   }
 
   let income = 0
@@ -515,7 +540,10 @@ export function calculateSafeToSpend(input: {
     nonFundExpense,
     savingsSetAside,
     plannedExpense,
-    safeToSpend: income + plannedIncome - nonFundExpense - savingsSetAside - plannedExpense,
+    carryOver,
+    safeToSpend:
+      carryOver + income + (countPlannedIncome ? plannedIncome : 0) - nonFundExpense - savingsSetAside - plannedExpense,
+    skippedForeign,
     cycleFrom: from,
     cycleTo: to,
   }
@@ -1093,6 +1121,65 @@ export async function exportAllData(): Promise<Result<string, AppError>> {
 
 export function isExpense(tx: Pick<Transaction, 'amount_cents'>): boolean {
   return tx.amount_cents < 0
+}
+
+export type CategoryBreakdownDirection = 'income' | 'expense'
+
+export type CategoryBreakdownItem = {
+  categoryId: string
+  category: Category | undefined
+  amount: number
+}
+
+export type CategoryBreakdown = {
+  items: CategoryBreakdownItem[]
+  total: number
+}
+
+/**
+ * Groups signed transactions into category proportions for report charts.
+ * Amounts are always positive in the returned buckets. Foreign-currency rows
+ * can be skipped by returning null from `convertAmount`.
+ */
+export function buildCategoryBreakdown(input: {
+  transactions: Transaction[]
+  categories: Category[]
+  direction: CategoryBreakdownDirection
+  limit?: number
+  convertAmount?: (amount: number, currency: string) => number | null
+}): CategoryBreakdown {
+  const catById = new Map(input.categories.map((cat) => [cat.id, cat]))
+  const catMap = new Map<string, CategoryBreakdownItem>()
+  const wantsIncome = input.direction === 'income'
+
+  for (const tx of input.transactions) {
+    if (wantsIncome ? tx.amount_cents <= 0 : tx.amount_cents >= 0) continue
+    const converted = input.convertAmount
+      ? input.convertAmount(tx.amount_cents, tx.currency)
+      : tx.amount_cents
+    if (converted === null || converted === 0) continue
+
+    const amount = Math.abs(converted)
+    const existing = catMap.get(tx.category_id)
+    if (existing) existing.amount += amount
+    else catMap.set(tx.category_id, {
+      categoryId: tx.category_id,
+      category: catById.get(tx.category_id),
+      amount,
+    })
+  }
+
+  const sorted = Array.from(catMap.values()).sort((a, b) => b.amount - a.amount)
+  const limit = input.limit ?? 5
+  const top = sorted.slice(0, limit)
+  const othersAmount = sorted.slice(limit).reduce((sum, item) => sum + item.amount, 0)
+  if (othersAmount > 0) {
+    top.push({ categoryId: '__others__', category: undefined, amount: othersAmount })
+  }
+  return {
+    items: top,
+    total: top.reduce((sum, item) => sum + item.amount, 0),
+  }
 }
 
 import { getIntlLocale } from '@services/locale'

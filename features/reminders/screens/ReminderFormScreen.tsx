@@ -26,6 +26,24 @@ const RECURRENCES: Recurrence[] = ['none', 'daily', 'weekly', 'monthly']
 const ADVANCE_OPTIONS = [0, 5, 10, 15, 30, 60, 120, 1440, 2880] as const
 const PRIORITIES: ReminderPriority[] = ['low', 'medium', 'high']
 
+function getInitialReminderTime(dateParam?: string): Date {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() + 30)
+  d.setSeconds(0, 0)
+
+  if (dateParam) {
+    const match = dateParam.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (match) {
+      const year = Number(match[1])
+      const month = Number(match[2]) - 1
+      const day = Number(match[3])
+      d.setFullYear(year, month, day)
+    }
+  }
+
+  return d
+}
+
 export function ReminderFormScreen() {
   useRemindersBootstrap()
   const theme = useTheme()
@@ -37,7 +55,7 @@ export function ReminderFormScreen() {
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
 
-  const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
+  const params = useLocalSearchParams<{ id?: string; prefill?: string; date?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
   const editingReminder = useMemo(
     () => (editingId ? reminders.find((r) => r.id === editingId) ?? null : null),
@@ -47,9 +65,7 @@ export function ReminderFormScreen() {
 
   const [title, setTitle] = useState('')
   const [note, setNote] = useState('')
-  const [remindAt, setRemindAt] = useState(() => {
-    const d = new Date(); d.setMinutes(d.getMinutes() + 30); d.setSeconds(0, 0); return d
-  })
+  const [remindAt, setRemindAt] = useState(() => getInitialReminderTime(typeof params.date === 'string' ? params.date : undefined))
   const [recurrence, setRecurrence] = useState<Recurrence>('none')
   const [priority, setPriority] = useState<ReminderPriority>('medium')
   const [isInbox, setIsInbox] = useState(false)

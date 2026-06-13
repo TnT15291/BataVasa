@@ -566,6 +566,13 @@ export const zh: Translations = {
   no_review_items: '没有需要审核的交易',
   safe_to_spend: 'Safe to spend',
   safe_to_spend_formula: 'Logged income plus remaining planned income, minus logged spending and remaining planned expenses.',
+  safe_to_spend_formula_no_projected: '已记录收入减去已记录支出和剩余计划支出。预期收入仅显示，不计入。',
+  safe_fx_missing: '有 {{count}} 笔外币记录因缺少汇率未计入。',
+  safe_count_planned_income: '计入预期收入',
+  safe_count_planned_income_hint: '将计划收入和别人欠你的钱计入“安心可花”。关闭后仅按你已有的钱计算。',
+  safe_rollover: '上一周期结转',
+  safe_carry_over: '结转上期余额',
+  safe_carry_over_hint: '将上一周期的结余计入本周期的“安心可花”（盈余增加、赤字扣减）。默认关闭。',
   safe_income: 'Income',
   safe_planned_income: 'Planned income left',
   safe_regular_expense: 'Spent',
@@ -574,9 +581,6 @@ export const zh: Translations = {
   monthly_plan_empty: 'Save recurring items into the plan so Safe to spend can forecast more accurately.',
   plan_due_day: 'Day {{day}} monthly',
   recurring_patterns: 'Recurring patterns',
-  finance_details_title: 'Planning details',
-  finance_show_details: 'Expand',
-  finance_hide_details: 'Collapse',
 
   // Habits — schedule
   cadence_custom: '自选日期',

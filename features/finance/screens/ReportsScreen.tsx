@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useId } from 'react'
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { Feather } from '@expo/vector-icons'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useRouter } from 'expo-router'
+import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg'
 import {
   startOfDay, endOfDay,
   startOfWeek, endOfWeek,
@@ -31,111 +32,167 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation, type Translations } from '@services/i18n'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
 import { translateCategoryName } from '../i18n'
-import type { Category } from '../types'
 import { generateReport, type ReportType } from '@services/ai/reports'
 import { getDateFnsLocale } from '@services/locale'
 import { useSettingsStore } from '@store/settingsStore'
 import { getProviderKey } from '@services/ai/openai'
 import { track } from '@services/analytics'
 import { convertMinorAmount, getRates } from '@services/fx'
-import { formatAmount } from '../services'
+import { buildCategoryBreakdown, formatAmount, type CategoryBreakdownDirection, type CategoryBreakdownItem } from '../services'
 import { InsightText } from '@/components/InsightText'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 type Period = ReportType
 type ChartBucket = { key: string; label: string; from: Date; to: Date; income: number; expense: number }
 
-type CatBreakdownItem = { cat: Category | undefined; amount: number }
-
-function ArcFill({ pct, color, size, strokeWidth }: {
-  pct: number; color: string; size: number; strokeWidth: number
-}) {
-  const half = size / 2
-  const clamped = Math.min(100, Math.max(0, pct))
-  const rightDeg = (Math.min(clamped, 50) / 50) * 180 - 180
-  const leftDeg = (Math.max(clamped - 50, 0) / 50) * 180 - 180
-  const circleStyle = {
-    width: size, height: size, borderRadius: half,
-    borderWidth: strokeWidth, borderColor: color,
-    position: 'absolute' as const,
+function polarToCartesian(center: number, radius: number, angle: number): { x: number; y: number } {
+  return {
+    x: center + radius * Math.cos(angle),
+    y: center + radius * Math.sin(angle),
   }
-  return (
-    <>
-      <View style={{ position: 'absolute', top: 0, right: 0, width: half, height: size, overflow: 'hidden' }}>
-        <View style={{ position: 'absolute', top: 0, left: -half, width: size, height: size }}>
-          <View style={[circleStyle, { transform: [{ rotate: `${rightDeg}deg` }] }]} />
-        </View>
-      </View>
-      <View style={{ position: 'absolute', top: 0, left: 0, width: half, height: size, overflow: 'hidden' }}>
-        <View style={{ position: 'absolute', top: 0, right: -half, width: size, height: size }}>
-          <View style={[circleStyle, { transform: [{ rotate: `${leftDeg}deg` }] }]} />
-        </View>
-      </View>
-    </>
-  )
 }
 
-function CategoryDonutChart({ breakdown, totalExpense, bgColor, trackColor, size = 120, ringWidth = 18 }: {
-  breakdown: CatBreakdownItem[]; totalExpense: number
-  bgColor: string; trackColor: string; size?: number; ringWidth?: number
+function describeDonutSlice(center: number, outerRadius: number, innerRadius: number, startAngle: number, endAngle: number): string {
+  const outerStart = polarToCartesian(center, outerRadius, startAngle)
+  const outerEnd = polarToCartesian(center, outerRadius, endAngle)
+  const innerStart = polarToCartesian(center, innerRadius, startAngle)
+  const innerEnd = polarToCartesian(center, innerRadius, endAngle)
+  const largeArcFlag = endAngle - startAngle > Math.PI ? 1 : 0
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y}`,
+    'Z',
+  ].join(' ')
+}
+
+function CategoryDonutChart({ breakdown, total, bgColor, trackColor, size = 120 }: {
+  breakdown: CategoryBreakdownItem[]; total: number
+  bgColor: string; trackColor: string; size?: number
 }) {
-  if (breakdown.length === 0 || totalExpense === 0) return <View style={{ width: size, height: size }} />
-  const withCumulative = breakdown.map((item, i) => ({
-    color: item.cat?.color ?? '#888888',
-    cumPct: breakdown.slice(0, i + 1).reduce((s, x) => s + x.amount, 0) / totalExpense * 100,
-  }))
-  const layers = [...withCumulative].reverse()
-  const innerSize = size - ringWidth * 2
+  const gradientId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  if (breakdown.length === 0 || total === 0) return <View style={{ width: size, height: size }} />
+  const center = size / 2
+  const outerRadius = center - 0.5
+  const innerRadius = outerRadius / 3
+  const outerGradientId = `outer-rim-${gradientId}`
+  const innerGradientId = `inner-rim-${gradientId}`
+  let angle = -Math.PI / 2
   return (
     <View style={{ width: size, height: size }}>
-      <View style={[StyleSheet.absoluteFill, {
-        borderRadius: size / 2, borderWidth: ringWidth, borderColor: trackColor,
-      }]} />
-      {layers.map((layer, i) => (
-        <ArcFill key={i} pct={layer.cumPct} color={layer.color} size={size} strokeWidth={ringWidth} />
-      ))}
-      <View style={{
-        position: 'absolute', top: ringWidth, left: ringWidth,
-        width: innerSize, height: innerSize, borderRadius: innerSize / 2,
-        backgroundColor: bgColor,
-      }} />
+      <Svg width={size} height={size}>
+        <Defs>
+          <LinearGradient id={outerGradientId} x1="0" y1="0" x2={size} y2={size} gradientUnits="userSpaceOnUse">
+            <Stop offset="0" stopColor={bgColor} stopOpacity="0.95" />
+            <Stop offset="0.55" stopColor={bgColor} stopOpacity="0.15" />
+            <Stop offset="1" stopColor={trackColor} stopOpacity="0.55" />
+          </LinearGradient>
+          <LinearGradient id={innerGradientId} x1={size} y1="0" x2="0" y2={size} gradientUnits="userSpaceOnUse">
+            <Stop offset="0" stopColor={trackColor} stopOpacity="0.65" />
+            <Stop offset="0.45" stopColor={bgColor} stopOpacity="0.18" />
+            <Stop offset="1" stopColor={bgColor} stopOpacity="0.9" />
+          </LinearGradient>
+        </Defs>
+        <Circle
+          cx={center}
+          cy={center}
+          r={outerRadius}
+          fill={trackColor}
+        />
+        {breakdown.map((item) => {
+          const sliceAngle = (item.amount / total) * Math.PI * 2
+          const startAngle = angle
+          const endAngle = angle + sliceAngle
+          angle = endAngle
+          const color = item.category?.color ?? '#888888'
+          if (sliceAngle >= Math.PI * 2 - 0.0001) {
+            return (
+              <Circle
+                key={item.category?.id ?? item.categoryId}
+                cx={center}
+                cy={center}
+                r={outerRadius}
+                fill={color}
+              />
+            )
+          }
+          return (
+            <Path
+              key={item.category?.id ?? item.categoryId}
+              d={describeDonutSlice(center, outerRadius, innerRadius, startAngle, endAngle)}
+              fill={color}
+              stroke={bgColor}
+              strokeWidth={1}
+            />
+          )
+        })}
+        <Circle
+          cx={center}
+          cy={center}
+          r={innerRadius}
+          fill={bgColor}
+        />
+        <Circle
+          cx={center}
+          cy={center}
+          r={outerRadius - 1}
+          stroke={`url(#${outerGradientId})`}
+          strokeWidth={2}
+          fill="none"
+        />
+        <Circle
+          cx={center}
+          cy={center}
+          r={innerRadius + 1}
+          stroke={`url(#${innerGradientId})`}
+          strokeWidth={2}
+          fill="none"
+        />
+      </Svg>
     </View>
   )
 }
 
 function CategoryBreakdownCard({
-  breakdown, totalExpense, currency, language, theme, t,
+  breakdown, total, direction, currency, language, theme, t,
 }: {
-  breakdown: CatBreakdownItem[]
-  totalExpense: number
+  breakdown: CategoryBreakdownItem[]
+  total: number
+  direction: CategoryBreakdownDirection
   currency: string
   language: string
   theme: Theme
   t: Translations
 }) {
-  if (breakdown.length === 0 || totalExpense === 0) return null
+  if (breakdown.length === 0 || total === 0) return null
+  const directionLabel = direction === 'income' ? t.income : t.expense
   return (
     <View style={[styles.card, getCardStyle(theme), { backgroundColor: theme.bg.elevated }]}>
       <View style={styles.snapshotHeader}>
         <Text style={[styles.snapshotTitle, { color: theme.text.primary }]}>{t.report_category_breakdown}</Text>
-        <Text style={[styles.snapshotMeta, { color: theme.text.muted }]}>{t.expense}</Text>
+        <Text style={[styles.snapshotMeta, { color: theme.text.muted }]}>{directionLabel}</Text>
       </View>
       <View style={styles.donutLayout}>
         <CategoryDonutChart
           breakdown={breakdown}
-          totalExpense={totalExpense}
+          total={total}
           bgColor={theme.bg.elevated}
           trackColor={theme.bg.secondary}
         />
         <View style={styles.catList}>
           {breakdown.map((item) => {
-            const pct = Math.round((item.amount / totalExpense) * 100)
-            const color = item.cat?.color ?? theme.text.muted
-            const name = item.cat
-              ? item.cat.kind === 'income' ? `${t.expense} (${t.review_queue})` : translateCategoryName(item.cat, t)
+            const pct = Math.round((item.amount / total) * 100)
+            const color = item.category?.color ?? theme.text.muted
+            const name = item.category
+              ? direction === 'expense' && item.category.kind === 'income'
+                ? `${t.expense} (${t.review_queue})`
+                : direction === 'income' && item.category.kind !== 'income'
+                  ? `${t.income} (${t.review_queue})`
+                  : translateCategoryName(item.category, t)
               : t.category_others
             return (
-              <View key={item.cat?.id ?? 'others'} style={styles.catRow}>
+              <View key={item.category?.id ?? item.categoryId} style={styles.catRow}>
                 <View style={[styles.catDot, { backgroundColor: color }]} />
                 <Text style={[styles.catName, { color: theme.text.primary }]} numberOfLines={1}>{name}</Text>
                 <Text style={[styles.catAmount, { color: theme.text.secondary }]}>
@@ -300,7 +357,6 @@ export function ReportsScreen() {
 
   const range = getRange()
   const reportCurrency = fxRates ? displayCurrency : currency
-  const catById = useMemo(() => new Map(cats.map((cat) => [cat.id, cat])), [cats])
   const rangeTxs = useMemo(() => {
     if (!range) return []
     const fromIso = range.from.toISOString()
@@ -311,7 +367,7 @@ export function ReportsScreen() {
       if (kindFilter === 'expense') return tx.amount_cents < 0
       return true
     })
-  }, [allTxs, range?.from, range?.to, kindFilter, catById])
+  }, [allTxs, range?.from, range?.to, kindFilter])
 
   const amountInReportCurrency = useCallback((amount: number, txCurrency: string) => {
     if (txCurrency === reportCurrency) return amount
@@ -330,7 +386,7 @@ export function ReportsScreen() {
       else expense += Math.abs(amount)
     }
     return { count: rangeTxs.length, income, expense }
-  }, [rangeTxs, amountInReportCurrency, catById])
+  }, [rangeTxs, amountInReportCurrency])
   const hasRangeData = summary.count > 0
 
   const prevSummary = useMemo(() => {
@@ -365,27 +421,24 @@ export function ReportsScreen() {
       else expense += Math.abs(amount)
     }
     return { count: prevTxs.length, income, expense }
-  }, [period, anchorDate, allTxs, amountInReportCurrency, catById])
+  }, [period, anchorDate, allTxs, amountInReportCurrency])
 
   const calcDelta = (cur: number, prev: number): number | undefined =>
     prev === 0 ? undefined : Math.round(((cur - prev) / Math.abs(prev)) * 100)
 
-  const categoryBreakdown = useMemo<CatBreakdownItem[]>(() => {
-    const catMap = new Map<string, CatBreakdownItem>()
-    for (const tx of rangeTxs) {
-      if (tx.amount_cents >= 0) continue
-      const amount = Math.abs(amountInReportCurrency(tx.amount_cents, tx.currency) ?? 0)
-      if (amount === 0) continue
-      const existing = catMap.get(tx.category_id)
-      if (existing) existing.amount += amount
-      else catMap.set(tx.category_id, { amount, cat: catById.get(tx.category_id) })
-    }
-    const sorted = Array.from(catMap.values()).sort((a, b) => b.amount - a.amount)
-    const top = sorted.slice(0, 5)
-    const othersAmount = sorted.slice(5).reduce((s, x) => s + x.amount, 0)
-    if (othersAmount > 0) top.push({ amount: othersAmount, cat: undefined })
-    return top
-  }, [rangeTxs, catById, amountInReportCurrency])
+  const expenseBreakdown = useMemo(() => buildCategoryBreakdown({
+    transactions: rangeTxs,
+    categories: cats,
+    direction: 'expense',
+    convertAmount: amountInReportCurrency,
+  }), [rangeTxs, cats, amountInReportCurrency])
+
+  const incomeBreakdown = useMemo(() => buildCategoryBreakdown({
+    transactions: rangeTxs,
+    categories: cats,
+    direction: 'income',
+    convertAmount: amountInReportCurrency,
+  }), [rangeTxs, cats, amountInReportCurrency])
 
   const chartBuckets = useMemo<ChartBucket[]>(() => {
     if (!range) return []
@@ -427,7 +480,7 @@ export function ReportsScreen() {
     }
     return eachMonthOfInterval({ start: range.from, end: range.to })
       .map((d) => makeBucket(startOfMonth(d), endOfMonth(d), format(d, 'MMM yy', { locale: dfLocale }), format(d, 'yyyy-MM')))
-  }, [range?.from, range?.to, rangeTxs, period, dfLocale, amountInReportCurrency, catById])
+  }, [range?.from, range?.to, rangeTxs, period, dfLocale, amountInReportCurrency])
 
   const chartMax = Math.max(...chartBuckets.map((b) => Math.max(b.income, b.expense)), 1)
 
@@ -633,8 +686,20 @@ export function ReportsScreen() {
         </View>
         {kindFilter !== 'income' && (
           <CategoryBreakdownCard
-            breakdown={categoryBreakdown}
-            totalExpense={summary.expense}
+            breakdown={expenseBreakdown.items}
+            total={expenseBreakdown.total}
+            direction="expense"
+            currency={reportCurrency}
+            language={language}
+            theme={theme}
+            t={t}
+          />
+        )}
+        {kindFilter !== 'expense' && (
+          <CategoryBreakdownCard
+            breakdown={incomeBreakdown.items}
+            total={incomeBreakdown.total}
+            direction="income"
             currency={reportCurrency}
             language={language}
             theme={theme}

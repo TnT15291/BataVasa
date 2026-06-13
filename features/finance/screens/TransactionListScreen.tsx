@@ -216,6 +216,8 @@ export function TransactionListScreen() {
   const expensePct = Math.max(6, (overviewExpense / chartMax) * 100)
 
   const safeCurrency = fxRates ? displayCurrency : currency
+  const countPlannedIncome = useSettingsStore((s) => s.safeToSpendCountPlannedIncome)
+  const countCarryOver = useSettingsStore((s) => s.safeToSpendCarryOver)
   const safeToSpend = useMemo(
     () => calculateSafeToSpend({
       transactions: txs,
@@ -225,8 +227,10 @@ export function TransactionListScreen() {
       currency: safeCurrency,
       fxRates,
       cycleStartDay,
+      countPlannedIncome,
+      countCarryOver,
     }),
-    [txs, cats, planItems, debts, safeCurrency, fxRates, cycleStartDay]
+    [txs, cats, planItems, debts, safeCurrency, fxRates, cycleStartDay, countPlannedIncome, countCarryOver]
   )
 
   const topCategory = useMemo(() => {
@@ -295,14 +299,11 @@ export function TransactionListScreen() {
     [activePlanItems, txs, cycleStartDay]
   )
 
-  // Unpaid first (what still needs money this month), settled items sink down.
-  const sortedPlanItems = useMemo(() => {
-    return [...activePlanItems].sort((a, b) => {
-      const aSettled = settledPlanIds.has(a.id) ? 1 : 0
-      const bSettled = settledPlanIds.has(b.id) ? 1 : 0
-      return aSettled - bSettled || a.due_day - b.due_day
-    })
-  }, [activePlanItems, settledPlanIds])
+  // Base order by due day; the combined monthlyPlanRows sort sinks settled items.
+  const sortedPlanItems = useMemo(
+    () => [...activePlanItems].sort((a, b) => a.due_day - b.due_day),
+    [activePlanItems]
+  )
 
   // Header totals = what is still expected/owed this cycle (settled items excluded).
   const plannedTotal = useMemo(() => {
@@ -341,11 +342,16 @@ export function TransactionListScreen() {
       ...sortedPlanItems.map((item) => ({ type: 'plan' as const, id: item.id, item })),
       ...dueDebtPlanRows.map((debt) => ({ type: 'debt' as const, id: `debt:${debt.id}`, debt })),
     ].sort((a, b) => {
+      // Settled plan items sink to the bottom so unpaid items keep the visible
+      // top slots (debts are always open, so never settled). Then by due day.
+      const aSettled = a.type === 'plan' && settledPlanIds.has(a.item.id) ? 1 : 0
+      const bSettled = b.type === 'plan' && settledPlanIds.has(b.item.id) ? 1 : 0
+      if (aSettled !== bSettled) return aSettled - bSettled
       const aDay = a.type === 'plan' ? a.item.due_day : new Date(a.debt.due_at!).getDate()
       const bDay = b.type === 'plan' ? b.item.due_day : new Date(b.debt.due_at!).getDate()
       return aDay - bDay
     }),
-    [sortedPlanItems, dueDebtPlanRows]
+    [sortedPlanItems, dueDebtPlanRows, settledPlanIds]
   )
   const visibleMonthlyPlanRows = showAllMonthlyPlanRows ? monthlyPlanRows : monthlyPlanRows.slice(0, 4)
   const hiddenMonthlyPlanCount = Math.max(0, monthlyPlanRows.length - visibleMonthlyPlanRows.length)
@@ -631,15 +637,30 @@ export function TransactionListScreen() {
                   style={styles.safeAmount}
                 />
               </View>
+              {safeToSpend.skippedForeign > 0 ? (
+                <View style={styles.safeWarnRow}>
+                  <Feather name="alert-circle" size={13} color={theme.semantic.danger} />
+                  <Text style={[styles.safeWarn, { color: theme.semantic.danger }]} numberOfLines={2}>
+                    {t.safe_fx_missing.replace('{{count}}', String(safeToSpend.skippedForeign))}
+                  </Text>
+                </View>
+              ) : null}
               {showFinanceDetails ? (
                 <>
                   <View style={styles.safeBreakdown}>
+                    {countCarryOver ? (
+                      <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                        {t.safe_rollover}: {safeToSpend.carryOver < 0 ? '-' : ''}{formatAmount(safeToSpend.carryOver, safeCurrency, language)}
+                      </Text>
+                    ) : null}
                     <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
                       {t.safe_income}: {formatAmount(safeToSpend.income, safeCurrency, language)}
                     </Text>
-                    <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
-                      {t.safe_planned_income}: {formatAmount(safeToSpend.plannedIncome, safeCurrency, language)}
-                    </Text>
+                    {countPlannedIncome ? (
+                      <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                        {t.safe_planned_income}: {formatAmount(safeToSpend.plannedIncome, safeCurrency, language)}
+                      </Text>
+                    ) : null}
                     <Text style={[styles.safeMeta, { color: theme.text.muted }]} numberOfLines={1}>
                       {t.safe_regular_expense}: {formatAmount(safeToSpend.nonFundExpense, safeCurrency, language)}
                     </Text>
@@ -652,7 +673,9 @@ export function TransactionListScreen() {
                       {t.safe_planned_expense}: {formatAmount(safeToSpend.plannedExpense, safeCurrency, language)}
                     </Text>
                   </View>
-                  <Text style={[styles.safeFormula, { color: theme.text.muted }]}>{t.safe_to_spend_formula}</Text>
+                  <Text style={[styles.safeFormula, { color: theme.text.muted }]}>
+                    {countPlannedIncome ? t.safe_to_spend_formula : t.safe_to_spend_formula_no_projected}
+                  </Text>
                 </>
               ) : null}
             </View>
@@ -679,7 +702,7 @@ export function TransactionListScreen() {
                       setShowFinanceDetails((v) => !v)
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={showFinanceDetails ? t.finance_hide_details : t.finance_show_details}
+                    accessibilityLabel={showFinanceDetails ? t.home_hide_details : t.home_show_details}
                     accessibilityState={{ expanded: showFinanceDetails }}
                     hitSlop={6}
                     style={[styles.recurringBtn, { borderColor: theme.border.strong }]}
@@ -1043,6 +1066,8 @@ const styles = StyleSheet.create({
   safeLabel: { fontSize: 13, fontWeight: '700' },
   safeAmount: { fontSize: 17, fontWeight: '700' },
   safeMeta: { fontSize: 12 },
+  safeWarnRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1], paddingTop: spacing[1] },
+  safeWarn: { flex: 1, fontSize: 12, fontWeight: '600' },
   safeBreakdown: { gap: 2, paddingTop: spacing[1] },
   safeFormula: { fontSize: 12, lineHeight: 16, paddingTop: spacing[1] },
   segmented: {

@@ -25,6 +25,76 @@ function addRecurrence(date: Date, recurrence: Reminder['recurrence']): Date {
   return next
 }
 
+function addMonthlyPreservingDay(date: Date, months: number, dayOfMonth: number): Date {
+  const next = new Date(date)
+  next.setDate(1)
+  next.setMonth(next.getMonth() + months)
+  const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+  next.setDate(Math.min(dayOfMonth, lastDay))
+  return next
+}
+
+export type ReminderOccurrence = {
+  reminder: Reminder
+  eventAt: Date
+  remindAt: Date
+}
+
+export function getReminderEventTime(reminder: Pick<Reminder, 'remind_at' | 'advance_minutes'>): Date {
+  return new Date(new Date(reminder.remind_at).getTime() + (reminder.advance_minutes ?? 0) * 60000)
+}
+
+export function getReminderOccurrencesInRange(
+  reminder: Reminder,
+  from: Date,
+  to: Date
+): ReminderOccurrence[] {
+  if ((reminder.is_inbox ?? 0) === 1) return []
+
+  const advance = reminder.advance_minutes ?? 0
+  const originalEvent = getReminderEventTime(reminder)
+  const originalDay = originalEvent.getDate()
+
+  if (reminder.recurrence === 'none') {
+    if (originalEvent < from || originalEvent > to) return []
+    return [{ reminder, eventAt: originalEvent, remindAt: new Date(reminder.remind_at) }]
+  }
+
+  const occurrences: ReminderOccurrence[] = []
+  let eventAt = new Date(originalEvent)
+  let guard = 0
+
+  while (eventAt < from && guard < 1000) {
+    if (reminder.recurrence === 'daily') {
+      eventAt.setDate(eventAt.getDate() + 1)
+    } else if (reminder.recurrence === 'weekly') {
+      eventAt.setDate(eventAt.getDate() + 7)
+    } else {
+      eventAt = addMonthlyPreservingDay(eventAt, 1, originalDay)
+    }
+    guard += 1
+  }
+
+  while (eventAt <= to && guard < 1000) {
+    const isOriginalOccurrence = eventAt.getTime() === originalEvent.getTime()
+    occurrences.push({
+      reminder: isOriginalOccurrence ? reminder : { ...reminder, completed: 0 },
+      eventAt: new Date(eventAt),
+      remindAt: new Date(eventAt.getTime() - advance * 60000),
+    })
+    if (reminder.recurrence === 'daily') {
+      eventAt.setDate(eventAt.getDate() + 1)
+    } else if (reminder.recurrence === 'weekly') {
+      eventAt.setDate(eventAt.getDate() + 7)
+    } else {
+      eventAt = addMonthlyPreservingDay(eventAt, 1, originalDay)
+    }
+    guard += 1
+  }
+
+  return occurrences
+}
+
 function nextOccurrence(reminder: Reminder, after = new Date()): string | null {
   if (reminder.recurrence === 'none') return null
   const advance = reminder.advance_minutes ?? 0
@@ -225,7 +295,38 @@ export async function restoreReminder(id: string): Promise<Result<Reminder, AppE
 export async function loadReminders(): Promise<Result<Reminder[], AppError>> {
   try {
     const reminders = await q.listReminders(getCurrentUserId())
-    return ok(reminders)
+    const repaired: Reminder[] = []
+
+    for (const reminder of reminders) {
+      if (
+        reminder.recurrence !== 'none' &&
+        reminder.completed === 1 &&
+        (reminder.is_inbox ?? 0) !== 1
+      ) {
+        const nextRemindAt = nextOccurrence(reminder)
+        if (nextRemindAt) {
+          const updated: Reminder = {
+            ...reminder,
+            remind_at: nextRemindAt,
+            completed: 0,
+            updated_at: nowIso(),
+          }
+          await q.updateReminder(reminder.id, {
+            remind_at: updated.remind_at,
+            completed: updated.completed,
+            updated_at: updated.updated_at,
+          })
+          await cancelPendingNotifications(reminder.id)
+          await scheduleNotificationsFor(updated)
+          void enqueue('reminder', reminder.id, 'upsert')
+          repaired.push(updated)
+          continue
+        }
+      }
+      repaired.push(reminder)
+    }
+
+    return ok(repaired)
   } catch (e) {
     logger.error(MODULE, 'loadReminders failed', { error: String(e) })
     return appErr('DB_ERROR', 'Failed to load reminders', e)

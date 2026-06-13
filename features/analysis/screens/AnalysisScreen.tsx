@@ -35,6 +35,8 @@ export function AnalysisScreen() {
   const language = useSettingsStore((s) => s.language)
   const currency = useSettingsStore((s) => s.currency)
   const cycleStartDay = useSettingsStore((s) => s.financeCycleStartDay)
+  const countPlannedIncome = useSettingsStore((s) => s.safeToSpendCountPlannedIncome)
+  const countCarryOver = useSettingsStore((s) => s.safeToSpendCarryOver)
 
   const transactions = useTransactions()
   const categories = useCategories()
@@ -138,11 +140,13 @@ export function AnalysisScreen() {
       currency: reportCurrency,
       fxRates,
       cycleStartDay,
+      countPlannedIncome,
+      countCarryOver,
       now: today,
     })
 
     return { totalExpense, topCat, bestStreak, journalCount: last30Journals.length, avgMood, safeToSpend: safeToSpend.safeToSpend }
-  }, [transactions, categories, debts, habits, journals, reportCurrency, fxRates, cycleStartDay, amountInReportCurrency])
+  }, [transactions, categories, debts, habits, journals, reportCurrency, fxRates, cycleStartDay, countPlannedIncome, countCarryOver, amountInReportCurrency])
 
   const comparison = useMemo(() => {
     // Compare like-for-like: month-to-date vs the SAME elapsed window last month.

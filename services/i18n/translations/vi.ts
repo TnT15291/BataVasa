@@ -583,6 +583,13 @@ export const vi = {
   no_review_items: 'Không có giao dịch cần xem xét',
   safe_to_spend: 'Có thể chi an toàn',
   safe_to_spend_formula: 'Thu đã ghi + thu dự kiến còn lại, trừ chi đã ghi và khoản cần chi còn lại.',
+  safe_to_spend_formula_no_projected: 'Thu đã ghi trừ chi đã ghi và khoản cần chi còn lại. Thu dự kiến chỉ hiển thị, không được tính.',
+  safe_fx_missing: '{{count}} khoản ngoại tệ chưa được tính — thiếu tỷ giá quy đổi.',
+  safe_count_planned_income: 'Tính thu nhập dự kiến',
+  safe_count_planned_income_hint: 'Cộng thu dự kiến và tiền người khác nợ bạn vào Có thể chi an toàn. Tắt để chỉ tiêu số tiền bạn đang thực có.',
+  safe_rollover: 'Mang sang từ kỳ trước',
+  safe_carry_over: 'Cộng dồn dư kỳ trước',
+  safe_carry_over_hint: 'Cộng số dư của kỳ trước vào Có thể chi an toàn của kỳ này (dư thì cộng thêm, thiếu thì trừ đi). Mặc định tắt.',
   safe_income: 'Thu vào',
   safe_planned_income: 'Thu dự kiến còn lại',
   safe_regular_expense: 'Đã chi',
@@ -591,9 +598,6 @@ export const vi = {
   monthly_plan_empty: 'Lưu các khoản lặp lại vào kế hoạch để Safe to spend dự toán chính xác hơn.',
   plan_due_day: 'Ngày {{day}} hằng tháng',
   recurring_patterns: 'Khoản lặp lại',
-  finance_details_title: 'Chi tiết kế hoạch',
-  finance_show_details: 'Expand',
-  finance_hide_details: 'Collapse',
 
   // Habits — schedule
   cadence_custom: 'Ngày tuỳ chọn',

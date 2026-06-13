@@ -76,6 +76,10 @@ export function SettingsScreen() {
   const setSyncJournals = useSettingsStore((s) => s.setSyncJournals)
   const financeCycleStartDay = useSettingsStore((s) => s.financeCycleStartDay)
   const setFinanceCycleStartDay = useSettingsStore((s) => s.setFinanceCycleStartDay)
+  const safeToSpendCountPlannedIncome = useSettingsStore((s) => s.safeToSpendCountPlannedIncome)
+  const setSafeToSpendCountPlannedIncome = useSettingsStore((s) => s.setSafeToSpendCountPlannedIncome)
+  const safeToSpendCarryOver = useSettingsStore((s) => s.safeToSpendCarryOver)
+  const setSafeToSpendCarryOver = useSettingsStore((s) => s.setSafeToSpendCarryOver)
   const biometricLock = useSettingsStore((s) => s.biometricLock)
   const setBiometricLock = useSettingsStore((s) => s.setBiometricLock)
   const authConfigured = useAuthStore((s) => s.configured)
@@ -268,6 +272,20 @@ export function SettingsScreen() {
               <Text style={[styles.stepBtnText, { color: theme.text.primary }]}>+</Text>
             </Pressable>
           </View>
+        </View>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.safe_count_planned_income}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.safe_count_planned_income_hint}</Text>
+          </View>
+          <Switch value={safeToSpendCountPlannedIncome} onValueChange={setSafeToSpendCountPlannedIncome} trackColor={switchTrack} />
+        </View>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.safe_carry_over}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.safe_carry_over_hint}</Text>
+          </View>
+          <Switch value={safeToSpendCarryOver} onValueChange={setSafeToSpendCarryOver} trackColor={switchTrack} />
         </View>
         <SettingRow label={t.categories} onPress={() => router.push('/categories')} />
         <Pressable

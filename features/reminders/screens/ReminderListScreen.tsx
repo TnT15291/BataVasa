@@ -22,6 +22,7 @@ import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeabl
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Reminder } from '../types'
 import { toast } from '@store/toastStore'
+import { getReminderEventTime, getReminderOccurrencesInRange, type ReminderOccurrence } from '../services'
 
 type ReminderFilter = 'all' | 'today' | 'important' | 'inbox'
 
@@ -155,17 +156,20 @@ const CAL_COL_W = '14.2857%'
 function ReminderCalendarView({
   reminders,
   calendarMonth,
+  selectedDay,
   onMonthChange,
+  onSelectedDayChange,
 }: {
   reminders: Reminder[]
   calendarMonth: Date
+  selectedDay: Date | null
   onMonthChange: (d: Date) => void
+  onSelectedDayChange: (d: Date | null) => void
 }) {
   const theme = useTheme()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const router = useRouter()
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const locale = getDateFnsLocale(language)
   const today = new Date()
 
@@ -174,23 +178,18 @@ function ReminderCalendarView({
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
   const startPad = (getDay(monthStart) + 6) % 7
 
-  const getEventTime = (r: Reminder) =>
-    new Date(new Date(r.remind_at).getTime() + (r.advance_minutes ?? 0) * 60000)
-
   const remindersByDay = useMemo(() => {
-    const map = new Map<string, Reminder[]>()
+    const map = new Map<string, ReminderOccurrence[]>()
     for (const r of reminders) {
-      const d = getEventTime(r)
-      if (isSameMonth(d, calendarMonth)) {
-        const key = format(d, 'yyyy-MM-dd')
+      for (const occurrence of getReminderOccurrencesInRange(r, monthStart, monthEnd)) {
+        const key = format(occurrence.eventAt, 'yyyy-MM-dd')
         const arr = map.get(key) ?? []
-        arr.push(r)
+        arr.push(occurrence)
         map.set(key, arr)
       }
     }
     return map
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reminders, calendarMonth])
+  }, [reminders, monthStart, monthEnd])
 
   const weekHeaders = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(2024, 0, 1 + i)
@@ -207,7 +206,7 @@ function ReminderCalendarView({
     <View style={[styles.calCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
       <View style={styles.calMonthHeader}>
         <Pressable
-          onPress={() => { onMonthChange(subMonths(calendarMonth, 1)); setSelectedDay(null) }}
+          onPress={() => { onMonthChange(subMonths(calendarMonth, 1)); onSelectedDayChange(null) }}
           hitSlop={12}
           style={styles.calNavBtn}
         >
@@ -217,7 +216,7 @@ function ReminderCalendarView({
           {format(calendarMonth, 'MMMM yyyy', { locale })}
         </Text>
         <Pressable
-          onPress={() => { onMonthChange(addMonths(calendarMonth, 1)); setSelectedDay(null) }}
+          onPress={() => { onMonthChange(addMonths(calendarMonth, 1)); onSelectedDayChange(null) }}
           hitSlop={12}
           style={styles.calNavBtn}
         >
@@ -239,7 +238,7 @@ function ReminderCalendarView({
           const isToday = isSameDay(day, today)
           const isSelected = selectedDay ? isSameDay(day, selectedDay) : false
           const dayIsPast = !isToday && day < today
-          const hasIncomplete = dayRems.some((r) => r.completed === 0)
+          const hasIncomplete = dayRems.some((occurrence) => occurrence.reminder.completed === 0)
           const dotColor = dayIsPast && hasIncomplete
             ? theme.semantic.danger
             : hasIncomplete
@@ -248,7 +247,7 @@ function ReminderCalendarView({
           return (
             <Pressable
               key={key}
-              onPress={() => setSelectedDay(isSelected ? null : day)}
+              onPress={() => onSelectedDayChange(isSelected ? null : day)}
               style={[
                 styles.calCell,
                 { width: CAL_COL_W },
@@ -281,9 +280,10 @@ function ReminderCalendarView({
           {selectedRems.length === 0 ? (
             <Text style={[styles.calDayDetailEmpty, { color: theme.text.muted }]}>{t.reminder_today_none}</Text>
           ) : (
-            selectedRems.map((r) => {
+            selectedRems.map((occurrence) => {
+              const r = occurrence.reminder
               const isDone = r.completed === 1
-              const time = getEventTime(r)
+              const time = occurrence.eventAt
               const isPast = !isDone && time < today
               const dc = isDone ? theme.semantic.success : isPast ? theme.semantic.danger : theme.brand.primary
               return (
@@ -328,15 +328,15 @@ export function ReminderListScreen() {
   const [activeFilter, setActiveFilter] = useState<ReminderFilter>('all')
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [calendarMonth, setCalendarMonth] = useState(() => new Date())
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<Date | null>(null)
   const [showDetails, setShowDetails] = useState(false)
 
-  const { overdue, today, next7Days, nextMonth, later, completed, inbox } = useMemo(() => {
+  const { overdue, today, next7Days, completed, inbox } = useMemo(() => {
     const now = new Date()
     const dayStart = startOfDay(now)
     const dayEnd = endOfDay(now)
     const sevenDaysLater = endOfDay(addDays(now, 7))
-    const thirtyDaysLater = endOfDay(addDays(now, 30))
-    const eventAt = (r: Reminder) => new Date(new Date(r.remind_at).getTime() + (r.advance_minutes ?? 0) * 60000)
+    const eventAt = getReminderEventTime
     const scoped = reminders.filter((r) => {
       if (activeFilter === 'today') {
         const d = eventAt(r)
@@ -368,25 +368,20 @@ export function ReminderListScreen() {
         return (r.is_inbox ?? 0) !== 1 && d > dayEnd && d <= sevenDaysLater
       })
       .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
-    const nextMonth = active
-      .filter((r) => {
-        const d = eventAt(r)
-        return (r.is_inbox ?? 0) !== 1 && d > sevenDaysLater && d <= thirtyDaysLater
-      })
-      .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
-    const later = active
-      .filter((r) => (r.is_inbox ?? 0) !== 1 && eventAt(r) > thirtyDaysLater)
-      .sort((a, b) => eventAt(a).getTime() - eventAt(b).getTime())
-    return { overdue, today, next7Days, nextMonth, later, completed, inbox }
+    return { overdue, today, next7Days, completed, inbox }
   }, [reminders, activeFilter])
 
-  const nextReminder = today[0] ?? next7Days[0] ?? nextMonth[0] ?? later[0] ?? overdue[0] ?? null
+  const nextReminder = today[0] ?? next7Days[0] ?? overdue[0] ?? null
   const completedCount = completed.length
   const activeCount = reminders.length - completedCount
 
   const toggleDone = (r: Reminder) => {
     const completing = r.completed !== 1
-    updateReminder({ id: r.id, completed: completing ? 1 : 0 })
+    if (completing && (r.is_inbox ?? 0) !== 1 && r.recurrence !== 'none') {
+      skipReminder(r.id)
+    } else {
+      updateReminder({ id: r.id, completed: completing ? 1 : 0 })
+    }
     void Haptics.impactAsync(completing ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light)
   }
 
@@ -570,7 +565,9 @@ export function ReminderListScreen() {
           <ReminderCalendarView
             reminders={reminders}
             calendarMonth={calendarMonth}
+            selectedDay={selectedCalendarDay}
             onMonthChange={setCalendarMonth}
+            onSelectedDayChange={setSelectedCalendarDay}
           />
         ) : reminders.length === 0 ? (
           <View style={styles.empty}>
@@ -592,15 +589,18 @@ export function ReminderListScreen() {
             {renderGroup(t.reminder_past, overdue)}
             {renderGroup(t.today, today)}
             {renderGroup(t.reminder_next7days, next7Days)}
-            {renderGroup(t.reminder_nextmonth, nextMonth)}
-            {renderGroup(t.reminder_later, later)}
             {activeFilter === 'all' ? renderGroup(t.reminder_completed, completed) : null}
           </>
         )}
       </ScrollView>
 
       <FAB
-        onPress={() => router.push('/reminder')}
+        onPress={() => {
+          const date = viewMode === 'calendar' && selectedCalendarDay
+            ? format(selectedCalendarDay, 'yyyy-MM-dd')
+            : undefined
+          router.push(date ? { pathname: '/reminder', params: { date } } : '/reminder')
+        }}
         accessibilityLabel={t.new_reminder}
         style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
       >

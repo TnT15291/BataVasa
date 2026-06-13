@@ -26,6 +26,10 @@ type SettingsState = {
   hideMicPermissionPrompt: boolean
   /** Day of month (1-28) the budget cycle starts — e.g. 25 for a salary paid on the 25th. */
   financeCycleStartDay: number
+  /** Count expected (not-yet-received) income in Safe to spend. Off = only spend money you hold. */
+  safeToSpendCountPlannedIncome: boolean
+  /** Roll the previous cycle's leftover into this cycle's Safe to spend. Default off. */
+  safeToSpendCarryOver: boolean
   loaded: boolean
 
   loadSettings: () => Promise<void>
@@ -45,6 +49,8 @@ type SettingsState = {
   setBiometricLock: (enabled: boolean) => Promise<void>
   setHideMicPermissionPrompt: (hidden: boolean) => Promise<void>
   setFinanceCycleStartDay: (day: number) => Promise<void>
+  setSafeToSpendCountPlannedIncome: (enabled: boolean) => Promise<void>
+  setSafeToSpendCarryOver: (enabled: boolean) => Promise<void>
 }
 
 function clampCycleDay(day: number): number {
@@ -69,6 +75,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   biometricLock: false,
   hideMicPermissionPrompt: false,
   financeCycleStartDay: 1,
+  safeToSpendCountPlannedIncome: true,
+  safeToSpendCarryOver: false,
   loaded: false,
 
   async loadSettings() {
@@ -93,6 +101,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       biometricLock: all['biometric_lock'] === 'true',
       hideMicPermissionPrompt: all['hide_mic_permission_prompt'] === 'true',
       financeCycleStartDay: clampCycleDay(Number(all['finance_cycle_start_day'] ?? '1')),
+      // default true — only false if explicitly stored
+      safeToSpendCountPlannedIncome: all['safe_to_spend_count_planned_income'] !== 'false',
+      // default false — only true if explicitly stored
+      safeToSpendCarryOver: all['safe_to_spend_carry_over'] === 'true',
       loaded: true,
     })
   },
@@ -179,5 +191,15 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     const clamped = clampCycleDay(day)
     set({ financeCycleStartDay: clamped })
     await db.setSetting('finance_cycle_start_day', String(clamped))
+  },
+
+  async setSafeToSpendCountPlannedIncome(enabled) {
+    set({ safeToSpendCountPlannedIncome: enabled })
+    await db.setSetting('safe_to_spend_count_planned_income', enabled ? 'true' : 'false')
+  },
+
+  async setSafeToSpendCarryOver(enabled) {
+    set({ safeToSpendCarryOver: enabled })
+    await db.setSetting('safe_to_spend_carry_over', enabled ? 'true' : 'false')
   },
 }))

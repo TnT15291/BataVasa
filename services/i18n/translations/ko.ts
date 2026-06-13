@@ -564,6 +564,13 @@ export const ko: Translations = {
   no_review_items: '검토가 필요한 거래가 없습니다',
   safe_to_spend: 'Safe to spend',
   safe_to_spend_formula: 'Logged income plus remaining planned income, minus logged spending and remaining planned expenses.',
+  safe_to_spend_formula_no_projected: '기록된 수입에서 기록된 지출과 남은 예정 지출을 뺀 금액. 예상 수입은 표시만 되고 합산되지 않습니다.',
+  safe_fx_missing: '환율 정보가 없어 외화 {{count}}건이 계산에 포함되지 않았습니다.',
+  safe_count_planned_income: '예상 수입 포함',
+  safe_count_planned_income_hint: '예정된 수입과 받을 돈을 안전하게 쓸 수 있는 금액에 포함합니다. 끄면 지금 가진 돈만으로 계산합니다.',
+  safe_rollover: '지난 주기에서 이월',
+  safe_carry_over: '지난 주기 잔액 이월',
+  safe_carry_over_hint: '지난 주기의 남은 금액을 이번 주기의 안전하게 쓸 수 있는 금액에 더합니다(흑자는 더하고 적자는 뺍니다). 기본값은 꺼짐입니다.',
   safe_income: 'Income',
   safe_planned_income: 'Planned income left',
   safe_regular_expense: 'Spent',
@@ -572,9 +579,6 @@ export const ko: Translations = {
   monthly_plan_empty: 'Save recurring items into the plan so Safe to spend can forecast more accurately.',
   plan_due_day: 'Day {{day}} monthly',
   recurring_patterns: 'Recurring patterns',
-  finance_details_title: 'Planning details',
-  finance_show_details: 'Expand',
-  finance_hide_details: 'Collapse',
 
   // Habits — schedule
   cadence_custom: '요일 선택',
