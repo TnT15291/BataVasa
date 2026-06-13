@@ -7,13 +7,15 @@
 
 - Supabase Auth.
 - Email/password sign up and sign in.
+- Google OAuth via Supabase Auth and the app callback route.
 - In-app password recovery through deep links.
 - Session persistence through `services/supabase.ts` and the secure storage
   wrapper.
 - Login wall before using the app.
 
-OAuth, anonymous mode, and account deletion Edge Functions are not implemented
-yet; see `docs/security.md`.
+Google OAuth is implemented but still needs manual native-device verification.
+Anonymous mode and account deletion Edge Functions are not implemented yet; see
+`docs/security.md`.
 
 ## Step 1 - Create A Supabase Project
 
@@ -54,6 +56,7 @@ values belong here.
 In Supabase Dashboard -> Authentication -> Providers -> Email:
 
 - Ensure Email provider is enabled.
+- Ensure Google provider is enabled before testing Google Auth.
 - For local development, you may turn email confirmation off so test accounts can
   sign in immediately.
 - For production, decide whether email confirmation should be on before launch.

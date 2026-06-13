@@ -10,6 +10,8 @@
 - Provider: Supabase Auth.
 - Current product behavior: login wall before app use.
 - Current auth method: email/password.
+- Google OAuth is implemented through Supabase Auth, but still needs manual
+  native-device verification.
 - Password recovery is handled in-app through deep links.
 - Session storage uses the app secure storage wrapper:
   - native: Expo SecureStore;
@@ -57,7 +59,8 @@ is not implemented in the sync queue yet.
 These are production-hardening targets, not current shipped behavior:
 
 - SQLCipher-encrypted SQLite database.
-- Apple/Google OAuth.
+- Apple OAuth.
+- Google OAuth sign-off on native builds.
 - Anonymous local mode with `device_id` to authenticated `user_id` migration.
 - Service-role account deletion Edge Function.
 - Server-mediated managed AI proxy.

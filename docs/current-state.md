@@ -10,13 +10,14 @@
 | Closed beta | Ready |
 | Public launch | Blocked by verification, tests, and store submission work |
 
-**Production score: 7/10.** Architecture, UX, and business-logic coverage are strong enough for closed beta. Public launch should still wait until Auth/Sync are verified end to end on a native build, CI stays clean, and fresh store screenshots are captured after the latest UI polish pass.
+**Production score: 7/10.** Architecture, UX, sync, and business-logic coverage are strong enough for closed beta. Public launch should still wait until Google Auth is verified on a native build, CI stays clean, and fresh store screenshots are captured after the latest UI polish pass.
 
 ## What Is Built
 
 ### Core Platform
 
 - Supabase Auth: email/password, login wall, account UI, session-aware store reloads.
+- Google OAuth: implemented through Supabase OAuth and app callback handling; not yet manually tested.
 - Offline-first SQLite: WAL, FK on, `PRAGMA user_version`, migration v12.
 - Cloud sync engine: local `sync_queue`, queued writes for all 4 modules, AppState drain worker, per-module sync toggles, Supabase RLS SQL in `docs/supabase-setup.sql`.
 - Biometric lock: `expo-local-authentication`, 30s AppState lock timer, Settings privacy toggle.
@@ -119,14 +120,14 @@
 
 ### B1/B2 Verification
 
-Code is implemented, but public launch still needs manual verification:
+Code is implemented. Sync has been manually verified as working; Google Auth still needs manual verification before public launch:
 
 - Run `docs/supabase-setup.sql` in the Supabase dashboard for the production project. (Re-run after 2026-06-12: adds the `finance_debt` table + RLS.)
 - Follow `docs/b1-b2-verification.md` for the full command/manual checklist.
-- Verify sign up, sign in, sign out, session restore, and login wall on a real device or emulator.
-- Verify create/update/delete/wipe for Finance, Reminders, Habits, and Journals sync from SQLite to Supabase.
-- Verify per-module sync toggles stop/resume queue draining correctly.
-- Verify offline create followed by foreground/network restore drains the queue.
+- Verified: create/update/delete/wipe sync from SQLite to Supabase is working.
+- Verified: per-module sync toggles and offline queue drain are working.
+- Still needs verification: Google Auth sign-in/callback/session restore on a real device or emulator.
+- Still needs spot check before release: email/password sign up, sign in, sign out, session restore, and login wall on a real device or emulator.
 
 ### B5 Tests
 
@@ -164,8 +165,9 @@ Repo-side assets and copy are mostly ready. Manual store work remains:
 Work in this order:
 
 1. **Closed beta verification**
-   - Run Supabase SQL.
-   - Verify Auth and Sync end to end on device/emulator.
+   - Sync is verified working.
+   - Verify Google Auth on device/emulator.
+   - Spot check email/password Auth on device/emulator.
    - Run smoke test for all 4 modules.
 2. **B5 coverage push**
    - Continue raising global coverage toward the 70% public-launch target.
@@ -342,6 +344,7 @@ These are the features that make BataVasa meaningfully different from single-pur
 - Supabase writes happen through the sync queue, not directly from UI.
 - Conflict handling is last-write-wins using `updated_at`.
 - Sync can be enabled/disabled per module in settings.
+- Sync was manually verified working before the 2026-06-13 docs update.
 - AI provider keys are stored in SecureStorage.
 - Category names use canonical DB values and translate at display time.
 - Locale-aware formatting must use `getDateFnsLocale(language)` and `getIntlLocale(language)`.
