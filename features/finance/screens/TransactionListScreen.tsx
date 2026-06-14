@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator, Alert, TextInput } from 'react-native'
+import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator, Alert, TextInput, LayoutAnimation, Platform, UIManager } from 'react-native'
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { FlashList } from '@shopify/flash-list'
 import { Feather } from '@expo/vector-icons'
@@ -60,6 +60,15 @@ type RecurringCandidate = {
   nextDate: Date
 }
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true)
+}
+
+// Smooth height transition for the finance card expand/collapse toggles.
+function animateExpand() {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+}
+
 function emptyTotals(): PeriodTotals {
   return new Map()
 }
@@ -87,6 +96,7 @@ export function TransactionListScreen() {
   const [activePeriod, setActivePeriod] = useState<Period>('month')
   const [reviewOnly, setReviewOnly] = useState(false)
   const [showFinanceDetails, setShowFinanceDetails] = useState(false)
+  const [showSafeDetails, setShowSafeDetails] = useState(false)
   const [showAllMonthlyPlanRows, setShowAllMonthlyPlanRows] = useState(false)
   const [planSheet, setPlanSheet] = useState<{ item: PlanItem | null } | null>(null)
   const [search, setSearch] = useState('')
@@ -620,7 +630,13 @@ export function TransactionListScreen() {
             </View>
 
             <View style={[styles.safePanel, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-              <View style={styles.safeLine}>
+              <Pressable
+                onPress={() => { animateExpand(); setShowSafeDetails((v) => !v) }}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showSafeDetails }}
+                accessibilityLabel={showSafeDetails ? t.home_hide_details : t.home_show_details}
+                style={styles.safeLine}
+              >
                 <View style={styles.safeTitleRow}>
                   <Feather
                     name={safeToSpend.safeToSpend < 0 ? 'alert-triangle' : 'shield'}
@@ -629,14 +645,17 @@ export function TransactionListScreen() {
                   />
                   <Text style={[styles.safeLabel, { color: theme.text.secondary }]}>{t.safe_to_spend}</Text>
                 </View>
-                <AmountText
-                  cents={safeToSpend.safeToSpend}
-                  currency={safeCurrency}
-                  showSign={safeToSpend.safeToSpend < 0}
-                  color={safeToSpend.safeToSpend < 0 ? theme.semantic.danger : theme.brand.primary}
-                  style={styles.safeAmount}
-                />
-              </View>
+                <View style={styles.safeRight}>
+                  <AmountText
+                    cents={safeToSpend.safeToSpend}
+                    currency={safeCurrency}
+                    showSign={safeToSpend.safeToSpend < 0}
+                    color={safeToSpend.safeToSpend < 0 ? theme.semantic.danger : theme.brand.primary}
+                    style={styles.safeAmount}
+                  />
+                  <Feather name={showSafeDetails ? 'chevron-up' : 'chevron-down'} size={15} color={theme.text.muted} />
+                </View>
+              </Pressable>
               {safeToSpend.skippedForeign > 0 ? (
                 <View style={styles.safeWarnRow}>
                   <Feather name="alert-circle" size={13} color={theme.semantic.danger} />
@@ -645,7 +664,7 @@ export function TransactionListScreen() {
                   </Text>
                 </View>
               ) : null}
-              {showFinanceDetails ? (
+              {showSafeDetails ? (
                 <>
                   <View style={styles.safeBreakdown}>
                     {countCarryOver ? (
@@ -685,6 +704,11 @@ export function TransactionListScreen() {
                 <View style={styles.recurringTitleRow}>
                   <Feather name="calendar" size={16} color={theme.brand.primary} />
                   <Text style={[styles.recurringTitle, { color: theme.text.primary }]} numberOfLines={1}>{t.monthly_plan}</Text>
+                  {!showFinanceDetails && monthlyPlanRows.length > 0 ? (
+                    <View style={[styles.planCountBadge, { backgroundColor: theme.brand.primary + '1F' }]}>
+                      <Text style={[styles.planCountBadgeText, { color: theme.brand.primary }]}>{monthlyPlanRows.length}</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <View style={styles.recurringHeaderRight}>
                   <Pressable
@@ -698,6 +722,7 @@ export function TransactionListScreen() {
                   </Pressable>
                   <Pressable
                     onPress={() => {
+                      animateExpand()
                       if (showFinanceDetails) setShowAllMonthlyPlanRows(false)
                       setShowFinanceDetails((v) => !v)
                     }}
@@ -816,7 +841,7 @@ export function TransactionListScreen() {
               })}
               {hiddenMonthlyPlanCount > 0 ? (
                 <Pressable
-                  onPress={() => setShowAllMonthlyPlanRows(true)}
+                  onPress={() => { animateExpand(); setShowAllMonthlyPlanRows(true) }}
                   accessibilityRole="button"
                   accessibilityLabel={`${t.load_more} ${hiddenMonthlyPlanCount}`}
                   style={({ pressed }) => [styles.planMoreRow, { backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary, borderColor: theme.border.subtle }]}
@@ -1061,8 +1086,9 @@ const styles = StyleSheet.create({
     padding: spacing[3],
     gap: spacing[1],
   },
-  safeLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
-  safeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], minWidth: 0 },
+  safeLine: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
+  safeTitleRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  safeRight: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   safeLabel: { fontSize: 13, fontWeight: '700' },
   safeAmount: { fontSize: 17, fontWeight: '700' },
   safeMeta: { fontSize: 12 },
@@ -1117,6 +1143,15 @@ const styles = StyleSheet.create({
   recurringHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   recurringTitleRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   recurringTitle: { flexShrink: 1, fontSize: 14, fontWeight: '700' },
+  planCountBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[2],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planCountBadgeText: { fontSize: 12, fontWeight: '700' },
   planTotalsRow: { flexDirection: 'row', gap: spacing[2] },
   planTotalPill: {
     flex: 1,
