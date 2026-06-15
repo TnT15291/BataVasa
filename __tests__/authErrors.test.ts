@@ -13,6 +13,7 @@ const t = {
   auth_error_weak_password: 'Password too weak',
   auth_error_same_password: 'Choose a different password',
   auth_error_invalid_email: 'Invalid email address',
+  auth_error_oauth_config: 'Google sign-in is misconfigured',
   auth_error_generic: 'Something went wrong',
 } as unknown as Translations
 
@@ -101,6 +102,15 @@ describe('localizeAuthError', () => {
     })
     it('maps message containing invalid email', () => {
       expect(localizeAuthError({ message: 'invalid email format' }, t)).toBe(t.auth_error_invalid_email)
+    })
+  })
+
+  describe('oauth config', () => {
+    it('maps provider disabled errors', () => {
+      expect(localizeAuthError({ code: 'provider_disabled' }, t)).toBe(t.auth_error_oauth_config)
+    })
+    it('maps redirect mismatch messages', () => {
+      expect(localizeAuthError({ message: 'redirect_uri_mismatch' }, t)).toBe(t.auth_error_oauth_config)
     })
   })
 

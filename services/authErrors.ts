@@ -56,6 +56,18 @@ export function localizeAuthError(error: AuthErrorLike, t: Translations): string
   ) {
     return t.auth_error_invalid_email
   }
+  if (
+    code === 'provider_disabled' ||
+    code === 'validation_failed' && msg.includes('provider') ||
+    msg.includes('provider is not enabled') ||
+    msg.includes('provider not enabled') ||
+    msg.includes('oauth provider') ||
+    msg.includes('redirect_uri_mismatch') ||
+    msg.includes('redirect url') ||
+    msg.includes('callback')
+  ) {
+    return t.auth_error_oauth_config
+  }
 
   logger.warn('auth.error', 'unmapped auth error', { code, message: error.message })
   return t.auth_error_generic

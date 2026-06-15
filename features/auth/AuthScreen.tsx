@@ -12,6 +12,7 @@ import { useSettingsStore } from '@store/settingsStore'
 import { toast } from '@store/toastStore'
 import { KeyboardAvoider } from '@components/KeyboardAvoider'
 import { BrandLogo } from '@components/BrandLogo'
+import { PasswordInput } from '@components/PasswordInput'
 
 type Mode = 'signin' | 'signup'
 
@@ -178,15 +179,12 @@ export function AuthScreen() {
         />
 
         <Text style={[styles.label, { color: theme.text.muted }]}>{t.auth_password}</Text>
-        <TextInput
+        <PasswordInput
           value={password}
           onChangeText={(v) => { setPassword(v); if (error) clearError() }}
           placeholder={t.auth_password_ph}
-          placeholderTextColor={theme.text.muted}
-          autoCapitalize="none"
-          secureTextEntry
+          autoComplete={mode === 'signin' ? 'current-password' : 'password-new'}
           onSubmitEditing={onSubmit}
-          style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
         />
 
         {error && <Text style={[styles.error, { color: theme.semantic.danger }]}>{error}</Text>}

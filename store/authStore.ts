@@ -172,7 +172,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const params = new URLSearchParams(paramStr)
       const code = params.get('code')
       if (!code) {
-        set({ busy: false, error: getTranslations().ai_error })
+        const t = getTranslations()
+        const oauthError = params.get('error') ?? 'oauth_callback_missing_code'
+        const oauthErrorDescription = params.get('error_description') ?? params.get('error_code') ?? undefined
+        logger.warn(MODULE, 'Google OAuth callback missing code', {
+          error: oauthError,
+          error_description: oauthErrorDescription,
+        })
+        set({
+          busy: false,
+          error: localizeAuthError({ code: oauthError, message: oauthErrorDescription }, t),
+        })
         return { ok: false }
       }
       const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)

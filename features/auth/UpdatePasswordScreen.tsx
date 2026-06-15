@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  View, Text, TextInput, Pressable, StyleSheet,
+  View, Text, Pressable, StyleSheet,
   ActivityIndicator, ScrollView,
 } from 'react-native'
 import { useTheme } from '@design/useTheme'
@@ -10,6 +10,7 @@ import { useAuthStore } from '@store/authStore'
 import { toast } from '@store/toastStore'
 import { KeyboardAvoider } from '@components/KeyboardAvoider'
 import { BrandLogo } from '@components/BrandLogo'
+import { PasswordInput } from '@components/PasswordInput'
 
 /**
  * Shown when a password-recovery deep link put the store into `recoveryMode`
@@ -58,28 +59,20 @@ export function UpdatePasswordScreen() {
         <Text style={[styles.subtitle, { color: theme.text.muted }]}>{t.auth_update_password_subtitle}</Text>
 
         <Text style={[styles.label, { color: theme.text.muted }]}>{t.auth_new_password}</Text>
-        <TextInput
+        <PasswordInput
           value={password}
           onChangeText={onChange(setPassword)}
           placeholder={t.auth_new_password_ph}
-          placeholderTextColor={theme.text.muted}
-          autoCapitalize="none"
           autoComplete="password-new"
-          secureTextEntry
-          style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
         />
 
         <Text style={[styles.label, { color: theme.text.muted }]}>{t.auth_confirm_password}</Text>
-        <TextInput
+        <PasswordInput
           value={confirm}
           onChangeText={onChange(setConfirm)}
           placeholder={t.auth_confirm_password_ph}
-          placeholderTextColor={theme.text.muted}
-          autoCapitalize="none"
           autoComplete="password-new"
-          secureTextEntry
           onSubmitEditing={onSubmit}
-          style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
         />
 
         {(localError || error) && (
@@ -109,7 +102,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '600', textAlign: 'center', marginTop: spacing[5] },
   subtitle: { fontSize: 14, textAlign: 'center', marginTop: spacing[2], marginBottom: spacing[5] },
   label: { fontSize: 12, fontWeight: '600', marginTop: spacing[2] },
-  input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
   error: { fontSize: 13, marginTop: spacing[2] },
   cta: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[5] },
   ctaText: { color: '#fff', fontSize: 16, fontWeight: '600' },
