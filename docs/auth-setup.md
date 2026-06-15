@@ -61,16 +61,24 @@ In Supabase Dashboard -> Authentication -> Providers -> Email:
   sign in immediately.
 - For production, decide whether email confirmation should be on before launch.
 
-## Step 5 - Configure Password Recovery Redirects
+## Step 5 - Configure OAuth And Password Recovery Redirects
 
 In Supabase Dashboard -> Authentication -> URL Configuration -> Redirect URLs,
 add:
 
+- Google OAuth native callback: `batavasa://auth/callback`
 - Production: `batavasa://reset-password`
 - Dev: the Expo Go `exp://.../--/reset-password` URL printed by the dev server
 
-Without these redirect URLs, password recovery links may fall back to the Site URL
-and fail to return to the app.
+Redirect URL order in Supabase does not matter; each `redirectTo` value must
+match one of the allowed URLs.
+
+In Supabase Dashboard -> Authentication -> Providers -> Google, ensure the
+Google provider is enabled and the Google OAuth client is configured for the same
+Supabase project.
+
+Without these redirect URLs, Google sign-in or password recovery may fall back
+to the Site URL and fail to return to the app.
 
 ## Step 6 - Configure Sync Tables And RLS
 
@@ -94,6 +102,7 @@ docs/b1-b2-verification.md
 |---|---|
 | App says sign-in is unavailable | Check `.env.local`, variable names, and Expo restart with `-c`. |
 | Sign-up works but sign-in fails immediately | Email confirmation may be enabled; confirm the email or disable confirmation for dev. |
+| Google sign-in returns to the login screen | Add `batavasa://auth/callback` to Supabase Redirect URLs and verify the Google provider is enabled. |
 | Password reset opens browser instead of app | Add the correct redirect URL in Supabase auth settings. |
 | Web session does not persist | Avoid private browsing and check localStorage availability. |
 | Supabase sync fails after login | Run `docs/supabase-setup.sql` and check RLS policies. |

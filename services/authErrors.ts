@@ -58,7 +58,11 @@ export function localizeAuthError(error: AuthErrorLike, t: Translations): string
   }
   if (
     code === 'provider_disabled' ||
+    code === 'oauth_callback_missing_code' ||
+    code === 'bad_oauth_state' ||
     code === 'validation_failed' && msg.includes('provider') ||
+    msg.includes('auth code') ||
+    msg.includes('code verifier') ||
     msg.includes('provider is not enabled') ||
     msg.includes('provider not enabled') ||
     msg.includes('oauth provider') ||

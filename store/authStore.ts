@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { AppState } from 'react-native'
-import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '@services/supabase'
@@ -14,6 +13,8 @@ import { useHabitsStore } from './habitsStore'
 import { useJournalsStore } from './journalsStore'
 
 const MODULE = 'auth.store'
+const GOOGLE_REDIRECT_URL = 'batavasa://auth/callback'
+const PASSWORD_RESET_REDIRECT_URL = 'batavasa://reset-password'
 
 // Reload module caches from SQLite after sign-in (auth state change → re-load,
 // per docs/security.md#authentication).
@@ -46,6 +47,7 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<{ ok: boolean }>
   signUp: (email: string, password: string) => Promise<{ ok: boolean; needsConfirm?: boolean }>
   signInWithGoogle: () => Promise<{ ok: boolean }>
+  completeGoogleSignIn: (url: string) => Promise<{ ok: boolean }>
   resetPassword: (email: string) => Promise<{ ok: boolean }>
   // Recovery link (implicit flow) — tokens come directly in the URL hash.
   enterRecovery: (accessToken: string, refreshToken: string) => Promise<{ ok: boolean }>
@@ -60,6 +62,15 @@ type AuthState = {
 }
 
 let started = false
+const exchangedOAuthCodes = new Set<string>()
+
+function parseAuthParams(url: string): URLSearchParams {
+  const hashIndex = url.indexOf('#')
+  if (hashIndex >= 0) return new URLSearchParams(url.slice(hashIndex + 1))
+  const queryIndex = url.indexOf('?')
+  if (queryIndex >= 0) return new URLSearchParams(url.slice(queryIndex + 1))
+  return new URLSearchParams()
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
@@ -149,55 +160,89 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // Use a fixed scheme URL — Linking.createURL() generates exp:// in Expo Go
       // which cannot be pre-registered in Supabase. The fixed scheme matches app.json.
-      const redirectTo = 'batavasa://auth/callback'
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo, skipBrowserRedirect: true },
+        options: { redirectTo: GOOGLE_REDIRECT_URL, skipBrowserRedirect: true },
       })
       if (error || !data.url) {
         set({ busy: false, error: localizeAuthError(error ?? new Error('OAuth URL missing'), getTranslations()) })
         return { ok: false }
       }
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+      const result = await WebBrowser.openAuthSessionAsync(data.url, GOOGLE_REDIRECT_URL)
       if (result.type !== 'success') {
         set({ busy: false })
         return { ok: false }
       }
-      // Parse code from redirect URL — works for both query (?code=) and hash (#code=)
-      const hashIndex = result.url.indexOf('#')
-      const queryIndex = result.url.indexOf('?')
-      const paramStr = hashIndex >= 0 ? result.url.slice(hashIndex + 1)
-        : queryIndex >= 0 ? result.url.slice(queryIndex + 1)
-        : ''
-      const params = new URLSearchParams(paramStr)
-      const code = params.get('code')
-      if (!code) {
-        const t = getTranslations()
-        const oauthError = params.get('error') ?? 'oauth_callback_missing_code'
-        const oauthErrorDescription = params.get('error_description') ?? params.get('error_code') ?? undefined
-        logger.warn(MODULE, 'Google OAuth callback missing code', {
-          error: oauthError,
-          error_description: oauthErrorDescription,
-        })
-        set({
-          busy: false,
-          error: localizeAuthError({ code: oauthError, message: oauthErrorDescription }, t),
-        })
-        return { ok: false }
+      return get().completeGoogleSignIn(result.url)
+    } catch (e) {
+      logger.error(MODULE, 'signInWithGoogle failed', { error: String(e) })
+      set({ busy: false, error: localizeAuthError({ message: String(e) }, getTranslations()) })
+      return { ok: false }
+    }
+  },
+
+  async completeGoogleSignIn(url) {
+    if (!supabase) return { ok: false }
+    const params = parseAuthParams(url)
+    const oauthError = params.get('error') ?? params.get('error_code')
+    const oauthErrorDescription = params.get('error_description') ?? undefined
+    if (oauthError) {
+      logger.warn(MODULE, 'Google OAuth callback returned error', {
+        error: oauthError,
+        error_description: oauthErrorDescription,
+      })
+      set({
+        busy: false,
+        error: localizeAuthError({ code: oauthError, message: oauthErrorDescription }, getTranslations()),
+      })
+      return { ok: false }
+    }
+
+    const code = params.get('code')
+    const accessToken = params.get('access_token')
+    const refreshToken = params.get('refresh_token')
+
+    if (code) {
+      if (exchangedOAuthCodes.has(code)) {
+        set({ busy: false })
+        return { ok: Boolean(get().session) }
       }
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-      if (exchangeError) {
-        set({ busy: false, error: localizeAuthError(exchangeError, getTranslations()) })
+      exchangedOAuthCodes.add(code)
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+      if (error) {
+        logger.error(MODULE, 'Google OAuth code exchange failed', { error: error.message })
+        set({ busy: false, error: localizeAuthError(error, getTranslations()) })
         return { ok: false }
       }
       track('auth_login')
-      set({ busy: false })
+      set({ busy: false, session: data.session })
       return { ok: true }
-    } catch (e) {
-      logger.error(MODULE, 'signInWithGoogle failed', { error: String(e) })
-      set({ busy: false, error: String(e) })
-      return { ok: false }
     }
+
+    if (accessToken && refreshToken) {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      })
+      if (error) {
+        logger.error(MODULE, 'Google OAuth token session failed', { error: error.message })
+        set({ busy: false, error: localizeAuthError(error, getTranslations()) })
+        return { ok: false }
+      }
+      track('auth_login')
+      set({ busy: false, session: data.session })
+      return { ok: true }
+    }
+
+    logger.warn(MODULE, 'Google OAuth callback missing credentials', { url })
+    set({
+      busy: false,
+      error: localizeAuthError(
+        { code: 'oauth_callback_missing_code', message: 'OAuth callback missing code' },
+        getTranslations()
+      ),
+    })
+    return { ok: false }
   },
 
   async resetPassword(email) {
@@ -207,7 +252,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // set a new password. This URL MUST be in Supabase → Auth → URL Configuration
     // → Redirect URLs (see docs/security.md#password-recovery).
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: Linking.createURL('reset-password'),
+      redirectTo: PASSWORD_RESET_REDIRECT_URL,
     })
     if (error) {
       set({ busy: false, error: localizeAuthError(error, getTranslations()) })

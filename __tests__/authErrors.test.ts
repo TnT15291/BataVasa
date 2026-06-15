@@ -109,6 +109,12 @@ describe('localizeAuthError', () => {
     it('maps provider disabled errors', () => {
       expect(localizeAuthError({ code: 'provider_disabled' }, t)).toBe(t.auth_error_oauth_config)
     })
+    it('maps missing OAuth callback code errors', () => {
+      expect(localizeAuthError({ code: 'oauth_callback_missing_code' }, t)).toBe(t.auth_error_oauth_config)
+    })
+    it('maps PKCE code verifier errors', () => {
+      expect(localizeAuthError({ message: 'both auth code and code verifier should be non-empty' }, t)).toBe(t.auth_error_oauth_config)
+    })
     it('maps redirect mismatch messages', () => {
       expect(localizeAuthError({ message: 'redirect_uri_mismatch' }, t)).toBe(t.auth_error_oauth_config)
     })

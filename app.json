@@ -34,6 +34,20 @@
           "data": [
             {
               "scheme": "batavasa",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "batavasa",
               "host": "reset-password"
             }
           ],
