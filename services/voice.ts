@@ -1,9 +1,13 @@
 import { Audio } from 'expo-av'
-import { getSecure } from '@services/secureStorage'
+import { supabase } from '@services/supabase'
+import { isAiAvailable } from '@services/ai/openai'
 import { logger } from '@services/logger'
 
 let _recording: Audio.Recording | null = null
 const TRANSCRIBE_TIMEOUT_MS = 30000
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
 
 export async function requestMicPermission(): Promise<boolean> {
   const { status } = await Audio.requestPermissionsAsync()
@@ -105,36 +109,32 @@ function getWhisperPrompt(language: string): string {
   return prompts[lang] ?? prompts['en']!
 }
 
-// Tries OpenAI Whisper first, falls back to Groq Whisper (both are OpenAI-compatible)
+// Routes through the `ai-transcribe` Edge Function (server-held Whisper key);
+// the function picks OpenAI Whisper, falling back to Groq. The model + endpoint
+// live server-side now — the client only supplies the audio, language, and a
+// domain prompt.
 export async function transcribeAudio(uri: string, language: string): Promise<TranscribeResult> {
-  const openaiKey = await getSecure('openai_api_key')
-  const groqKey = await getSecure('groq_api_key')
-  if (!openaiKey && !groqKey) return { ok: false, reason: 'error' }
-
-  const endpoint = openaiKey
-    ? 'https://api.openai.com/v1/audio/transcriptions'
-    : 'https://api.groq.com/openai/v1/audio/transcriptions'
-  const apiKey = (openaiKey ?? groqKey)!
-  const model = openaiKey ? 'whisper-1' : 'whisper-large-v3-turbo'
+  if (!supabase || !SUPABASE_URL || !SUPABASE_ANON_KEY) return { ok: false, reason: 'error' }
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  if (!token) return { ok: false, reason: 'error' }
 
   const formData = new FormData()
   formData.append('file', { uri, type: 'audio/m4a', name: 'audio.m4a' } as any)
-  formData.append('model', model)
   formData.append('language', language.slice(0, 2))
   // A same-language domain prompt improves tone-mark accuracy for tonal languages
   // (Vietnamese especially) and reduces Whisper's tendency to hallucinate wrong
   // diacritics when the audio is lightly accented.
   formData.append('prompt', getWhisperPrompt(language))
-  // verbose_json exposes per-segment no_speech_prob; temperature 0 disables the
-  // decoder's temperature-fallback, which is the main driver of hallucinations.
-  formData.append('response_format', 'verbose_json')
-  formData.append('temperature', '0')
 
   try {
     const controller = new AbortController()
-    const res = await withTimeout(fetch(endpoint, {
+    const res = await withTimeout(fetch(`${SUPABASE_URL}/functions/v1/ai-transcribe`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
       body: formData,
       signal: controller.signal,
     }), TRANSCRIBE_TIMEOUT_MS, controller)
@@ -162,6 +162,6 @@ export async function transcribeAudio(uri: string, language: string): Promise<Tr
 }
 
 export async function hasVoiceKey(): Promise<boolean> {
-  const [ok, gk] = await Promise.all([getSecure('openai_api_key'), getSecure('groq_api_key')])
-  return !!(ok || gk)
+  // Transcription runs server-side now; available whenever the backend is reachable.
+  return isAiAvailable()
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { AppState } from 'react-native'
+import { AppState, Platform } from 'react-native'
 import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
 import type { Session } from '@supabase/supabase-js'
@@ -8,6 +8,12 @@ import { logger } from '@services/logger'
 import { track } from '@services/analytics'
 import { getTranslations } from '@services/i18n'
 import { localizeAuthError } from '@services/authErrors'
+import {
+  isNativeGoogleAvailable,
+  configureGoogleSignin,
+  nativeGoogleSignIn,
+  nativeGoogleSignOut,
+} from '@services/googleAuth'
 import { useFinanceStore } from './financeStore'
 import { useRemindersStore } from './remindersStore'
 import { useHabitsStore } from './habitsStore'
@@ -46,6 +52,10 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<{ ok: boolean }>
   signUp: (email: string, password: string) => Promise<{ ok: boolean; needsConfirm?: boolean }>
   signInWithGoogle: () => Promise<{ ok: boolean }>
+  // Internal branches of signInWithGoogle — exposed on the store so each can call
+  // the other via get(); not meant to be invoked directly by UI.
+  signInWithGoogleNative: () => Promise<{ ok: boolean }>
+  signInWithGoogleWeb: () => Promise<{ ok: boolean }>
   resetPassword: (email: string) => Promise<{ ok: boolean }>
   // Recovery link (implicit flow) — tokens come directly in the URL hash.
   enterRecovery: (accessToken: string, refreshToken: string) => Promise<{ ok: boolean }>
@@ -79,6 +89,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     // Local const so TS keeps the non-null narrowing inside deferred callbacks.
     const client = supabase
+
+    // Prime the native Google Sign-In SDK once (no-op on web / when unconfigured).
+    configureGoogleSignin()
 
     try {
       const { data } = await client.auth.getSession()
@@ -145,12 +158,53 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async signInWithGoogle() {
     if (!supabase) return { ok: false }
+    // Native on iOS/Android (system account picker → ID token, no browser
+    // redirect); the OAuth browser flow remains the fallback for web and for
+    // builds where no native Google client ID is configured.
+    if (Platform.OS !== 'web' && isNativeGoogleAvailable()) {
+      return get().signInWithGoogleNative()
+    }
+    return get().signInWithGoogleWeb()
+  },
+
+  async signInWithGoogleNative() {
+    const client = supabase
+    if (!client) return { ok: false }
+    set({ busy: true, error: null })
+    try {
+      const result = await nativeGoogleSignIn()
+      if (!result.ok) {
+        // Cancellation is not an error — just stop the spinner.
+        set({ busy: false, error: 'cancelled' in result ? null : result.error })
+        return { ok: false }
+      }
+      const { error } = await client.auth.signInWithIdToken({
+        provider: 'google',
+        token: result.idToken,
+      })
+      if (error) {
+        set({ busy: false, error: localizeAuthError(error, getTranslations()) })
+        return { ok: false }
+      }
+      track('auth_login')
+      set({ busy: false })
+      return { ok: true }
+    } catch (e) {
+      logger.error(MODULE, 'signInWithGoogleNative failed', { error: String(e) })
+      set({ busy: false, error: String(e) })
+      return { ok: false }
+    }
+  },
+
+  async signInWithGoogleWeb() {
+    const client = supabase
+    if (!client) return { ok: false }
     set({ busy: true, error: null })
     try {
       // Use a fixed scheme URL — Linking.createURL() generates exp:// in Expo Go
       // which cannot be pre-registered in Supabase. The fixed scheme matches app.json.
       const redirectTo = 'batavasa://auth/callback'
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo, skipBrowserRedirect: true },
       })
@@ -175,7 +229,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ busy: false, error: getTranslations().ai_error })
         return { ok: false }
       }
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      const { error: exchangeError } = await client.auth.exchangeCodeForSession(code)
       if (exchangeError) {
         set({ busy: false, error: localizeAuthError(exchangeError, getTranslations()) })
         return { ok: false }
@@ -184,7 +238,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ busy: false })
       return { ok: true }
     } catch (e) {
-      logger.error(MODULE, 'signInWithGoogle failed', { error: String(e) })
+      logger.error(MODULE, 'signInWithGoogleWeb failed', { error: String(e) })
       set({ busy: false, error: String(e) })
       return { ok: false }
     }
@@ -263,6 +317,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   async signOut() {
     if (!supabase) return
     set({ busy: true })
+    // Clear the cached native Google session too, so the next Google sign-in
+    // shows the account picker instead of silently reusing the last account.
+    await nativeGoogleSignOut()
     await supabase.auth.signOut()
     track('auth_logout')
     set({ busy: false, session: null })

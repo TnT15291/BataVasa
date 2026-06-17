@@ -1,48 +1,31 @@
-import { getSecure, setSecure, deleteSecure } from '@services/secureStorage'
-import { AI_PROVIDERS, type AIProvider } from './providers'
+import { supabase, isSupabaseConfigured } from '@services/supabase'
 import { useSettingsStore } from '@store/settingsStore'
+import type { AIProvider } from './providers'
 
-// ── Key management (per-provider) ─────────────────────────────────────────
+// AI keys are NOT stored on the device anymore. They live as Supabase secrets and
+// are used only inside the `ai-chat` / `ai-transcribe` Edge Functions, which the
+// app calls with the signed-in user's token. See docs/ai-integration.md.
 
-export async function getProviderKey(provider: AIProvider): Promise<string | null> {
-  return getSecure(AI_PROVIDERS[provider].keyStore)
+/**
+ * Whether AI features can run. They route through the Supabase Edge Function
+ * proxy, so availability == backend configured (and, in practice, a signed-in
+ * session — guaranteed behind the app's login wall).
+ */
+export function isAiAvailable(): boolean {
+  return isSupabaseConfigured
 }
 
-export async function saveProviderKey(provider: AIProvider, key: string): Promise<void> {
-  await setSecure(AI_PROVIDERS[provider].keyStore, key.trim())
+/**
+ * @deprecated Provider API keys are now held server-side by the Edge Function
+ * proxy; the app never sees them. This shim only reports availability so the
+ * legacy pre-flight `if (!key)` gates across feature screens keep working.
+ * New code should call {@link isAiAvailable} instead.
+ */
+export async function getProviderKey(_provider?: AIProvider): Promise<string | null> {
+  return isAiAvailable() ? 'server' : null
 }
 
-export async function deleteProviderKey(provider: AIProvider): Promise<void> {
-  await deleteSecure(AI_PROVIDERS[provider].keyStore)
-}
-
-export async function getKeysStatus(): Promise<Record<AIProvider, boolean>> {
-  const entries = await Promise.all(
-    (['openai', 'gemini', 'groq', 'deepseek'] as AIProvider[]).map(async (p) => {
-      const key = await getProviderKey(p)
-      return [p, !!key] as const
-    })
-  )
-  return Object.fromEntries(entries) as Record<AIProvider, boolean>
-}
-
-// Backward compat — uses active provider
-export async function getApiKey(): Promise<string | null> {
-  const provider = useSettingsStore.getState().aiProvider
-  return getProviderKey(provider)
-}
-
-export async function saveApiKey(key: string): Promise<void> {
-  const provider = useSettingsStore.getState().aiProvider
-  await saveProviderKey(provider, key)
-}
-
-export async function deleteApiKey(): Promise<void> {
-  const provider = useSettingsStore.getState().aiProvider
-  await deleteProviderKey(provider)
-}
-
-// ── Chat completion ────────────────────────────────────────────────────────
+// ── Chat completion (via Edge Function proxy) ───────────────────────────────
 
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant'
@@ -53,34 +36,31 @@ export async function chatCompletion(
   messages: ChatMessage[],
   opts?: { model?: string; temperature?: number; max_tokens?: number }
 ): Promise<string> {
+  if (!supabase) throw new Error('NO_BACKEND')
   const provider = useSettingsStore.getState().aiProvider
-  const config = AI_PROVIDERS[provider]
 
-  const key = await getProviderKey(provider)
-  if (!key) throw new Error('NO_API_KEY')
-
-  const model = opts?.model ?? config.defaultModel
-
-  const res = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model,
+  const { data, error } = await supabase.functions.invoke('ai-chat', {
+    body: {
+      provider,
       messages,
+      model: opts?.model,
       temperature: opts?.temperature ?? 0.7,
       max_tokens: opts?.max_tokens ?? 1500,
-    }),
+    },
   })
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    const msg = (err as any)?.error?.message ?? `API error ${res.status}`
+  if (error) {
+    // FunctionsHttpError carries the response; pull the server's error message.
+    let msg = error.message
+    try {
+      const ctx = (error as { context?: Response }).context
+      const j = ctx ? await ctx.json() : null
+      if (j?.error) msg = j.error
+    } catch {
+      // keep the generic message
+    }
     throw new Error(msg)
   }
 
-  const data = await res.json()
-  return (data.choices?.[0]?.message?.content as string) ?? ''
+  return (data?.content as string) ?? ''
 }

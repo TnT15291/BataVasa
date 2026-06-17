@@ -12,7 +12,6 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore, type Language } from '@store/settingsStore'
-import { getProviderKey } from '@services/ai/openai'
 import { AI_PROVIDERS } from '@services/ai/providers'
 import { FlowDiagram } from '@components/FlowDiagram'
 
@@ -28,25 +27,12 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
   const aiProvider = useSettingsStore((s) => s.aiProvider)
   const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding)
   const [step, setStep] = useState(0)
-  const [hasApiKey, setHasApiKey] = useState(false)
   const isIndexRoute = pathname === '/'
 
   useEffect(() => {
     if (!visible) return
     setStep(0)
   }, [visible])
-
-  useEffect(() => {
-    if (!visible || !isIndexRoute || step !== 1) return
-    let active = true
-    const loadKey = async () => {
-      const key = await getProviderKey(aiProvider)
-      if (active) setHasApiKey(!!key)
-    }
-    void loadKey()
-    const interval = setInterval(() => { void loadKey() }, 1000)
-    return () => { active = false; clearInterval(interval) }
-  }, [visible, aiProvider, step, isIndexRoute])
 
   const providerName = AI_PROVIDERS[aiProvider]?.name ?? aiProvider
   const stepLabel = t.onboarding_step
@@ -109,11 +95,11 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
                 <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
                   <Text style={[styles.cardLabel, { color: theme.text.muted }]}>{t.ai_settings}</Text>
                   <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{providerName}</Text>
-                  <Text style={[styles.cardStatus, { color: hasApiKey ? theme.semantic.success : theme.text.muted }]}> 
-                    {hasApiKey ? `✅ ${t.has_key}` : `⚠️ ${t.no_key}`} 
+                  <Text style={[styles.cardStatus, { color: theme.semantic.success }]}>
+                    ✅ {t.onboarding_api_key_ready}
                   </Text>
                   <Text style={[styles.cardHint, { color: theme.text.muted }]}>
-                    {hasApiKey ? t.onboarding_api_key_ready : t.onboarding_api_key_missing}
+                    {t.ai_server_managed}
                   </Text>
                 </View>
 

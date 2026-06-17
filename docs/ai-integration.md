@@ -1,26 +1,60 @@
 # AI Integration
 
-> Current AI architecture: bring-your-own provider key on the client, with a
-> multi-provider OpenAI-compatible chat abstraction.
+> Current AI architecture: provider API keys are held **server-side** as Supabase
+> secrets and used only inside Edge Functions. The app never sees a key; it calls
+> the functions with the signed-in user's token. Users pick which provider is
+> active, but do not enter keys (BYOK was removed).
 
 ## Provider Layer
 
 Main files:
 
-- `services/ai/openai.ts`: `chatCompletion()`.
-- `services/ai/providers.ts`: provider metadata.
-- `features/settings/screens/AISettingsScreen.tsx`: provider/key settings UI.
+- `services/ai/openai.ts`: `chatCompletion()` (calls the `ai-chat` Edge Function)
+  and `isAiAvailable()`.
+- `services/ai/providers.ts`: provider metadata (client-side, for the chooser UI).
+- `features/settings/screens/AISettingsScreen.tsx`: provider chooser (no key entry).
 - `store/settingsStore.ts`: active provider setting.
+- `supabase/functions/ai-chat/`: chat-completion proxy (holds the keys).
+- `supabase/functions/ai-transcribe/`: Whisper transcription proxy.
 
-Supported provider family:
+Supported providers (OpenAI-compatible chat completions): OpenAI, Gemini, Groq,
+DeepSeek. The active provider is sent in the request body; the function looks up
+that provider's secret and forwards the call.
 
-- OpenAI-compatible chat completions.
-- OpenAI.
-- Groq.
-- Gemini.
-- Ollama/self-hosted where configured.
+> `services/ai/openai.ts` still exports a deprecated `getProviderKey()` shim that
+> only reports availability (returns a sentinel, never a real key) so legacy
+> pre-flight `if (!key)` gates in feature screens keep compiling. New code should
+> use `isAiAvailable()`.
 
-Provider keys are stored with the secure storage wrapper, not in AsyncStorage.
+## Server Setup (Edge Functions + secrets)
+
+The keys live in Supabase, never in the app bundle. One-time setup:
+
+```bash
+# 1. Deploy the two functions (JWT verification is on by default, so only
+#    signed-in users can call them; each also re-checks the user inside).
+supabase functions deploy ai-chat
+supabase functions deploy ai-transcribe
+
+# 2. Set the provider secrets (set only the providers you use).
+supabase secrets set OPENAI_API_KEY=sk-...
+supabase secrets set GEMINI_API_KEY=...
+supabase secrets set GROQ_API_KEY=gsk_...
+supabase secrets set DEEPSEEK_API_KEY=sk-...
+```
+
+Notes:
+
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` are injected into functions automatically —
+  do not set them as secrets.
+- Voice transcription (`ai-transcribe`) reuses `OPENAI_API_KEY` (preferred) or
+  falls back to `GROQ_API_KEY`.
+- If a user selects a provider whose secret is not set, the function returns 503
+  and the app surfaces a generic AI error.
+- **Never** put these keys in `.env.local`, `eas.json`, or any `EXPO_PUBLIC_*`
+  variable — those ship to the client bundle and would be extractable.
+- Cost control lives at the function boundary: only authenticated users pass, and
+  you can add per-user rate limiting inside the function later.
 
 ## Prompt Contract
 
