@@ -199,6 +199,7 @@ export default function RootLayout() {
           <Stack.Screen name="reminders-insights" options={{ title: t.reminder_insight_title }} />
           <Stack.Screen name="auth/callback" options={{ headerShown: false, animation: 'none' }} />
           <Stack.Screen name="callback" options={{ headerShown: false, animation: 'none' }} />
+          <Stack.Screen name="reset-password" options={{ headerShown: false, animation: 'none' }} />
         </Stack>
         )}
         {/* Auth gate: overlay covers the Stack while unauthenticated so routing

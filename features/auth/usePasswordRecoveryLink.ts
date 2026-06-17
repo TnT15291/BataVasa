@@ -5,6 +5,7 @@ import { getTranslations } from '@services/i18n'
 import { logger } from '@services/logger'
 
 const MODULE = 'auth.recovery'
+const handledRecoveryUrls = new Set<string>()
 
 /**
  * Supabase's implicit flow returns the recovery tokens in the URL **fragment**
@@ -31,6 +32,7 @@ function parseAuthParams(url: string): URLSearchParams {
  */
 export function usePasswordRecoveryLink() {
   const initialized = useAuthStore((s) => s.initialized)
+  const currentUrl = Linking.useURL()
 
   useEffect(() => {
     if (!initialized) return
@@ -39,6 +41,8 @@ export function usePasswordRecoveryLink() {
     async function handle(url: string | null) {
       // Only act on our recovery deep link — never hijack other incoming URLs.
       if (!active || !url || !url.includes('reset-password')) return
+      if (handledRecoveryUrls.has(url)) return
+      handledRecoveryUrls.add(url)
 
       const params = parseAuthParams(url)
       const accessToken = params.get('access_token')
@@ -67,6 +71,7 @@ export function usePasswordRecoveryLink() {
     Linking.getInitialURL()
       .then(handle)
       .catch((e) => logger.error(MODULE, 'getInitialURL failed', { error: String(e) }))
+    void handle(currentUrl)
 
     // Warm: links arriving while the app is already running.
     const sub = Linking.addEventListener('url', ({ url }) => { void handle(url) })
@@ -75,5 +80,5 @@ export function usePasswordRecoveryLink() {
       active = false
       sub.remove()
     }
-  }, [initialized])
+  }, [initialized, currentUrl])
 }
