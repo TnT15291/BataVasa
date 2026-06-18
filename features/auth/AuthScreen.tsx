@@ -152,7 +152,7 @@ export function AuthScreen() {
           {mode === 'signin' ? t.auth_subtitle_signin : t.auth_subtitle_signup}
         </Text>
 
-        <View style={[styles.benefits, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.benefits, { backgroundColor: theme.bg.elevated, borderColor: theme.border.strong }]}>
           {([
             { icon: 'cloud' as const, text: t.auth_benefit_sync },
             { icon: 'wifi-off' as const, text: t.auth_benefit_offline },
@@ -202,7 +202,7 @@ export function AuthScreen() {
         <Pressable
           onPress={onSubmit}
           disabled={!canSubmit}
-          style={[styles.cta, { backgroundColor: canSubmit ? theme.brand.primary : theme.text.muted }]}
+          style={[styles.cta, { backgroundColor: canSubmit ? theme.brand.primary : theme.bg.secondary, borderColor: canSubmit ? theme.brand.primary : theme.border.strong }]}
         >
           {busy
             ? <ActivityIndicator color="#fff" />
@@ -239,18 +239,18 @@ export function AuthScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6] },
-  body: { padding: spacing[6], paddingTop: spacing[8] * 1.5, gap: spacing[2], flexGrow: 1, justifyContent: 'center' },
-  comboWrap: { alignSelf: 'stretch', alignItems: 'center', marginBottom: spacing[6] },
+  body: { padding: spacing[6], paddingTop: spacing[8], gap: spacing[2], flexGrow: 1, justifyContent: 'flex-start' },
+  comboWrap: { alignSelf: 'stretch', alignItems: 'center', marginBottom: spacing[5] },
   comboTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     paddingLeft: spacing[3],
     paddingRight: spacing[2],
     paddingVertical: spacing[2],
-    minWidth: 160,
+    minWidth: 190,
   },
   comboFlag: { fontSize: 16 },
   comboLabel: { fontSize: 14, fontWeight: '600', flex: 1 },
@@ -266,10 +266,10 @@ const styles = StyleSheet.create({
   comboItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
   comboItemText: { fontSize: 15 },
   comboCheck: { marginLeft: 'auto' },
-  tagline: { fontSize: 14, textAlign: 'center', marginTop: spacing[2], lineHeight: 20 },
-  subtitle: { fontSize: 14, textAlign: 'center', marginTop: spacing[4], marginBottom: spacing[4] },
+  tagline: { fontSize: 15, textAlign: 'center', marginTop: spacing[4], lineHeight: 21, fontWeight: '600' },
+  subtitle: { fontSize: 14, textAlign: 'center', marginTop: spacing[3], marginBottom: spacing[4], lineHeight: 20 },
   benefits: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
@@ -279,13 +279,13 @@ const styles = StyleSheet.create({
   benefitText: { fontSize: 13, flex: 1, lineHeight: 18 },
   title: { fontSize: 18, fontWeight: '600', textAlign: 'center' },
   label: { fontSize: 12, fontWeight: '600', marginTop: spacing[2] },
-  input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
+  input: { borderWidth: 1, borderRadius: radius.lg, padding: spacing[3], fontSize: 15 },
   error: { fontSize: 13, marginTop: spacing[2] },
   confirm: { fontSize: 13, marginTop: spacing[2] },
   forgot: { alignSelf: 'flex-start', paddingVertical: spacing[2] },
   forgotText: { fontSize: 13, fontWeight: '600' },
-  cta: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[5] },
-  ctaText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  cta: { paddingVertical: spacing[4], borderRadius: radius.lg, borderWidth: 1, alignItems: 'center', marginTop: spacing[5] },
+  ctaText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: spacing[4] },
   dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
   dividerText: { fontSize: 13 },
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing[3],
     paddingVertical: spacing[3] + 2,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     marginTop: spacing[3],
   },

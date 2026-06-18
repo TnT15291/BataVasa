@@ -9,6 +9,8 @@ export type ThemeColors = {
   semantic: { success: string; warning: string; danger: string; info: string }
   finance: { expense: string; income: string }
   border: { subtle: string; strong: string; card: string }
+  // Command surface for the quick BataVasa help entry.
+  command: { bg: string; surface: string; text: string; placeholder: string; border: string }
   shadow: {
     color: string
     offset: { width: number; height: number }
@@ -18,10 +20,12 @@ export type ThemeColors = {
   }
 }
 
+// UI1 console = calm, flat, whitespace-led. Shadows are barely-there; structure
+// comes from hairline borders + spacing, never heavy drop shadows.
 const shadowLight = {
-  color: '#000000',
+  color: '#0B1220',
   offset: { width: 0, height: 1 },
-  opacity: 0.025,
+  opacity: 0.05,
   radius: 3,
   elevation: 1,
 }
@@ -29,24 +33,26 @@ const shadowLight = {
 const shadowDark = {
   color: '#000000',
   offset: { width: 0, height: 2 },
-  opacity: 0.28,
-  radius: 6,
+  opacity: 0.32,
+  radius: 8,
   elevation: 3,
 }
 
 const baseLight = {
-  text: { primary: '#20201D', secondary: '#4D493F', muted: '#6F6A60', danger: '#A33A32' },
-  semantic: { success: '#3E7C59', warning: '#B87521', danger: '#A33A32', info: '#4C6F91' },
-  finance: { expense: '#A33A32', income: '#3E7C59' },
-  border: { subtle: '#DDD5C8', strong: '#BEB2A2', card: '#D7CCBA' },
+  text: { primary: '#181B20', secondary: '#3D444D', muted: '#6B7280', danger: '#B4232E' },
+  semantic: { success: '#1A7A46', warning: '#B26A00', danger: '#B4232E', info: '#2E63C8' },
+  finance: { expense: '#B4232E', income: '#1A7A46' },
+  border: { subtle: '#ECEEF1', strong: '#CDD2D9', card: '#E6E8EC' },
+  command: { bg: '#FFFFFF', surface: '#F5F6F8', text: '#181B20', placeholder: '#5F6874', border: '#E3E6EA' },
   shadow: shadowLight,
 }
 
 const baseDark = {
-  text: { primary: '#F6F0E7', secondary: '#D2C8B8', muted: '#A99D8C', danger: '#E19A94' },
-  semantic: { success: '#8FBE9D', warning: '#E0AD63', danger: '#E19A94', info: '#8FAFCA' },
-  finance: { expense: '#E19A94', income: '#8FBE9D' },
-  border: { subtle: '#352F27', strong: '#51483A', card: '#4A4034' },
+  text: { primary: '#F3F7FA', secondary: '#C3CCD5', muted: '#8B97A2', danger: '#FF9A9A' },
+  semantic: { success: '#5FC792', warning: '#F0B45F', danger: '#FF9A9A', info: '#7FB0F5' },
+  finance: { expense: '#FF9A9A', income: '#5FC792' },
+  border: { subtle: '#222A32', strong: '#39444E', card: '#2A333C' },
+  command: { bg: '#F7F8FA', surface: '#FFFFFF', text: '#181B20', placeholder: '#5F6874', border: '#E3E6EA' },
   shadow: shadowDark,
 }
 
@@ -56,22 +62,21 @@ export const themes: Record<ThemeName, ThemeDef> = {
   default: {
     light: {
       ...baseLight,
-      bg: { primary: '#F7F4EE', secondary: '#EDE7DC', elevated: '#FFFDF8' },
-      brand: { primary: '#2F6F73', accent: '#C9853E' },
+      bg: { primary: '#FBFBFC', secondary: '#F1F3F6', elevated: '#FFFFFF' },
+      brand: { primary: '#197C92', accent: '#7B5BB3' },
     },
     dark: {
       ...baseDark,
-      bg: { primary: '#15130F', secondary: '#211E18', elevated: '#2B261F' },
-      brand: { primary: '#79B8B6', accent: '#D9A15C' },
+      bg: { primary: '#0C1117', secondary: '#141B22', elevated: '#1A222B' },
+      brand: { primary: '#5FD0E3', accent: '#B9A0FF' },
     },
   },
 
   sage: {
     light: {
       ...baseLight,
-      bg: { primary: '#F7FAF6', secondary: '#EBF3E8', elevated: '#FFFFFF' },
-      brand: { primary: '#527B63', accent: '#947449' },
-      border: { subtle: '#DDE8D9', strong: '#C5D9BF', card: '#E3ECDD' },
+      bg: { primary: '#FAFBFA', secondary: '#EEF3EF', elevated: '#FFFFFF' },
+      brand: { primary: '#2F735B', accent: '#7A6E2F' },
     },
     dark: {
       ...baseDark,
@@ -84,9 +89,8 @@ export const themes: Record<ThemeName, ThemeDef> = {
   ocean: {
     light: {
       ...baseLight,
-      bg: { primary: '#F0F9FC', secondary: '#E0F2F7', elevated: '#FFFFFF' },
-      brand: { primary: '#2388AD', accent: '#258A7D' },
-      border: { subtle: '#D0EBF5', strong: '#A8D5E8', card: '#D9EDF5' },
+      bg: { primary: '#FAFCFD', secondary: '#EDF3F7', elevated: '#FFFFFF' },
+      brand: { primary: '#176B87', accent: '#2D7C72' },
     },
     dark: {
       ...baseDark,
@@ -99,9 +103,8 @@ export const themes: Record<ThemeName, ThemeDef> = {
   sunset: {
     light: {
       ...baseLight,
-      bg: { primary: '#FFF8F3', secondary: '#FFEDE0', elevated: '#FFFFFF' },
-      brand: { primary: '#DD6A38', accent: '#C08A24' },
-      border: { subtle: '#F5DDD0', strong: '#E8C5AD', card: '#F1D8C8' },
+      bg: { primary: '#FCFBFA', secondary: '#F4EFEB', elevated: '#FFFFFF' },
+      brand: { primary: '#B85C38', accent: '#8B6A2A' },
     },
     dark: {
       ...baseDark,
@@ -114,9 +117,8 @@ export const themes: Record<ThemeName, ThemeDef> = {
   midnight: {
     light: {
       ...baseLight,
-      bg: { primary: '#F9F5FF', secondary: '#EDE7F6', elevated: '#FFFFFF' },
-      brand: { primary: '#7B55AD', accent: '#CF3C73' },
-      border: { subtle: '#E2D5F5', strong: '#C9B8E8', card: '#E5D9F5' },
+      bg: { primary: '#FBFAFD', secondary: '#F1EEF7', elevated: '#FFFFFF' },
+      brand: { primary: '#6653A6', accent: '#A84870' },
     },
     dark: {
       ...baseDark,
@@ -132,9 +134,9 @@ export const THEME_SWATCHES: Array<{
   light: string
   dark: string
 }> = [
-  { name: 'default', light: '#2F6F73', dark: '#79B8B6' },
-  { name: 'sage', light: '#527B63', dark: '#6DA882' },
-  { name: 'ocean', light: '#2388AD', dark: '#4DB8D8' },
-  { name: 'sunset', light: '#DD6A38', dark: '#FF8A50' },
-  { name: 'midnight', light: '#7B55AD', dark: '#BB86FC' },
+  { name: 'default', light: '#197C92', dark: '#5FD0E3' },
+  { name: 'sage', light: '#2F735B', dark: '#6DA882' },
+  { name: 'ocean', light: '#176B87', dark: '#4DB8D8' },
+  { name: 'sunset', light: '#B85C38', dark: '#FF8A50' },
+  { name: 'midnight', light: '#6653A6', dark: '#BB86FC' },
 ]

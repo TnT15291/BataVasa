@@ -16,6 +16,8 @@ import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/u
 import type { Journal } from '../types'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AppHeader, ModuleOverview } from '@components/ui'
 import { toast } from '@store/toastStore'
 
 const MOOD_COLORS = ['', '#D96C6C', '#E0A84B', '#8A8A8A', '#6FAE75', '#4FA3D8'] as const
@@ -33,7 +35,7 @@ function JournalRow({ journal, onPress }: { journal: Journal; onPress: () => voi
   const preview = journal.content.slice(0, 100).replace(/\n/g, ' ')
   const timeStr = format(new Date(journal.occurred_at), 'HH:mm', { locale })
   const dateStr = format(new Date(journal.occurred_at), 'dd/MM', { locale })
-  const moodColor = journal.mood ? MOOD_COLORS[journal.mood] : theme.border.strong
+  const moodColor = journal.mood ? MOOD_COLORS[journal.mood] : MODULE_COLORS.journal
 
   return (
     <Pressable
@@ -44,15 +46,15 @@ function JournalRow({ journal, onPress }: { journal: Journal; onPress: () => voi
         { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
       ]}
     >
-      <View style={[styles.moodBadge, { backgroundColor: moodColor + '22' }]}>
-        <Feather name="book-open" size={16} color={moodColor} />
+      <View style={[styles.moodBadge, { backgroundColor: moodColor }]}>
+        <Feather name="book-open" size={16} color="#fff" />
       </View>
       <View style={styles.rowBody}>
         <View style={styles.rowHeader}>
           <Text style={[styles.timeStr, { color: theme.text.muted }]}>{timeStr}</Text>
           <Text style={[styles.timeStr, { color: theme.text.muted }]}>{dateStr}</Text>
           {(journal.is_important ?? 0) === 1 ? (
-            <Feather name="star" size={12} color={theme.brand.primary} />
+            <Feather name="star" size={12} color={MODULE_COLORS.journal} />
           ) : null}
           {journal.location_label ? (
             <View style={styles.locationWrap}>
@@ -78,6 +80,7 @@ export function JournalListScreen() {
   useJournalsBootstrap()
   const theme = useTheme()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const journals = useJournals()
@@ -148,8 +151,8 @@ export function JournalListScreen() {
   if (journals.length === 0) {
     return (
       <View style={[styles.empty, { backgroundColor: theme.bg.primary }]}>
-        <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
-          <Feather name="book-open" size={34} color={theme.brand.primary} />
+        <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.journal + '1F' }]}>
+          <Feather name="book-open" size={34} color={MODULE_COLORS.journal} />
         </View>
         <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_journals}</Text>
         <Text style={[styles.emptyMsg, { color: theme.text.muted }]}>{t.no_journals_msg}</Text>
@@ -168,56 +171,41 @@ export function JournalListScreen() {
 
   return (
     <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
-      <ScrollView contentContainerStyle={styles.list}>
-        <View style={[styles.hero, { backgroundColor: MODULE_COLORS.journal + '14', borderColor: MODULE_COLORS.journal + '44' }]}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroKicker, { color: theme.text.muted }]}>{t.nav_journal}</Text>
-              <Text style={[styles.heroTitle, { color: theme.text.primary }]} numberOfLines={2}>
-                {journalStats.latest
-                  ? journalStats.latest.content.replace(/^#+\s?/gm, '').replace(/[*_`]/g, '').replace(/\n+/g, ' ').trim().slice(0, 90)
-                  : t.journal_empty_prompt}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: theme.text.muted }]}>
-                {journalStats.latest
-                  ? format(new Date(journalStats.latest.occurred_at), 'EEEE, dd MMMM yyyy', { locale })
-                  : t.no_journals_msg}
-              </Text>
-            </View>
-            <View style={[styles.heroIcon, { backgroundColor: MODULE_COLORS.journal + '1F' }]}>
-              <Feather name="book-open" size={28} color={MODULE_COLORS.journal} />
-            </View>
-          </View>
-          <View style={styles.statGrid}>
-            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.statValue, { color: theme.brand.primary }]}>{journalStats.todayCount}</Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.today}</Text>
-            </View>
-            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.statValue, { color: MODULE_COLORS.journal }]}>{journalStats.weekCount}</Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.weekly}</Text>
-            </View>
-            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.statValue, { color: theme.text.primary }]}>
-                {journalStats.importantCount}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.report_important}</Text>
-            </View>
-          </View>
-        </View>
+      <ScrollView contentContainerStyle={[styles.list, { paddingTop: insets.top + spacing[2] }]}>
+        <AppHeader subtitle={t.nav_journal} onSettings={() => router.push('/settings')} />
+        <ModuleOverview
+          eyebrow={t.nav_journal}
+          value={String(journals.length)}
+          subtitle={journalStats.latest
+            ? journalStats.latest.content.replace(/^#+\s?/gm, '').replace(/[*_`]/g, '').replace(/\n+/g, ' ').trim().slice(0, 60)
+            : t.journal_empty_prompt}
+          icon="book-open"
+          accent={MODULE_COLORS.journal}
+          stats={[
+            { key: 'today', label: t.today, value: String(journalStats.todayCount), color: MODULE_COLORS.journal },
+            { key: 'week', label: t.weekly, value: String(journalStats.weekCount) },
+            { key: 'important', label: t.report_important, value: String(journalStats.importantCount), color: MODULE_COLORS.journal },
+          ]}
+        />
 
         <View style={styles.analysisRow}>
           {[
             { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/journals-report', bg: MODULE_COLORS.journal },
-            { label: t.nav_insights, icon: 'cpu' as const, route: '/journals-insights', bg: theme.brand.primary },
+            { label: t.nav_insights, icon: 'cpu' as const, route: '/journals-insights', bg: MODULE_COLORS.analysis },
           ].map((item) => (
             <Pressable
               key={item.route}
               onPress={() => router.push(item.route as any)}
-              style={({ pressed }) => [styles.analysisBtn, { backgroundColor: pressed ? item.bg + 'CC' : item.bg }]}
+              style={({ pressed }) => [
+                styles.analysisBtn,
+                {
+                  backgroundColor: pressed ? item.bg + '12' : theme.bg.elevated,
+                  borderColor: item.bg + '66',
+                },
+              ]}
             >
-              <Feather name={item.icon} size={17} color="#fff" />
-              <Text style={styles.analysisBtnText} numberOfLines={1}>{item.label}</Text>
+              <Feather name={item.icon} size={16} color={item.bg} />
+              <Text style={[styles.analysisBtnText, { color: item.bg }]} numberOfLines={1}>{item.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -234,11 +222,11 @@ export function JournalListScreen() {
                 key={tag}
                 onPress={() => setActiveTag(active ? null : tag)}
                 style={[styles.tagChip, {
-                  backgroundColor: active ? theme.brand.primary : theme.bg.elevated,
-                  borderColor: active ? theme.brand.primary : theme.border.subtle,
+                  backgroundColor: active ? MODULE_COLORS.journal + '18' : theme.bg.elevated,
+                  borderColor: active ? MODULE_COLORS.journal + '66' : theme.border.subtle,
                 }]}
               >
-                <Text style={[styles.tagChipText, { color: active ? '#fff' : theme.text.secondary }]}>
+                <Text style={[styles.tagChipText, { color: active ? MODULE_COLORS.journal : theme.text.secondary }]}>
                   {tagLabels[tag]}
                 </Text>
               </Pressable>
@@ -309,6 +297,8 @@ export function JournalListScreen() {
 
 const styles = StyleSheet.create({
   list: { padding: spacing[4], paddingBottom: 120, gap: spacing[3] },
+  radarStats: { gap: spacing[2] },
+  radarMetricRow: { flexDirection: 'row', gap: spacing[2] },
   tagScroll: { paddingHorizontal: 0, gap: spacing[2], flexDirection: 'row' },
   tagChip: {
     borderWidth: 1,
@@ -355,10 +345,11 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     paddingVertical: spacing[4],
     borderRadius: radius.md,
+    borderWidth: 1,
   },
-  analysisBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  analysisBtnText: { fontSize: 12, fontWeight: '600' },
   group: { gap: spacing[2] },
-  dateLabel: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  dateLabel: { fontSize: 13, fontWeight: '600', marginBottom: 2 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[3],
     borderRadius: radius.lg, borderWidth: 1,
@@ -371,7 +362,7 @@ const styles = StyleSheet.create({
   timeStr: { fontSize: 12 },
   locationWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3 },
   location: { fontSize: 12, flex: 1 },
-  preview: { fontSize: 14, lineHeight: 20 },
+  preview: { fontSize: 13, lineHeight: 19 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6], gap: spacing[3] },
   emptyIconWrap: { width: 72, height: 72, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '700' },
@@ -381,9 +372,9 @@ const styles = StyleSheet.create({
   emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   fab: {
     position: 'absolute', right: spacing[6],
-    width: 56, height: 56, borderRadius: radius.full,
+    width: 56, height: 56, borderRadius: radius.lg, borderWidth: 2, borderColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
-    elevation: 6, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
+    elevation: 5, shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
   swipeDelete: {
     width: 72,

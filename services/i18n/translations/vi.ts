@@ -1,6 +1,7 @@
 export const vi = {
   // Navigation
   nav_home: 'Trang chủ',
+  nav_modules: 'Module',
   nav_finance: 'Tài chính',
   nav_settings: 'Cài đặt',
   nav_new_transaction: 'Giao dịch mới',
@@ -756,6 +757,21 @@ export const vi = {
   field_counterparty: 'tên người vay/cho vay',
   field_title: 'tiêu đề',
   field_target: 'số lần lặp',
+  command_placeholder: 'Hỏi nhanh BataVasa',
+  today_priority: 'Ưu tiên hôm nay',
+  today_signals: 'Tín hiệu hôm nay',
+  ai_insight: 'Gợi ý AI',
+  view_all: 'Xem tất cả',
+  on_track: 'Đúng tiến độ',
+  top_priority: 'Ưu tiên cao',
+  quick_capture: 'Ghi nhanh',
+  quick_assistant: 'Trợ lý',
+  quick_reports: 'Báo cáo',
+  quick_settings: 'Cài đặt',
+  tag_personal: 'Cá nhân',
+  home_ai_tip_review: 'Bạn có {{count}} mục cần xem. Mở trợ lý và hỏi: Hôm nay tôi nên xử lý gì trước?',
+  home_ai_tip_habits: 'Bạn đã hoàn thành {{done}}/{{total}} thói quen hôm nay. Hỏi trợ lý cách giữ nhịp trong 7 ngày tới.',
+  home_ai_tip_empty: 'Mẹo: thử nhập cà phê 35k, uống nước lúc 9h, hoặc viết một dòng nhật ký. BataVasa sẽ tự phân loại cho bạn.',
 }
 
 export type Translations = typeof vi

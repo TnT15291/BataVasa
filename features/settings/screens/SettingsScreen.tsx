@@ -10,6 +10,8 @@ import { requestMicPermission } from '@services/voice'
 import { requestNotificationPermission } from '@services/notifications'
 import { useAuthStore } from '@store/authStore'
 import { getBiometricSupport } from '@services/biometric'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AppHeader } from '@components/ui'
 
 type RowProps = {
   label: string
@@ -45,6 +47,25 @@ function SectionHeader({ label }: { label: string }) {
   )
 }
 
+function SettingsSwitch({
+  value,
+  onValueChange,
+}: {
+  value: boolean
+  onValueChange: (next: boolean) => void | Promise<void>
+}) {
+  return (
+    <Switch
+      value={value}
+      onValueChange={(next) => { void onValueChange(next) }}
+      trackColor={{ false: '#D1D5DB', true: '#34C759' }}
+      thumbColor="#FFFFFF"
+      ios_backgroundColor="#D1D5DB"
+      style={styles.iosSwitch}
+    />
+  )
+}
+
 function confirmPermissionPrompt(title: string, message: string, cancel: string, next: string): Promise<boolean> {
   return new Promise((resolve) => {
     Alert.alert(title, message, [
@@ -57,9 +78,8 @@ function confirmPermissionPrompt(title: string, message: string, cancel: string,
 export function SettingsScreen() {
   const theme = useTheme()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { t } = useTranslation()
-  // Default platform switch colors ignore the active theme — tint the on-state.
-  const switchTrack = { false: theme.border.strong, true: theme.brand.primary }
   const currency = useSettingsStore((s) => s.currency)
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const locationAccess = useSettingsStore((s) => s.locationAccess)
@@ -146,7 +166,8 @@ export function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={styles.container}>
+    <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing[2] }]}>
+      <AppHeader subtitle={t.settings} />
       {authConfigured && (
         <>
           <SectionHeader label={t.account} />
@@ -189,14 +210,14 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.biometric_lock}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.biometric_lock_hint}</Text>
           </View>
-          <Switch value={biometricLock} onValueChange={toggleBiometric} trackColor={switchTrack} />
+          <SettingsSwitch value={biometricLock} onValueChange={toggleBiometric} />
         </View>
         <View style={[styles.row, { borderColor: theme.border.subtle }]}>
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.location_access}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.location_access_hint}</Text>
           </View>
-          <Switch value={locationAccess} onValueChange={toggleLocation} trackColor={switchTrack} />
+          <SettingsSwitch value={locationAccess} onValueChange={toggleLocation} />
         </View>
         <Pressable
           onPress={requestMicrophone}
@@ -233,7 +254,7 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.ai_auto_confirm}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.ai_auto_confirm_hint}</Text>
           </View>
-          <Switch value={aiAutoConfirm} onValueChange={setAIAutoConfirm} trackColor={switchTrack} />
+          <SettingsSwitch value={aiAutoConfirm} onValueChange={setAIAutoConfirm} />
         </View>
       </View>
 
@@ -244,7 +265,7 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
           </View>
-          <Switch value={syncFinance} onValueChange={setSyncFinance} trackColor={switchTrack} />
+          <SettingsSwitch value={syncFinance} onValueChange={setSyncFinance} />
         </View>
         <SettingRow label={t.currency} value={currency} onPress={() => router.push('/currency')} />
         <SettingRow label={t.display_currency} value={displayCurrency} onPress={() => router.push('/display-currency')} />
@@ -278,14 +299,14 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.safe_count_planned_income}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.safe_count_planned_income_hint}</Text>
           </View>
-          <Switch value={safeToSpendCountPlannedIncome} onValueChange={setSafeToSpendCountPlannedIncome} trackColor={switchTrack} />
+          <SettingsSwitch value={safeToSpendCountPlannedIncome} onValueChange={setSafeToSpendCountPlannedIncome} />
         </View>
         <View style={[styles.row, { borderColor: theme.border.subtle }]}>
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.safe_carry_over}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.safe_carry_over_hint}</Text>
           </View>
-          <Switch value={safeToSpendCarryOver} onValueChange={setSafeToSpendCarryOver} trackColor={switchTrack} />
+          <SettingsSwitch value={safeToSpendCarryOver} onValueChange={setSafeToSpendCarryOver} />
         </View>
         <SettingRow label={t.categories} onPress={() => router.push('/categories')} />
         <Pressable
@@ -322,7 +343,7 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
           </View>
-          <Switch value={syncReminders} onValueChange={setSyncReminders} trackColor={switchTrack} />
+          <SettingsSwitch value={syncReminders} onValueChange={setSyncReminders} />
         </View>
         <SettingRow label={t.reminders} onPress={() => router.push('/reminders')} />
         <Pressable
@@ -359,7 +380,7 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
           </View>
-          <Switch value={syncHabits} onValueChange={setSyncHabits} trackColor={switchTrack} />
+          <SettingsSwitch value={syncHabits} onValueChange={setSyncHabits} />
         </View>
         <SettingRow label={t.habits} onPress={() => router.push('/habits')} />
         <Pressable
@@ -389,7 +410,7 @@ export function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
           </View>
-          <Switch value={syncJournals} onValueChange={setSyncJournals} trackColor={switchTrack} />
+          <SettingsSwitch value={syncJournals} onValueChange={setSyncJournals} />
         </View>
         <SettingRow label={t.journals} onPress={() => router.push('/journals')} />
         <Pressable
@@ -427,7 +448,9 @@ const styles = StyleSheet.create({
   container: { padding: spacing[4], gap: spacing[1] },
   sectionHeader: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
     marginTop: spacing[4],
     marginBottom: spacing[2],
     marginLeft: spacing[1],
@@ -450,6 +473,7 @@ const styles = StyleSheet.create({
   rowHint: { fontSize: 12, marginTop: 4 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   rowValue: { fontSize: 15 },
+  iosSwitch: { transform: [{ scaleX: 0.86 }, { scaleY: 0.86 }] },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   stepBtn: {
     width: 36,

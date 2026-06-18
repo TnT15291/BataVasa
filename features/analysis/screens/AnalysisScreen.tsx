@@ -19,6 +19,7 @@ import { translateCategoryName } from '@features/finance/i18n'
 import { convertMinorAmount, getRates } from '@services/fx'
 import { InsightText } from '@/components/InsightText'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AppHeader, ModuleOverview } from '@components/ui'
 
 export function AnalysisScreen() {
   useFinanceBootstrap()
@@ -200,9 +201,22 @@ export function AnalysisScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing[2] }]}>
+        <AppHeader subtitle={t.nav_insights} onSettings={() => router.push('/settings')} />
+        <ModuleOverview
+          eyebrow={t.analysis_title}
+          value={t.analysis_subtitle}
+          subtitle={moduleCount >= 2 ? t.analysis_patterns : t.analysis_no_data_msg}
+          icon="cpu"
+          accent={theme.brand.primary}
+          stats={[
+            { key: 'finance', label: t.nav_finance, value: transactions.length > 0 ? String(transactions.length) : '-', color: theme.finance.income },
+            { key: 'habits', label: t.nav_habits, value: habits.length > 0 ? String(habits.length) : '-', color: theme.brand.accent },
+            { key: 'journal', label: t.nav_journal, value: journals.length > 0 ? String(journals.length) : '-', color: theme.brand.primary },
+          ]}
+        />
         {/* Module status chips */}
-        <View style={styles.chips}>
+        <View style={{ display: 'none' }}>
           <Chip label={`💰 ${t.nav_finance}`} active={transactions.length > 0} theme={theme} />
           <Chip label={`✅ ${t.nav_habits}`} active={habits.length > 0} theme={theme} />
           <Chip label={`📔 ${t.nav_journal}`} active={journals.length > 0} theme={theme} />
@@ -391,6 +405,8 @@ function CompRow({
 
 const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
+  radarStats: { gap: spacing[2] },
+  radarMetricRow: { flexDirection: 'row', gap: spacing[2] },
   chips: { flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' },
   chip: {
     paddingHorizontal: spacing[3],

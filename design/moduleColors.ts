@@ -1,10 +1,14 @@
-// One identity color per module. Finance previously borrowed the semantic
-// expense red (tab bar) AND income green (add sheet) — module identity must
-// never reuse semantic money colors, so it gets its own deep green.
+// One identity color per module, retuned to the UI1.png "Personal OS Console"
+// palette: Finance = blue, Habits = green, Journal = amber, Reminders = purple,
+// Analysis/Focus = indigo. Module identity never reuses the semantic money
+// colors (income green / expense red) — Finance is blue, Habits a teal-green.
 export const MODULE_COLORS = {
-  finance: '#3E7C59',
-  tasks: '#4C6F91',
-  habits: '#C9853E',
-  journal: '#7D5A86',
-  analysis: '#5E756E',
+  finance: '#4B7CF3',
+  habits: '#28B985',
+  journal: '#F09A2F',
+  tasks: '#8B6DF6',
+  analysis: '#5F62D9',
 } as const
+
+// Soft tint background for a module-colored icon chip (matches UI1 list rows).
+export const moduleTint = (hex: string) => hex + '1A'

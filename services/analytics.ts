@@ -1,4 +1,5 @@
 import { logger } from '@services/logger'
+import { isExpoGo } from './expoGo'
 
 type SentryApi = {
   addBreadcrumb: (breadcrumb: Record<string, unknown>) => void
@@ -71,6 +72,7 @@ const PII_KEY_PATTERN = /amount|merchant|note|content|body|journal|mood|email|ph
 let transport: AnalyticsTransport | null = null
 
 function getSentry(): SentryApi | null {
+  if (isExpoGo()) return null
   try {
     return typeof require === 'function' ? require('@sentry/react-native') : null
   } catch {

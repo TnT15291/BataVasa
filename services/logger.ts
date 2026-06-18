@@ -1,3 +1,5 @@
+import { isExpoGo } from './expoGo'
+
 type SentryApi = {
   addBreadcrumb: (breadcrumb: Record<string, unknown>) => void
   captureMessage: (message: string, level?: string) => void
@@ -29,6 +31,7 @@ function scrub(meta: Record<string, unknown> | undefined): Record<string, unknow
 }
 
 function getSentry(): SentryApi | null {
+  if (isExpoGo()) return null
   try {
     return typeof require === 'function' ? require('@sentry/react-native') : null
   } catch {

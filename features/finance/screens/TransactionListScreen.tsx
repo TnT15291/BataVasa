@@ -29,6 +29,7 @@ import { AmountText } from '../components/AmountText'
 import { PlanItemSheet } from '../components/PlanItemSheet'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
+import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getRates, convertMinorAmount } from '@services/fx'
@@ -39,6 +40,8 @@ import type { Debt, PlanItem, Transaction } from '../types'
 import { SkeletonTransactionList } from '@components/SkeletonBox'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AppHeader } from '@components/ui'
 import { toast } from '@store/toastStore'
 
 type Period = 'today' | 'week' | 'month' | 'all'
@@ -84,6 +87,7 @@ export function TransactionListScreen() {
   const isLoading = useFinanceBootstrap()
   const theme = useTheme()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const txs = useTransactions()
   const cats = useCategories()
@@ -526,33 +530,47 @@ export function TransactionListScreen() {
       <FlashList
         data={activityItems}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingTop: insets.top + spacing[2] }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={theme.brand.primary}
-            colors={[theme.brand.primary]}
+            tintColor={MODULE_COLORS.finance}
+            colors={[MODULE_COLORS.finance]}
           />
         }
         ListHeaderComponent={
           <View style={styles.headerContent}>
+            <AppHeader subtitle={t.nav_finance} onSettings={() => router.push('/settings')} />
+
             <View style={[styles.overviewCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
               <View style={styles.overviewTop}>
-                <View>
-                  <Text style={[styles.eyebrow, { color: theme.text.muted }]}>{PERIOD_ROWS.find((p) => p.key === activePeriod)?.label}</Text>
-                  <AmountText
-                    cents={overviewNet}
-                    currency={overviewCurrency}
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.eyebrow, { color: theme.text.muted }]}>
+                    {PERIOD_ROWS.find((p) => p.key === activePeriod)?.label}
+                  </Text>
+                  <Text
+                    style={[styles.netAmount, { color: overviewNet < 0 ? theme.finance.expense : theme.finance.income }]}
+                    numberOfLines={1}
+                  >
+                    {formatAmount(overviewNet, overviewCurrency, language)}
+                  </Text>
+                  <Text style={[styles.insightLine, { color: theme.text.muted }]} numberOfLines={1}>
+                    {reviewCount > 0
+                      ? t.review_queue_count.replace('{{count}}', String(reviewCount))
+                      : topCategory?.category
+                        ? `${translateCategoryName(topCategory.category, t)} · ${formatAmount(topCategory.amount, topCategory.currency, language)}`
+                        : t.no_transactions}
+                  </Text>
+                </View>
+                <View style={[styles.netBadge, { backgroundColor: (overviewNet < 0 ? theme.finance.expense : theme.finance.income) + '1A' }]}>
+                  <Feather
+                    name={overviewNet < 0 ? 'trending-down' : 'trending-up'}
+                    size={20}
                     color={overviewNet < 0 ? theme.finance.expense : theme.finance.income}
-                    style={styles.netAmount}
                   />
                 </View>
-                {activeConverted?.mixed ? (
-                  <Text style={[styles.converted, { color: theme.text.muted }]}>~ {displayCurrency}</Text>
-                ) : null}
               </View>
-
               <View style={styles.metricRow}>
                 <View style={styles.metric}>
                   <Text style={[styles.metricLabel, { color: theme.text.muted }]}>{t.income}</Text>
@@ -564,27 +582,9 @@ export function TransactionListScreen() {
                   <AmountText cents={overviewExpense} currency={overviewCurrency} showSign={false} color={theme.finance.expense} style={styles.metricValue} />
                 </View>
               </View>
-
-              <View style={styles.chartRows}>
-                <View style={styles.chartRow}>
-                  <View style={[styles.chartTrack, { backgroundColor: theme.bg.secondary }]}>
-                    <View style={[styles.chartBar, { width: `${incomePct}%`, backgroundColor: theme.finance.income }]} />
-                  </View>
-                </View>
-                <View style={styles.chartRow}>
-                  <View style={[styles.chartTrack, { backgroundColor: theme.bg.secondary }]}>
-                    <View style={[styles.chartBar, { width: `${expensePct}%`, backgroundColor: theme.finance.expense }]} />
-                  </View>
-                </View>
-              </View>
-
-              <Text style={[styles.insightLine, { color: theme.text.muted }]} numberOfLines={1}>
-                {reviewCount > 0
-                  ? t.review_queue_count.replace('{{count}}', String(reviewCount))
-                  : topCategory?.category
-                    ? `${translateCategoryName(topCategory.category, t)} / ${formatAmount(topCategory.amount, topCategory.currency, language)}`
-                    : t.no_transactions}
-              </Text>
+              {activeConverted?.mixed ? (
+                <Text style={[styles.converted, { color: theme.text.muted }]}>~ {displayCurrency}</Text>
+              ) : null}
             </View>
 
             <View style={[styles.segmented, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
@@ -596,9 +596,9 @@ export function TransactionListScreen() {
                     onPress={() => setActivePeriod(row.key)}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: active }}
-                    style={[styles.segment, { backgroundColor: active ? theme.brand.primary : 'transparent' }]}
+                    style={[styles.segment, { backgroundColor: active ? MODULE_COLORS.finance + '18' : 'transparent' }]}
                   >
-                    <Text style={[styles.segmentText, { color: active ? '#fff' : theme.text.secondary }]}>
+                    <Text style={[styles.segmentText, { color: active ? MODULE_COLORS.finance : theme.text.secondary }]}>
                       {row.label}
                     </Text>
                   </Pressable>
@@ -641,7 +641,7 @@ export function TransactionListScreen() {
                   <Feather
                     name={safeToSpend.safeToSpend < 0 ? 'alert-triangle' : 'shield'}
                     size={15}
-                    color={safeToSpend.safeToSpend < 0 ? theme.semantic.danger : theme.brand.primary}
+                    color={safeToSpend.safeToSpend < 0 ? theme.semantic.danger : MODULE_COLORS.finance}
                   />
                   <Text style={[styles.safeLabel, { color: theme.text.secondary }]}>{t.safe_to_spend}</Text>
                 </View>
@@ -650,7 +650,7 @@ export function TransactionListScreen() {
                     cents={safeToSpend.safeToSpend}
                     currency={safeCurrency}
                     showSign={safeToSpend.safeToSpend < 0}
-                    color={safeToSpend.safeToSpend < 0 ? theme.semantic.danger : theme.brand.primary}
+                    color={safeToSpend.safeToSpend < 0 ? theme.semantic.danger : MODULE_COLORS.finance}
                     style={styles.safeAmount}
                   />
                   <Feather name={showSafeDetails ? 'chevron-up' : 'chevron-down'} size={15} color={theme.text.muted} />
@@ -702,11 +702,11 @@ export function TransactionListScreen() {
             <View style={[styles.planCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
               <View style={styles.recurringHeader}>
                 <View style={styles.recurringTitleRow}>
-                  <Feather name="calendar" size={16} color={theme.brand.primary} />
+                  <Feather name="calendar" size={16} color={MODULE_COLORS.finance} />
                   <Text style={[styles.recurringTitle, { color: theme.text.primary }]} numberOfLines={1}>{t.monthly_plan}</Text>
                   {!showFinanceDetails && monthlyPlanRows.length > 0 ? (
-                    <View style={[styles.planCountBadge, { backgroundColor: theme.brand.primary + '1F' }]}>
-                      <Text style={[styles.planCountBadgeText, { color: theme.brand.primary }]}>{monthlyPlanRows.length}</Text>
+                    <View style={[styles.planCountBadge, { backgroundColor: MODULE_COLORS.finance + '1F' }]}>
+                      <Text style={[styles.planCountBadgeText, { color: MODULE_COLORS.finance }]}>{monthlyPlanRows.length}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -718,7 +718,7 @@ export function TransactionListScreen() {
                     hitSlop={6}
                     style={[styles.recurringBtn, { borderColor: theme.border.strong }]}
                   >
-                    <Feather name="plus" size={14} color={theme.brand.primary} />
+                    <Feather name="plus" size={14} color={MODULE_COLORS.finance} />
                   </Pressable>
                   <Pressable
                     onPress={() => {
@@ -846,8 +846,8 @@ export function TransactionListScreen() {
                   accessibilityLabel={`${t.load_more} ${hiddenMonthlyPlanCount}`}
                   style={({ pressed }) => [styles.planMoreRow, { backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary, borderColor: theme.border.subtle }]}
                 >
-                  <Feather name="more-horizontal" size={16} color={theme.brand.primary} />
-                  <Text style={[styles.planMoreText, { color: theme.brand.primary }]}>
+                  <Feather name="more-horizontal" size={16} color={MODULE_COLORS.finance} />
+                  <Text style={[styles.planMoreText, { color: MODULE_COLORS.finance }]}>
                     {t.load_more} ({hiddenMonthlyPlanCount})
                   </Text>
                 </Pressable>
@@ -864,7 +864,7 @@ export function TransactionListScreen() {
               accessibilityLabel={t.debt_book}
               style={[styles.reviewFilter, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
             >
-              <Feather name="users" size={16} color={debtSummary.overdueCount > 0 ? theme.semantic.danger : theme.brand.primary} />
+              <Feather name="users" size={16} color={debtSummary.overdueCount > 0 ? theme.semantic.danger : MODULE_COLORS.finance} />
               <Text style={[styles.reviewFilterText, { color: theme.text.secondary }]}>{t.debt_book}</Text>
               <Text style={[styles.reviewFilterCount, { color: theme.text.muted }]} numberOfLines={1}>
                 {debtSummary.openCount > 0
@@ -879,16 +879,16 @@ export function TransactionListScreen() {
               accessibilityRole="button"
               accessibilityState={{ selected: reviewOnly }}
               style={[styles.reviewFilter, {
-                backgroundColor: reviewOnly ? theme.brand.primary + '18' : theme.bg.elevated,
-                borderColor: reviewOnly ? theme.brand.primary : theme.border.subtle,
+                backgroundColor: reviewOnly ? MODULE_COLORS.finance + '18' : theme.bg.elevated,
+                borderColor: reviewOnly ? MODULE_COLORS.finance : theme.border.subtle,
               }]}
             >
-              <Feather name="alert-circle" size={16} color={reviewOnly ? theme.brand.primary : theme.text.muted} />
-              <Text style={[styles.reviewFilterText, { color: reviewOnly ? theme.brand.primary : theme.text.secondary }]}>
+              <Feather name="alert-circle" size={16} color={reviewOnly ? MODULE_COLORS.finance : theme.text.muted} />
+              <Text style={[styles.reviewFilterText, { color: reviewOnly ? MODULE_COLORS.finance : theme.text.secondary }]}>
                 {t.review_queue}
               </Text>
               {periodReviewCount > 0 && (
-                <Text style={[styles.reviewFilterCount, { color: reviewOnly ? theme.brand.primary : theme.text.muted }]}>{periodReviewCount}</Text>
+                <Text style={[styles.reviewFilterCount, { color: reviewOnly ? MODULE_COLORS.finance : theme.text.muted }]}>{periodReviewCount}</Text>
               )}
             </Pressable>
 
@@ -896,7 +896,7 @@ export function TransactionListScreen() {
               <View style={[styles.recurringCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
                 <View style={styles.recurringHeader}>
                   <View style={styles.recurringTitleRow}>
-                    <Feather name="repeat" size={16} color={theme.brand.primary} />
+                    <Feather name="repeat" size={16} color={MODULE_COLORS.finance} />
                     <Text style={[styles.recurringTitle, { color: theme.text.primary }]}>{t.recurring_patterns}</Text>
                   </View>
                   <Text style={[styles.recurringMeta, { color: theme.text.muted }]}>{recurringCandidates.length}</Text>
@@ -915,14 +915,14 @@ export function TransactionListScreen() {
                       disabled={candidateInPlan(candidate)}
                       style={[styles.recurringBtn, { borderColor: theme.border.strong, opacity: candidateInPlan(candidate) ? 0.45 : 1 }]}
                     >
-                      <Feather name={candidateInPlan(candidate) ? 'check' : 'plus'} size={14} color={theme.brand.primary} />
+                      <Feather name={candidateInPlan(candidate) ? 'check' : 'plus'} size={14} color={MODULE_COLORS.finance} />
                     </Pressable>
                     {candidate.kind === 'expense' ? (
                       <Pressable
                         onPress={() => createBillReminder(candidate)}
                         style={[styles.recurringBtn, { borderColor: theme.border.strong }]}
                       >
-                        <Feather name="bell" size={14} color={theme.brand.primary} />
+                        <Feather name="bell" size={14} color={MODULE_COLORS.finance} />
                       </Pressable>
                     ) : null}
                   </View>
@@ -932,16 +932,22 @@ export function TransactionListScreen() {
 
             <View style={styles.analysisRow}>
               {[
-                { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/reports', bg: theme.brand.primary },
+                { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/reports', bg: MODULE_COLORS.finance },
                 { label: t.nav_insights, icon: 'cpu' as const, route: '/insights', bg: theme.brand.accent },
               ].map((item) => (
                 <Pressable
                   key={item.route}
                   onPress={() => router.push(item.route as any)}
-                  style={({ pressed }) => [styles.analysisBtn, { backgroundColor: pressed ? item.bg + 'CC' : item.bg }]}
+                  style={({ pressed }) => [
+                    styles.analysisBtn,
+                    {
+                      backgroundColor: pressed ? item.bg + '12' : theme.bg.elevated,
+                      borderColor: item.bg + '66',
+                    },
+                  ]}
                 >
-                  <Feather name={item.icon} size={17} color="#fff" />
-                  <Text style={styles.analysisBtnText} numberOfLines={1}>{item.label}</Text>
+                  <Feather name={item.icon} size={16} color={item.bg} />
+                  <Text style={[styles.analysisBtnText, { color: item.bg }]} numberOfLines={1}>{item.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -988,7 +994,7 @@ export function TransactionListScreen() {
           !reviewOnly && activePeriod === 'all' && (loadingMore || hasMore) ? (
             <View style={styles.footer}>
               {loadingMore ? (
-                <ActivityIndicator size="small" color={theme.brand.primary} />
+                <ActivityIndicator size="small" color={MODULE_COLORS.finance} />
               ) : (
                 <Pressable onPress={loadMore} style={[styles.loadMoreBtn, { borderColor: theme.border.subtle }]}>
                   <Text style={{ color: theme.text.secondary, fontSize: 13 }}>{t.load_more}</Text>
@@ -1002,15 +1008,15 @@ export function TransactionListScreen() {
             <SkeletonTransactionList />
           ) : reviewOnly ? (
             <View style={styles.empty}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
-                <Feather name="check-circle" size={34} color={theme.brand.primary} />
+              <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.finance + '1F' }]}>
+                <Feather name="check-circle" size={34} color={MODULE_COLORS.finance} />
               </View>
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_review_items}</Text>
             </View>
           ) : search.trim() ? (
             <View style={styles.empty}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
-                <Feather name="search" size={34} color={theme.brand.primary} />
+              <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.finance + '1F' }]}>
+                <Feather name="search" size={34} color={MODULE_COLORS.finance} />
               </View>
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_matching_transactions}</Text>
               <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{search.trim()}</Text>
@@ -1023,8 +1029,8 @@ export function TransactionListScreen() {
             </View>
           ) : (
             <View style={styles.empty}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
-                <Feather name="credit-card" size={34} color={theme.brand.primary} />
+              <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.finance + '1F' }]}>
+                <Feather name="dollar-sign" size={34} color={MODULE_COLORS.finance} />
               </View>
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_transactions}</Text>
               <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.tap_to_add}</Text>
@@ -1060,13 +1066,16 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: { padding: spacing[4], paddingBottom: 112 },
   headerContent: { gap: spacing[3], marginBottom: spacing[3] },
+  radarStats: { gap: spacing[2] },
+  radarMetricRow: { flexDirection: 'row', gap: spacing[2] },
   overviewCard: {
     borderRadius: radius.lg,
     borderWidth: 1,
     padding: spacing[4],
     gap: spacing[3],
   },
-  overviewTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[3] },
+  overviewTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3] },
+  netBadge: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { fontSize: 12, fontWeight: '500', marginBottom: spacing[1] },
   netAmount: { fontSize: 26, fontWeight: '700' },
   converted: { fontSize: 12, fontWeight: '600' },
@@ -1220,8 +1229,9 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     paddingVertical: spacing[4],
     borderRadius: radius.md,
+    borderWidth: 1,
   },
-  analysisBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  analysisBtnText: { fontSize: 12, fontWeight: '600' },
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1265,12 +1275,15 @@ const styles = StyleSheet.create({
     right: spacing[6],
     width: 56,
     height: 56,
-    borderRadius: radius.full,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowOpacity: 0.2,
+    elevation: 5,
+    shadowOpacity: 0.18,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
   },
 })
+

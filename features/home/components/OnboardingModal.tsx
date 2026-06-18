@@ -79,11 +79,13 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
                         styles.languageOption,
                         {
                           borderColor: language === lang ? theme.brand.primary : theme.border.subtle,
-                          backgroundColor: language === lang ? theme.bg.elevated : theme.bg.secondary,
+                          backgroundColor: language === lang ? theme.brand.primary : theme.bg.secondary,
                         },
                       ]}
                     >
-                      <Text style={[styles.languageText, { color: theme.text.primary }]}> {t[`lang_${lang}` as keyof typeof t]} </Text>
+                      <Text style={[styles.languageText, { color: language === lang ? '#fff' : theme.text.primary }]}>
+                        {t[`lang_${lang}` as keyof typeof t]}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -132,7 +134,7 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
             )}
           </ScrollView>
 
-          <View style={styles.footer}>
+          <View style={[styles.footer, { borderTopColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
             {step > 0 ? (
               <Pressable onPress={handleBack} style={[styles.footerButton, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
                 <Text style={[styles.footerText, { color: theme.text.primary }]}>{t.onboarding_back}</Text>
@@ -156,7 +158,7 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(13,18,23,0.72)',
     justifyContent: 'center',
     padding: spacing[4],
   },
@@ -167,22 +169,23 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   content: {
-    padding: spacing[4],
-    gap: spacing[3],
+    padding: spacing[5],
+    gap: spacing[4],
   },
   heading: {
-    fontSize: 22,
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: '700',
   },
   step: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
   section: {
     gap: spacing[3],
   },
   title: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
   },
   description: {
@@ -199,11 +202,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    minWidth: 100,
+    paddingHorizontal: spacing[3],
+    minWidth: 96,
+    flexGrow: 1,
   },
   languageText: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
     textAlign: 'center',
   },
   card: {

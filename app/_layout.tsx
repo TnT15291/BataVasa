@@ -2,7 +2,6 @@ import 'react-native-gesture-handler'
 import * as WebBrowser from 'expo-web-browser'
 
 WebBrowser.maybeCompleteAuthSession()
-import * as Sentry from '@sentry/react-native'
 import { useEffect, useRef, useState } from 'react'
 import { AppState, View, Text, ActivityIndicator, StyleSheet, LogBox } from 'react-native'
 import { Stack } from 'expo-router'
@@ -22,15 +21,9 @@ import { useGoogleAuthCallback } from '@features/auth/useGoogleAuthCallback'
 import { startSyncWorker, drainQueue } from '@services/sync'
 import { BiometricLockScreen } from '@/components/BiometricLockScreen'
 import { ToastHost } from '@/components/Toast'
+import { initSentry } from '@services/sentry'
 
-const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
-if (SENTRY_DSN) {
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    environment: __DEV__ ? 'development' : 'production',
-    tracesSampleRate: __DEV__ ? 0 : 0.2,
-  })
-}
+initSentry()
 
 if (__DEV__) {
   LogBox.ignoreLogs([
@@ -177,6 +170,7 @@ export default function RootLayout() {
           <Stack.Screen name="insights" options={{ title: t.nav_insights }} />
           <Stack.Screen name="reports" options={{ title: t.nav_reports }} />
           <Stack.Screen name="chat" options={{ title: t.nav_chat }} />
+          <Stack.Screen name="batavasa" options={{ title: 'Hỏi BataVasa' }} />
           <Stack.Screen name="categories" options={{ title: t.nav_categories }} />
           <Stack.Screen name="category" options={{ title: t.new_category }} />
           <Stack.Screen name="debts" options={{ title: t.debt_book }} />

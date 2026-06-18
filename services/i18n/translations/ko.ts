@@ -2,6 +2,7 @@ import type { Translations } from './vi'
 
 export const ko: Translations = {
   nav_home: '홈',
+  nav_modules: 'Modules',
   nav_finance: '재정',
   nav_settings: '설정',
   nav_new_transaction: '새 거래',
@@ -732,4 +733,19 @@ export const ko: Translations = {
   field_counterparty: '상대방 이름',
   field_title: '제목',
   field_target: '반복 횟수',
+  command_placeholder: 'Ask BataVasa quickly',
+  today_priority: 'Today Focus',
+  today_signals: 'Today Signals',
+  ai_insight: 'AI Insight',
+  view_all: 'View all',
+  on_track: 'On Track',
+  top_priority: 'Top Priority',
+  quick_capture: 'Capture',
+  quick_assistant: 'Assistant',
+  quick_reports: 'Reports',
+  quick_settings: 'Settings',
+  tag_personal: 'Personal',
+  home_ai_tip_review: 'You have {{count}} items to review. Ask the assistant what to handle first today.',
+  home_ai_tip_habits: 'You have completed {{done}}/{{total}} habits today. Ask the assistant how to keep the streak.',
+  home_ai_tip_empty: 'Tip: try coffee 35k, drink water at 9, or write one journal line. BataVasa will classify it.',
 }

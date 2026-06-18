@@ -56,6 +56,11 @@ type AuthState = {
   // the other via get(); not meant to be invoked directly by UI.
   signInWithGoogleNative: () => Promise<{ ok: boolean }>
   signInWithGoogleWeb: () => Promise<{ ok: boolean }>
+  // Finish the OAuth web flow from a redirect URL — used by the inline web flow
+  // (iOS, where openAuthSessionAsync returns the URL) and by the Android deep-link
+  // handler (useGoogleAuthCallback), where Chrome Custom Tabs fire the redirect as
+  // a new app intent. Handles both implicit (hash tokens) and PKCE (?code=) links.
+  completeGoogleSignIn: (url: string) => Promise<{ ok: boolean }>
   resetPassword: (email: string) => Promise<{ ok: boolean }>
   // Recovery link (implicit flow) — tokens come directly in the URL hash.
   enterRecovery: (accessToken: string, refreshToken: string) => Promise<{ ok: boolean }>
@@ -214,31 +219,72 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
       if (result.type !== 'success') {
+        // Dismissed/cancelled. On Android the redirect may instead arrive as a
+        // deep link handled by useGoogleAuthCallback → completeGoogleSignIn.
         set({ busy: false })
         return { ok: false }
       }
-      // Parse code from redirect URL — works for both query (?code=) and hash (#code=)
-      const hashIndex = result.url.indexOf('#')
-      const queryIndex = result.url.indexOf('?')
-      const paramStr = hashIndex >= 0 ? result.url.slice(hashIndex + 1)
-        : queryIndex >= 0 ? result.url.slice(queryIndex + 1)
-        : ''
-      const params = new URLSearchParams(paramStr)
-      const code = params.get('code')
-      if (!code) {
-        set({ busy: false, error: getTranslations().ai_error })
-        return { ok: false }
-      }
-      const { error: exchangeError } = await client.auth.exchangeCodeForSession(code)
-      if (exchangeError) {
-        set({ busy: false, error: localizeAuthError(exchangeError, getTranslations()) })
-        return { ok: false }
-      }
-      track('auth_login')
-      set({ busy: false })
-      return { ok: true }
+      return get().completeGoogleSignIn(result.url)
     } catch (e) {
       logger.error(MODULE, 'signInWithGoogleWeb failed', { error: String(e) })
+      set({ busy: false, error: String(e) })
+      return { ok: false }
+    }
+  },
+
+  async completeGoogleSignIn(url) {
+    const client = supabase
+    if (!client) return { ok: false }
+    set({ busy: true, error: null })
+    try {
+      // Tokens/code may live in the hash (implicit flow — supabase-js default) or
+      // the query string (PKCE). Read whichever the redirect carries.
+      const hashIndex = url.indexOf('#')
+      const queryIndex = url.indexOf('?')
+      const paramStr = hashIndex >= 0 ? url.slice(hashIndex + 1)
+        : queryIndex >= 0 ? url.slice(queryIndex + 1)
+        : ''
+      const params = new URLSearchParams(paramStr)
+
+      const errorDescription = params.get('error_description') ?? params.get('error')
+      if (errorDescription) {
+        set({ busy: false, error: localizeAuthError({ message: errorDescription }, getTranslations()) })
+        return { ok: false }
+      }
+
+      // Implicit flow: tokens delivered directly → set the session.
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      if (accessToken && refreshToken) {
+        const { error } = await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        if (error) {
+          set({ busy: false, error: localizeAuthError(error, getTranslations()) })
+          return { ok: false }
+        }
+        track('auth_login')
+        set({ busy: false })
+        return { ok: true }
+      }
+
+      // PKCE flow: a one-time code to exchange for a session.
+      const code = params.get('code')
+      if (code) {
+        const { error } = await client.auth.exchangeCodeForSession(code)
+        if (error) {
+          set({ busy: false, error: localizeAuthError(error, getTranslations()) })
+          return { ok: false }
+        }
+        track('auth_login')
+        set({ busy: false })
+        return { ok: true }
+      }
+
+      // Neither tokens nor code → misconfigured redirect.
+      logger.warn(MODULE, 'completeGoogleSignIn: no tokens or code in redirect')
+      set({ busy: false, error: getTranslations().auth_error_oauth_config })
+      return { ok: false }
+    } catch (e) {
+      logger.error(MODULE, 'completeGoogleSignIn failed', { error: String(e) })
       set({ busy: false, error: String(e) })
       return { ok: false }
     }

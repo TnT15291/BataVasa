@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   itemIcon: {
     width: 34,
     height: 34,
-    borderRadius: radius.full,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },

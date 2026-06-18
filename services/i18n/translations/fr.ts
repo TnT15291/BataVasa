@@ -2,6 +2,7 @@ import type { Translations } from './vi'
 
 export const fr: Translations = {
   nav_home: 'Accueil',
+  nav_modules: 'Modules',
   nav_finance: 'Finances',
   nav_settings: 'Paramètres',
   nav_new_transaction: 'Nouvelle transaction',
@@ -734,4 +735,19 @@ export const fr: Translations = {
   field_counterparty: 'nom de la personne',
   field_title: 'titre',
   field_target: 'nombre de répétitions',
+  command_placeholder: 'Demander vite à BataVasa',
+  today_priority: 'Priorité du jour',
+  today_signals: 'Signaux du jour',
+  ai_insight: 'Aperçu IA',
+  view_all: 'Tout voir',
+  on_track: 'Sur la bonne voie',
+  top_priority: 'Priorité haute',
+  quick_capture: 'Capturer',
+  quick_assistant: 'Assistant',
+  quick_reports: 'Rapports',
+  quick_settings: 'Paramètres',
+  tag_personal: 'Personnel',
+  home_ai_tip_review: 'Vous avez {{count}} éléments à revoir. Demandez à l assistant quoi traiter en premier aujourd hui.',
+  home_ai_tip_habits: 'Vous avez terminé {{done}}/{{total}} habitudes aujourd hui. Demandez à l assistant comment garder le rythme.',
+  home_ai_tip_empty: 'Astuce : essayez café 35k, boire de l eau à 9h, ou une ligne de journal. BataVasa classera l entrée.',
 }

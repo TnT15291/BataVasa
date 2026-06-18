@@ -2,6 +2,7 @@ import type { Translations } from './vi'
 
 export const zh: Translations = {
   nav_home: '首页',
+  nav_modules: 'Modules',
   nav_finance: '财务',
   nav_settings: '设置',
   nav_new_transaction: '新交易',
@@ -734,4 +735,19 @@ export const zh: Translations = {
   field_counterparty: '对方姓名',
   field_title: '标题',
   field_target: '重复次数',
+  command_placeholder: 'Ask BataVasa quickly',
+  today_priority: 'Today Focus',
+  today_signals: 'Today Signals',
+  ai_insight: 'AI Insight',
+  view_all: 'View all',
+  on_track: 'On Track',
+  top_priority: 'Top Priority',
+  quick_capture: 'Capture',
+  quick_assistant: 'Assistant',
+  quick_reports: 'Reports',
+  quick_settings: 'Settings',
+  tag_personal: 'Personal',
+  home_ai_tip_review: 'You have {{count}} items to review. Ask the assistant what to handle first today.',
+  home_ai_tip_habits: 'You have completed {{done}}/{{total}} habits today. Ask the assistant how to keep the streak.',
+  home_ai_tip_empty: 'Tip: try coffee 35k, drink water at 9, or write one journal line. BataVasa will classify it.',
 }

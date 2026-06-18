@@ -1,6 +1,12 @@
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import { logger } from './logger'
+import { useSettingsStore } from '@store/settingsStore'
+
+/** User-level master switch (Settings → Privacy → Notifications). */
+function notificationsEnabled(): boolean {
+  return useSettingsStore.getState().notificationAccess
+}
 
 type ReminderPriority = 'low' | 'medium' | 'high'
 
@@ -63,6 +69,7 @@ export async function scheduleReminderNotification(
   priority: ReminderPriority = 'medium'
 ): Promise<string | null> {
   try {
+    if (!notificationsEnabled()) return null
     const granted = await requestNotificationPermission()
     if (!granted) return null
     if (triggerDate <= new Date()) return null
@@ -129,6 +136,7 @@ export async function scheduleHabitNotifications(
 ): Promise<void> {
   if (times.length === 0) return
   try {
+    if (!notificationsEnabled()) return
     const granted = await requestNotificationPermission()
     if (!granted) return
     await ensureHabitsChannel()

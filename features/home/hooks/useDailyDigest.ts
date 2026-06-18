@@ -33,6 +33,8 @@ export type ReviewInboxItem = {
   subtitleKey: 'financeReview' | 'taskOverdue' | 'taskPriority' | 'taskSchedule' | 'habitPending' | 'journalImportant'
   count: number
   progressText?: string
+  /** ISO timestamp of the underlying item, for relative-time meta on the row. */
+  at?: string
 }
 
 export type DailyDigestData = {
@@ -149,6 +151,7 @@ export function useDailyDigest(): DailyDigestData {
         severity: 'high',
         subtitleKey: 'financeReview',
         count: reviewTxs.length,
+        at: first.occurred_at,
       })
     }
 
@@ -173,6 +176,7 @@ export function useDailyDigest(): DailyDigestData {
         severity: 'high',
         subtitleKey: 'taskOverdue',
         count: overdueReminders.length,
+        at: overdueReminders[0].remind_at,
       })
     } else if (highPriorityToday.length > 0) {
       items.push({
@@ -183,6 +187,7 @@ export function useDailyDigest(): DailyDigestData {
         severity: 'medium',
         subtitleKey: 'taskPriority',
         count: highPriorityToday.length,
+        at: highPriorityToday[0].remind_at,
       })
     }
 
@@ -195,6 +200,7 @@ export function useDailyDigest(): DailyDigestData {
         severity: 'medium',
         subtitleKey: 'taskSchedule',
         count: inboxReminders.length,
+        at: inboxReminders[0].created_at,
       })
     }
 
@@ -234,6 +240,7 @@ export function useDailyDigest(): DailyDigestData {
         severity: 'low',
         subtitleKey: 'journalImportant',
         count: importantJournals.length,
+        at: importantJournals[0].occurred_at,
       })
     }
 

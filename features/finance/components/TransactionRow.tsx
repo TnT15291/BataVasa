@@ -6,6 +6,7 @@ import { translateCategoryName } from '../i18n'
 import { useTranslation } from '@services/i18n'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 type Props = {
   tx: Transaction
@@ -42,8 +43,8 @@ export function TransactionRow({ tx, category, onPress }: Props) {
         { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: (category?.color ?? theme.brand.primary) + '20' }]}>
-        <Text style={[styles.icon, { color: category?.color ?? theme.brand.primary }]}>
+      <View style={[styles.iconWrap, { backgroundColor: category?.color ?? MODULE_COLORS.finance }]}>
+        <Text style={styles.icon}>
           {displayName.slice(0, 1).toUpperCase()}
         </Text>
       </View>
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  icon: { fontWeight: '700', fontSize: 16 },
+  icon: { color: '#fff', fontWeight: '800', fontSize: 16 },
   middle: { flex: 1 },
   title: { fontSize: 15, fontWeight: '600' },
   sub: { fontSize: 12, marginTop: 2 },

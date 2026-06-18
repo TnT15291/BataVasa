@@ -16,6 +16,8 @@ type SettingsState = {
   themeName: ThemeName
   aiProvider: AIProvider
   locationAccess: boolean
+  /** Allow BataVasa to send reminder/habit notifications. Off = schedule nothing. */
+  notificationAccess: boolean
   aiAutoConfirm: boolean
   syncFinance: boolean
   syncReminders: boolean
@@ -40,6 +42,7 @@ type SettingsState = {
   setThemeName: (t: ThemeName) => Promise<void>
   setAIProvider: (p: AIProvider) => Promise<void>
   setLocationAccess: (allowed: boolean) => Promise<void>
+  setNotificationAccess: (allowed: boolean) => Promise<void>
   setAIAutoConfirm: (enabled: boolean) => Promise<void>
   setSyncFinance: (enabled: boolean) => Promise<void>
   setSyncReminders: (enabled: boolean) => Promise<void>
@@ -66,6 +69,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   themeName: 'default',
   aiProvider: 'openai',
   locationAccess: false,
+  notificationAccess: true,
   aiAutoConfirm: true,
   syncFinance: true,
   syncReminders: true,
@@ -91,6 +95,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       themeName: (all['theme_name'] as ThemeName) ?? 'default',
       aiProvider: (all['ai_provider'] as AIProvider) ?? 'openai',
       locationAccess: all['location_access'] === 'true',
+      // default true — only false if explicitly stored (so reminders notify by default)
+      notificationAccess: all['notification_access'] !== 'false',
       // default true — only false if explicitly stored
       aiAutoConfirm: all['ai_auto_confirm'] !== 'false',
       syncFinance: all['sync_finance'] !== 'false',
@@ -150,6 +156,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   async setLocationAccess(allowed) {
     set({ locationAccess: allowed })
     await db.setSetting('location_access', allowed ? 'true' : 'false')
+  },
+
+  async setNotificationAccess(allowed) {
+    set({ notificationAccess: allowed })
+    await db.setSetting('notification_access', allowed ? 'true' : 'false')
   },
 
   async setAIAutoConfirm(enabled) {

@@ -15,6 +15,8 @@ import { MODULE_COLORS } from '@design/moduleColors'
 import * as Haptics from 'expo-haptics'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AppHeader, ModuleOverview } from '@components/ui'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
@@ -26,6 +28,16 @@ import { getReminderEventTime, getReminderOccurrencesInRange, type ReminderOccur
 
 type ReminderFilter = 'all' | 'today' | 'important' | 'inbox'
 
+const GROUP_COLORS = {
+  inbox: MODULE_COLORS.finance,
+  overdue: '#D96C6C',
+  today: MODULE_COLORS.tasks,
+  next: MODULE_COLORS.habits,
+  done: '#6B7280',
+}
+
+const capitalizeFirst = (text: string) => text ? text.charAt(0).toUpperCase() + text.slice(1) : text
+
 function RecurrenceBadge({ recurrence }: { recurrence: Reminder['recurrence'] }) {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -36,9 +48,9 @@ function RecurrenceBadge({ recurrence }: { recurrence: Reminder['recurrence'] })
     monthly: t.recurrence_monthly,
   }
   return (
-    <View style={[styles.badge, { backgroundColor: theme.brand.primary + '22' }]}>
-      <Feather name="repeat" size={10} color={theme.brand.primary} />
-      <Text style={[styles.badgeText, { color: theme.brand.primary }]}>{labels[recurrence]}</Text>
+    <View style={[styles.badge, { backgroundColor: MODULE_COLORS.tasks + '22' }]}>
+      <Feather name="repeat" size={10} color={MODULE_COLORS.tasks} />
+      <Text style={[styles.badgeText, { color: MODULE_COLORS.tasks }]}>{labels[recurrence]}</Text>
     </View>
   )
 }
@@ -57,11 +69,13 @@ function PriorityBadge({ priority }: { priority: Reminder['priority'] }) {
   )
 }
 
-function ReminderRow({ reminder, onPress, onToggle, onSkip }: {
+function ReminderRow({ reminder, onPress, onToggle, onSkip, accent, compact }: {
   reminder: Reminder
   onPress: () => void
   onToggle: () => void
   onSkip: () => void
+  accent: string
+  compact?: boolean
 }) {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -73,7 +87,7 @@ function ReminderRow({ reminder, onPress, onToggle, onSkip }: {
   const now = new Date()
   const isPast = !isInbox && eventTime < now && !isDone
   const isToday = !isInbox && eventTime >= startOfDay(now) && eventTime <= endOfDay(now)
-  const statusColor = isDone ? theme.semantic.success : isPast ? theme.semantic.danger : isToday ? theme.brand.primary : MODULE_COLORS.tasks
+  const statusColor = isDone ? accent : isPast ? theme.semantic.danger : accent
   const canSkip = !isDone && !isInbox && reminder.recurrence !== 'none'
   const statusLabel = isDone ? t.reminder_completed : isInbox ? t.reminder_inbox : isPast ? t.reminder_past : isToday ? t.today : t.reminder_upcoming
   const dateStr = isInbox ? t.reminder_inbox : format(eventTime, isToday ? 'HH:mm' : 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
@@ -94,24 +108,24 @@ function ReminderRow({ reminder, onPress, onToggle, onSkip }: {
       <Pressable
         onPress={onToggle}
         style={[styles.checkbox, {
-          borderColor: isDone ? theme.semantic.success : statusColor,
-          backgroundColor: isDone ? theme.semantic.success : statusColor + '12',
+          borderColor: isDone ? accent : theme.border.strong,
+          backgroundColor: isDone ? accent : 'transparent',
         }]}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isDone }}
         hitSlop={12}
       >
-        {isDone && <Feather name="check" size={12} color="#fff" />}
+        {isDone ? <Feather name="check" size={12} color="#fff" /> : null}
       </Pressable>
 
       <View style={styles.rowContent}>
         <View style={styles.rowTop}>
           <Text
             style={[styles.rowTitle, { color: isDone ? theme.text.muted : theme.text.primary },
-              isDone && styles.strikethrough]}
+              compact && styles.rowTitleCompact]}
             numberOfLines={1}
           >
-            {reminder.title}
+            {capitalizeFirst(reminder.title)}
           </Text>
           <PriorityBadge priority={reminder.priority ?? 'medium'} />
           <RecurrenceBadge recurrence={reminder.recurrence} />
@@ -124,7 +138,7 @@ function ReminderRow({ reminder, onPress, onToggle, onSkip }: {
           <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
         </View>
         {adv > 0 && !isInbox && (
-          <Text style={[styles.rowAdvance, { color: theme.brand.primary }]}>
+          <Text style={[styles.rowAdvance, { color: accent }]}>
             {adv < 60 ? `${adv}m` : adv < 1440 ? `${adv / 60}h` : `${adv / 1440}d`} {t.remind_before.toLowerCase()}
           </Text>
         )}
@@ -242,7 +256,7 @@ function ReminderCalendarView({
           const dotColor = dayIsPast && hasIncomplete
             ? theme.semantic.danger
             : hasIncomplete
-            ? theme.brand.primary
+            ? MODULE_COLORS.tasks
             : theme.semantic.success
           return (
             <Pressable
@@ -251,14 +265,14 @@ function ReminderCalendarView({
               style={[
                 styles.calCell,
                 { width: CAL_COL_W },
-                isSelected && { backgroundColor: theme.brand.primary, borderRadius: radius.full },
-                isToday && !isSelected && { backgroundColor: theme.brand.primary + '22', borderRadius: radius.full },
+                isSelected && { backgroundColor: MODULE_COLORS.tasks, borderRadius: radius.full },
+                isToday && !isSelected && { backgroundColor: MODULE_COLORS.tasks + '22', borderRadius: radius.full },
               ]}
             >
               <Text
                 style={[
                   styles.calDayNum,
-                  { color: isSelected ? '#fff' : isToday ? theme.brand.primary : theme.text.primary },
+                  { color: isSelected ? '#fff' : isToday ? MODULE_COLORS.tasks : theme.text.primary },
                   (isToday || isSelected) && styles.calDayNumBold,
                 ]}
               >
@@ -285,7 +299,7 @@ function ReminderCalendarView({
               const isDone = r.completed === 1
               const time = occurrence.eventAt
               const isPast = !isDone && time < today
-              const dc = isDone ? theme.semantic.success : isPast ? theme.semantic.danger : theme.brand.primary
+              const dc = isDone ? theme.semantic.success : isPast ? theme.semantic.danger : MODULE_COLORS.tasks
               return (
                 <Pressable
                   key={r.id}
@@ -320,6 +334,7 @@ export function ReminderListScreen() {
   useRemindersBootstrap()
   const theme = useTheme()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const reminders = useReminders()
   const { updateReminder, skipReminder, deleteReminder, restoreReminder } = useReminderActions()
@@ -389,13 +404,16 @@ export function ReminderListScreen() {
     skipReminder(r.id)
   }
 
-  const renderGroup = (title: string, items: Reminder[]) => {
+  const renderGroup = (title: string, items: Reminder[], accent: string, compact = false) => {
     if (items.length === 0) return null
     return (
       <View key={title} style={styles.group}>
         <View style={styles.groupTitleRow}>
-          <Text style={[styles.groupHeader, { color: theme.text.primary }]}>{title}</Text>
-          <Text style={[styles.groupCount, { color: theme.text.muted }]}>{items.length}</Text>
+          <View style={styles.groupTitleLeft}>
+            <View style={[styles.groupDot, { backgroundColor: accent }]} />
+            <Text style={[styles.groupHeader, { color: theme.text.primary }]}>{capitalizeFirst(title)}</Text>
+          </View>
+          <Text style={[styles.groupCount, { color: accent, backgroundColor: accent + '14' }]}>{items.length}</Text>
         </View>
 
         <View style={styles.listStack}>
@@ -439,6 +457,8 @@ export function ReminderListScreen() {
                 onPress={() => router.push({ pathname: '/reminder', params: { id: r.id } })}
                 onToggle={() => toggleDone(r)}
                 onSkip={() => skip(r)}
+                accent={accent}
+                compact={compact}
               />
             </ReanimatedSwipeable>
               )
@@ -451,69 +471,42 @@ export function ReminderListScreen() {
 
   return (
     <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.hero, { backgroundColor: MODULE_COLORS.tasks + '14', borderColor: MODULE_COLORS.tasks + '44' }]}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroKicker, { color: theme.text.muted }]}>{t.nav_reminders}</Text>
-              <Text style={[styles.heroTitle, { color: theme.text.primary }]}>
-                {nextReminder ? nextReminder.title : t.reminder_today_none}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: theme.text.muted }]}>
-                {nextReminder
-                  ? format(new Date(new Date(nextReminder.remind_at).getTime() + (nextReminder.advance_minutes ?? 0) * 60000), 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
-                  : t.reminder_add_hint}
-              </Text>
-            </View>
-            <View style={[styles.heroIcon, { backgroundColor: MODULE_COLORS.tasks + '1F' }]}>
-              <Feather name="bell" size={28} color={MODULE_COLORS.tasks} />
-            </View>
-          </View>
-          <Pressable
-            onPress={() => setShowDetails((v) => !v)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showDetails }}
-            style={[styles.detailToggle, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}
-          >
-            <Text style={[styles.detailToggleText, { color: MODULE_COLORS.tasks }]}>
-              {showDetails ? t.home_hide_details : t.home_show_details}
-            </Text>
-            <Feather name={showDetails ? 'chevron-up' : 'chevron-down'} size={16} color={theme.text.muted} />
-          </Pressable>
-          {showDetails ? (
-          <View style={styles.statGrid}>
-            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.statValue, { color: theme.semantic.danger }]}>{overdue.length}</Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.reminder_past}</Text>
-            </View>
-            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.statValue, { color: theme.brand.primary }]}>{today.length}</Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.today}</Text>
-            </View>
-            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.statValue, { color: theme.text.primary }]}>{activeCount}</Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.all_period}</Text>
-            </View>
-            <View style={[styles.statChip, { backgroundColor: theme.bg.primary, borderColor: theme.border.subtle }]}>
-              <Text style={[styles.statValue, { color: theme.semantic.success }]}>{completedCount}</Text>
-              <Text style={[styles.statLabel, { color: theme.text.muted }]}>{t.reminder_completed}</Text>
-            </View>
-          </View>
-          ) : null}
-        </View>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing[2] }]}>
+        <AppHeader subtitle={t.nav_reminders} onSettings={() => router.push('/settings')} />
+        <ModuleOverview
+          eyebrow={t.nav_reminders}
+          value={nextReminder ? nextReminder.title : t.reminder_today_none}
+          subtitle={nextReminder
+            ? format(new Date(new Date(nextReminder.remind_at).getTime() + (nextReminder.advance_minutes ?? 0) * 60000), 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
+            : t.reminder_add_hint}
+          icon="bell"
+          accent={MODULE_COLORS.tasks}
+          stats={[
+            { key: 'overdue', label: t.reminder_past, value: String(overdue.length), color: theme.semantic.danger },
+            { key: 'today', label: t.today, value: String(today.length), color: MODULE_COLORS.tasks },
+            { key: 'active', label: t.all_period, value: String(activeCount) },
+            { key: 'done', label: t.reminder_completed, value: String(completedCount), color: theme.semantic.success },
+          ]}
+        />
 
         <View style={styles.analysisRow}>
           {[
             { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/reminders-report', bg: MODULE_COLORS.tasks },
-            { label: t.nav_insights, icon: 'cpu' as const, route: '/reminders-insights', bg: theme.brand.primary },
+            { label: t.nav_insights, icon: 'cpu' as const, route: '/reminders-insights', bg: MODULE_COLORS.analysis },
           ].map((item) => (
             <Pressable
               key={item.route}
               onPress={() => router.push(item.route as any)}
-              style={({ pressed }) => [styles.analysisBtn, { backgroundColor: pressed ? item.bg + 'CC' : item.bg }]}
+              style={({ pressed }) => [
+                styles.analysisBtn,
+                {
+                  backgroundColor: pressed ? item.bg + '12' : theme.bg.elevated,
+                  borderColor: item.bg + '66',
+                },
+              ]}
             >
-              <Feather name={item.icon} size={17} color="#fff" />
-              <Text style={styles.analysisBtnText} numberOfLines={1}>{item.label}</Text>
+              <Feather name={item.icon} size={16} color={item.bg} />
+              <Text style={[styles.analysisBtnText, { color: item.bg }]} numberOfLines={1}>{item.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -526,10 +519,10 @@ export function ReminderListScreen() {
               <Pressable
                 key={mode}
                 onPress={() => setViewMode(mode)}
-                style={[styles.viewToggleBtn, { backgroundColor: isActive ? theme.brand.primary : 'transparent' }]}
+                style={[styles.viewToggleBtn, { backgroundColor: isActive ? MODULE_COLORS.tasks + '18' : 'transparent' }]}
               >
-                <Feather name={mode === 'list' ? 'list' : 'calendar'} size={14} color={isActive ? '#fff' : theme.text.secondary} />
-                <Text style={[styles.viewToggleBtnText, { color: isActive ? '#fff' : theme.text.secondary }]}>{label}</Text>
+                <Feather name={mode === 'list' ? 'list' : 'calendar'} size={14} color={isActive ? MODULE_COLORS.tasks : theme.text.secondary} />
+                <Text style={[styles.viewToggleBtnText, { color: isActive ? MODULE_COLORS.tasks : theme.text.secondary }]}>{label}</Text>
               </Pressable>
             )
           })}
@@ -548,9 +541,9 @@ export function ReminderListScreen() {
                 <Pressable
                   key={item.key}
                   onPress={() => setActiveFilter(item.key)}
-                  style={[styles.filterBtn, { backgroundColor: active ? theme.brand.primary : 'transparent' }]}
+                  style={[styles.filterBtn, { backgroundColor: active ? MODULE_COLORS.tasks + '18' : 'transparent' }]}
                 >
-                  <Text style={[styles.filterText, { color: active ? '#fff' : theme.text.secondary }]} numberOfLines={1}>{item.label}</Text>
+                  <Text style={[styles.filterText, { color: active ? MODULE_COLORS.tasks : theme.text.secondary }]} numberOfLines={1}>{item.label}</Text>
                 </Pressable>
               )
             })}
@@ -571,8 +564,8 @@ export function ReminderListScreen() {
           />
         ) : reminders.length === 0 ? (
           <View style={styles.empty}>
-            <View style={[styles.emptyIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
-              <Feather name="bell" size={34} color={theme.brand.primary} />
+            <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.tasks + '1F' }]}>
+              <Feather name="bell" size={34} color={MODULE_COLORS.tasks} />
             </View>
             <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_reminders}</Text>
             <Text style={[styles.emptyMsg, { color: theme.text.muted }]}>{t.no_reminders_msg}</Text>
@@ -585,11 +578,11 @@ export function ReminderListScreen() {
           </View>
         ) : (
           <>
-            {activeFilter === 'all' ? renderGroup(t.reminder_inbox, inbox) : null}
-            {renderGroup(t.reminder_past, overdue)}
-            {renderGroup(t.today, today)}
-            {renderGroup(t.reminder_next7days, next7Days)}
-            {activeFilter === 'all' ? renderGroup(t.reminder_completed, completed) : null}
+            {activeFilter === 'all' ? renderGroup(t.reminder_inbox, inbox, GROUP_COLORS.inbox) : null}
+            {renderGroup(t.reminder_past, overdue, GROUP_COLORS.overdue)}
+            {renderGroup(t.today, today, GROUP_COLORS.today)}
+            {renderGroup(t.reminder_next7days, next7Days, GROUP_COLORS.next)}
+            {activeFilter === 'all' ? renderGroup(t.reminder_completed, completed, GROUP_COLORS.done, true) : null}
           </>
         )}
       </ScrollView>
@@ -612,6 +605,8 @@ export function ReminderListScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
+  radarStats: { gap: spacing[2] },
+  radarMetricRow: { flexDirection: 'row', gap: spacing[2] },
   hero: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -662,20 +657,22 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13, fontWeight: '600' },
   group: { gap: spacing[2] },
   groupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  groupHeader: { fontSize: 15, fontWeight: '600' },
-  groupCount: { fontSize: 12, fontWeight: '700' },
+  groupTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  groupDot: { width: 8, height: 8, borderRadius: radius.full },
+  groupHeader: { fontSize: 13, fontWeight: '600' },
+  groupCount: { minWidth: 22, overflow: 'hidden', borderRadius: radius.full, paddingHorizontal: 7, paddingVertical: 2, textAlign: 'center', fontSize: 11, fontWeight: '700' },
   listStack: { gap: spacing[2] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     borderWidth: 1,
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: spacing[3],
     paddingVertical: spacing[3],
     gap: spacing[3],
     overflow: 'hidden',
   },
-  checkbox: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  checkbox: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   skipBtn: {
     width: 36,
     height: 36,
@@ -686,7 +683,8 @@ const styles = StyleSheet.create({
   },
   rowContent: { flex: 1, gap: spacing[1] },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  rowTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
+  rowTitle: { fontSize: 14, fontWeight: '600', flex: 1 },
+  rowTitleCompact: { fontSize: 13, fontWeight: '500' },
   strikethrough: { textDecorationLine: 'line-through' },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexWrap: 'wrap' },
   timePill: {
@@ -697,7 +695,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: radius.full,
   },
-  timePillText: { fontSize: 12, fontWeight: '700' },
+  timePillText: { fontSize: 11, fontWeight: '600' },
   statusText: { fontSize: 12, fontWeight: '700' },
   rowAdvance: { fontSize: 12, fontWeight: '500' },
   rowNote: { fontSize: 12 },
@@ -719,12 +717,13 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     paddingVertical: spacing[4],
     borderRadius: radius.md,
+    borderWidth: 1,
   },
-  analysisBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  analysisBtnText: { fontSize: 12, fontWeight: '600' },
   fab: {
     position: 'absolute', right: spacing[6],
-    width: 56, height: 56, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center',
-    elevation: 4, shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    width: 56, height: 56, borderRadius: radius.lg, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    elevation: 5, shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
   viewToggle: {
     flexDirection: 'row',

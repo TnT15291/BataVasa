@@ -1,294 +1,151 @@
-import { Tabs, useRouter } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Tabs } from 'expo-router'
+import { StyleSheet, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withSequence,
-  withTiming,
-  ReduceMotion,
-} from 'react-native-reanimated'
-import * as Haptics from 'expo-haptics'
 import { useTheme } from '@design/useTheme'
-import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
-import { ModulePicker } from '@features/home/components/ModulePicker'
+import { MODULE_COLORS } from '@design/moduleColors'
+import { BrandMark } from '@components/ui'
 
 type IconName = keyof typeof Feather.glyphMap
 
-function AnimatedTabIcon({ name, color, focused }: { name: IconName; color: string; focused: boolean }) {
-  const scale = useSharedValue(1)
-  const prevFocused = useRef(false)
-
-  useEffect(() => {
-    if (focused && !prevFocused.current) {
-      scale.value = withSequence(
-        withSpring(1.2, { damping: 6, stiffness: 320, reduceMotion: ReduceMotion.System }),
-        withSpring(1,   { damping: 12, stiffness: 240, reduceMotion: ReduceMotion.System })
-      )
-    }
-    prevFocused.current = focused
-  }, [focused, scale])
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }))
-
-  return (
-    <Animated.View style={animStyle}>
-      <Feather name={name} size={22} color={color} />
-    </Animated.View>
-  )
-}
-
-// Center FAB — tap: home screen | long-press: module picker
-function LauncherButton({
-  onOpenPicker,
-  onPress,
-  label,
-  hint,
+function ModuleTabIcon({
+  name,
+  color,
+  focused,
+  home,
 }: {
-  onOpenPicker: () => void
-  onPress: () => void
-  label: string
-  hint: string
+  name: IconName
+  color: string
+  focused: boolean
+  home?: boolean
 }) {
-  const theme       = useTheme()
-  const mountScale  = useSharedValue(0.7)
-  const pressScale  = useSharedValue(1)
-  const rotation    = useSharedValue(0)
-  const ringScale   = useSharedValue(1)
-  const ringOpacity = useSharedValue(0)
-  const longPressed = useRef(false)
-
-  useEffect(() => {
-    mountScale.value = withSpring(1, { damping: 10, stiffness: 180, reduceMotion: ReduceMotion.System })
-  }, [mountScale])
-
-  const buttonStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: mountScale.value * pressScale.value },
-      { rotate: `${rotation.value}deg` },
-    ],
-  }))
-
-  const chargeRingStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: ringScale.value }],
-    opacity: ringOpacity.value,
-  }))
-
-  const handlePressIn = () => {
-    longPressed.current   = false
-    pressScale.value      = withSpring(0.88, { damping: 18, stiffness: 480, reduceMotion: ReduceMotion.System })
-    ringOpacity.value     = withTiming(0.35, { duration: 90, reduceMotion: ReduceMotion.System })
-    ringScale.value       = withTiming(1.18, { duration: 180, reduceMotion: ReduceMotion.System })
-  }
-
-  const handlePressOut = () => {
-    if (longPressed.current) return
-    pressScale.value  = withSpring(1, { damping: 8, stiffness: 280, reduceMotion: ReduceMotion.System })
-    ringOpacity.value = withTiming(0, { duration: 160, reduceMotion: ReduceMotion.System })
-    ringScale.value   = withTiming(1, { duration: 160, reduceMotion: ReduceMotion.System })
-  }
-
-  const handleLongPress = () => {
-    longPressed.current = true
-    // Burst ring outward — confirms activation
-    ringScale.value   = withSpring(1.28, { damping: 16, stiffness: 220, reduceMotion: ReduceMotion.System })
-    ringOpacity.value = withTiming(0, { duration: 220, reduceMotion: ReduceMotion.System })
-    // Button pops then settles
-    pressScale.value  = withSequence(
-      withSpring(1.06, { damping: 8,  stiffness: 340, reduceMotion: ReduceMotion.System }),
-      withSpring(1.0,  { damping: 12, stiffness: 260, reduceMotion: ReduceMotion.System })
-    )
-    rotation.value = withSequence(
-      withSpring(18, { damping: 8,  stiffness: 260, reduceMotion: ReduceMotion.System }),
-      withSpring(0,  { damping: 10, stiffness: 220, reduceMotion: ReduceMotion.System })
-    )
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    onOpenPicker()
-  }
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onLongPress={handleLongPress}
-      delayLongPress={400}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-    >
-      <View style={styles.launcherOuter}>
-        <Animated.View
-          style={[styles.chargeRing, { borderColor: theme.brand.primary }, chargeRingStyle]}
-        />
-        <Animated.View
-          style={[
-            styles.launcherButton,
-            { backgroundColor: theme.brand.primary, borderColor: theme.bg.elevated },
-            buttonStyle,
-          ]}
-        >
-          <Feather name="grid" size={24} color="#fff" />
-        </Animated.View>
-        <Text style={[styles.launcherLabel, { color: theme.text.muted }]}>{label}</Text>
-      </View>
-    </Pressable>
-  )
-}
-
-function HeaderRight() {
-  const router = useRouter()
   const theme = useTheme()
+  if (home) {
+    const size = 40
+    return (
+      <View
+        style={[
+          styles.iconBadge,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: '#fff',
+            borderColor: focused ? theme.brand.primary : '#181B20',
+            borderWidth: focused ? 2.5 : 2,
+            shadowColor: theme.shadow.color,
+            shadowOpacity: focused ? 0.12 : 0.06,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 1 },
+            elevation: focused ? 2 : 1,
+          },
+        ]}
+      >
+        <BrandMark size={28} bg="#fff" glyph={focused ? theme.brand.primary : '#181B20'} />
+      </View>
+    )
+  }
+  // Module tabs: gray when inactive, colored tint circle when active
+  const size = 28
   return (
-    <View style={styles.headerRight}>
-      <Pressable onPress={() => router.push('/help')} hitSlop={8} style={styles.headerBtn}>
-        <Feather name="help-circle" size={22} color={theme.text.secondary} />
-      </Pressable>
-      <Pressable onPress={() => router.push('/settings')} hitSlop={8} style={styles.headerBtn}>
-        <Feather name="settings" size={22} color={theme.text.secondary} />
-      </Pressable>
+    <View
+      style={[
+        styles.iconBadge,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: focused ? color + '18' : 'transparent',
+        },
+      ]}
+    >
+      <Feather name={name} size={18} color={focused ? color : theme.text.muted} />
     </View>
   )
 }
 
 export default function TabsLayout() {
-  const router = useRouter()
   const theme = useTheme()
   const { t } = useTranslation()
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
-    <>
-      <Tabs
-        screenOptions={{
-          headerStyle: { backgroundColor: theme.bg.elevated },
-          headerTitleStyle: { color: theme.text.primary, fontWeight: '600', fontSize: 17 },
-          headerShadowVisible: false,
-          tabBarStyle: {
-            backgroundColor: theme.bg.elevated,
-            borderTopColor: theme.border.subtle,
-            borderTopWidth: StyleSheet.hairlineWidth,
-            minHeight: 62,
-            paddingBottom: 6,
-          },
-          tabBarActiveTintColor: theme.brand.primary,
-          tabBarInactiveTintColor: theme.text.muted,
-          tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: -2 },
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        headerStyle: { backgroundColor: theme.bg.primary },
+        headerTitleStyle: { color: theme.text.primary, fontWeight: '700', fontSize: 16 },
+        headerShadowVisible: false,
+        tabBarStyle: {
+          backgroundColor: theme.bg.elevated,
+          borderTopColor: theme.border.subtle,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          minHeight: 62,
+          paddingBottom: 5,
+          paddingTop: 5,
+        },
+        tabBarShowLabel: false,
+        tabBarActiveTintColor: theme.text.primary,
+        tabBarInactiveTintColor: theme.text.muted,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginTop: -2 },
+        tabBarItemStyle: { paddingVertical: 1 },
+      }}
+    >
+      <Tabs.Screen
+        name="habits"
+        options={{
+          title: t.habits,
+          tabBarLabel: t.habits,
+          tabBarActiveTintColor: MODULE_COLORS.habits,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name="check-circle" color={MODULE_COLORS.habits} focused={focused} />,
         }}
-      >
-        <Tabs.Screen
-          name="index"
-          options={{
-            href: null,
-            title: 'BataVasa',
-            headerRight: () => <HeaderRight />,
-          }}
-        />
-        <Tabs.Screen
-          name="habits"
-          options={{
-            title: t.habits,
-            tabBarLabel: t.nav_habits,
-            tabBarActiveTintColor: MODULE_COLORS.habits,
-            tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon name="check-circle" color={color} focused={focused} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="journals"
-          options={{
-            title: t.nav_journal,
-            tabBarLabel: t.nav_journal,
-            tabBarActiveTintColor: MODULE_COLORS.journal,
-            tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon name="book-open" color={color} focused={focused} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="launcher"
-          options={{
-            title: 'BataVasa',
-            tabBarLabel: '',
-            tabBarButton: () => (
-              <LauncherButton
-                onPress={() => router.navigate('/')}
-                onOpenPicker={() => setPickerOpen(true)}
-                label={t.nav_home}
-                hint={t.module_launcher_subtitle}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="reminders"
-          options={{
-            title: t.nav_reminders,
-            tabBarLabel: t.nav_reminders,
-            tabBarActiveTintColor: MODULE_COLORS.tasks,
-            tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon name="bell" color={color} focused={focused} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="finance"
-          options={{
-            title: t.nav_finance,
-            tabBarLabel: t.nav_finance,
-            tabBarActiveTintColor: MODULE_COLORS.finance,
-            tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon name="dollar-sign" color={color} focused={focused} />
-            ),
-          }}
-        />
-      </Tabs>
-      <ModulePicker
-        visible={pickerOpen}
-        onClose={() => setPickerOpen(false)}
       />
-    </>
+      <Tabs.Screen
+        name="journals"
+        options={{
+          title: t.nav_journal,
+          tabBarLabel: t.nav_journal,
+          tabBarActiveTintColor: MODULE_COLORS.journal,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name="book-open" color={MODULE_COLORS.journal} focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'BataVasa',
+          tabBarLabel: t.nav_home,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name="home" color="#181B20" focused={focused} home />,
+        }}
+      />
+      <Tabs.Screen
+        name="reminders"
+        options={{
+          title: t.nav_reminders,
+          tabBarLabel: t.nav_reminders,
+          tabBarActiveTintColor: MODULE_COLORS.tasks,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name="bell" color={MODULE_COLORS.tasks} focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="finance"
+        options={{
+          title: t.nav_finance,
+          tabBarLabel: t.nav_finance,
+          tabBarActiveTintColor: MODULE_COLORS.finance,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name="dollar-sign" color={MODULE_COLORS.finance} focused={focused} />,
+        }}
+      />
+
+      <Tabs.Screen name="modules" options={{ href: null }} />
+      <Tabs.Screen name="launcher" options={{ href: null }} />
+      <Tabs.Screen name="insights" options={{ href: null }} />
+      <Tabs.Screen name="you" options={{ href: null }} />
+    </Tabs>
   )
 }
 
 const styles = StyleSheet.create({
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14, marginRight: 4 },
-  headerBtn: { paddingHorizontal: 4 },
-  launcherOuter: {
-    width: 80,
-    height: 80,
+  iconBadge: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -20,
-    gap: 3,
-  },
-  launcherLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  chargeRing: {
-    position: 'absolute',
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    borderWidth: 1.5,
-  },
-  launcherButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    borderWidth: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOpacity: 0.24,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
   },
 })

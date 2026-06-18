@@ -2,6 +2,45 @@
 
 > Calm UI · fast interaction · low friction. See product principles in CLAUDE.md.
 
+## UI1 "Personal OS Console" — design rules (source of truth)
+
+Extracted from `UI test/UI1.png`. These govern **every module** (Finance, Habits,
+Journal, Reminders, Insights, Settings). Codified in `design/tokens.ts`,
+`design/themes.ts`, `design/moduleColors.ts`, and the primitives in
+`components/ui/` — compose screens from those, don't re-implement.
+
+- **Canvas:** near-white, flat, calm. Light `bg.primary` ≈ `#FBFBFC`, surfaces pure
+  white. Separate sections with **whitespace**, not heavy rules or nested cards.
+  Elevation is barely-there: hairline borders + spacing over drop shadows.
+- **Header (`AppHeader`):** circular brand mark + "BataVasa" + "AI Personal OS"
+  subtitle, ghost search/settings icons right. No shadow.
+- **Command bar (`CommandBar`) — identity element:** dark inverted "console"
+  surface (`theme.command`), monospace `>_` prompt, `⌘K` hint, mic. It launches the
+  assistant; the mic opens voice capture.
+- **Section header (`SectionHeader`):** small UPPERCASE tracked label + optional
+  count + optional right action ("View all"). A consistent *functional* list-section
+  system — not a marketing eyebrow.
+- **List row (`ListRow`):** tinted module-color icon chip · title · context subtitle
+  · trailing meta. Whole row taps to detail/edit (Cross-Module Rule 7).
+- **Status pill / chip (`StatusPill`, `Chip`):** full-round, tinted bg + bold colored
+  text for status ("On Track" = success); quiet neutral chips for tags.
+- **Signals timeline (`SignalsTimeline`):** one calm lane per module on a shared time
+  axis, module-colored dots, a "now" marker. Thin, never a heavy chart.
+- **AI insight (`AIInsightCard`):** "AI INSIGHT" label + one grounded sentence +
+  quiet rationale tags. Inline, never a modal.
+- **Quick actions (`QuickActionRow`):** evenly distributed ghost actions (Capture ·
+  Plan · Review · Sync) under a hairline rule.
+- **Module colors (`MODULE_COLORS`):** Finance = blue `#3B6FE0`, Habits = green
+  `#1F9D74`, Journal = amber `#E0892C`, Reminders = purple `#7A5AF0`, Analysis =
+  indigo `#5654D4`. Accent = action/selection/state only, never decoration.
+- **Type:** one sans for all UI + mono only for `>_` / `⌘K` / command hints. Fixed
+  scale, floor 12px, max weight 700. Section labels uppercase tracked 700.
+- **Shape (`radius`):** rows/cards 12–16 (`md`/`lg`), command bar `lg`, pills `full`.
+- **Motion:** 150–250ms ease-out, conveys state only (tab underline, now marker,
+  press feedback). Always honor reduced motion.
+- **Navigation (IA):** bottom nav Home · Modules · `[>_ command]` · Insights · You;
+  Console home carries the top `ModuleTabBar` switcher + command bar.
+
 ## Design Tokens
 
 Defined in `design/tokens.ts`. Two themes: `light` and `dark` (system preference + manual toggle).

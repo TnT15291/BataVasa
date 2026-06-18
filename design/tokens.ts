@@ -1,19 +1,19 @@
 export const colors = {
   light: {
-    bg: { primary: '#F7F4EE', secondary: '#EDE7DC', elevated: '#FFFDF8' },
-    text: { primary: '#20201D', secondary: '#4D493F', muted: '#6F6A60', danger: '#A33A32' },
-    brand: { primary: '#2F6F73', accent: '#C9853E' },
-    semantic: { success: '#3E7C59', warning: '#B87521', danger: '#A33A32', info: '#4C6F91' },
-    finance: { expense: '#A33A32', income: '#3E7C59' },
-    border: { subtle: '#DDD5C8', strong: '#BEB2A2', card: '#D7CCBA' },
+    bg: { primary: '#EEF3F6', secondary: '#DDE7EC', elevated: '#FAFCFD' },
+    text: { primary: '#101820', secondary: '#31414D', muted: '#657681', danger: '#B4232E' },
+    brand: { primary: '#197C92', accent: '#7B5BB3' },
+    semantic: { success: '#247A5A', warning: '#B76A24', danger: '#B4232E', info: '#326FB0' },
+    finance: { expense: '#B4232E', income: '#247A4D' },
+    border: { subtle: '#D7DEE5', strong: '#AAB6C2', card: '#C7D0D9' },
   },
   dark: {
-    bg: { primary: '#15130F', secondary: '#211E18', elevated: '#2B261F' },
-    text: { primary: '#F6F0E7', secondary: '#D2C8B8', muted: '#A99D8C', danger: '#E19A94' },
-    brand: { primary: '#79B8B6', accent: '#D9A15C' },
-    semantic: { success: '#8FBE9D', warning: '#E0AD63', danger: '#E19A94', info: '#8FAFCA' },
-    finance: { expense: '#E19A94', income: '#8FBE9D' },
-    border: { subtle: '#352F27', strong: '#51483A', card: '#4A4034' },
+    bg: { primary: '#0B1116', secondary: '#121C23', elevated: '#1B2831' },
+    text: { primary: '#F4F8FA', secondary: '#CAD7DE', muted: '#93A4AE', danger: '#FF9A9A' },
+    brand: { primary: '#70CFE3', accent: '#B9A0FF' },
+    semantic: { success: '#77C59A', warning: '#F0B45F', danger: '#FF9A9A', info: '#8FC0F5' },
+    finance: { expense: '#FF9A9A', income: '#77C59A' },
+    border: { subtle: '#26333D', strong: '#42515D', card: '#34424E' },
   },
 } as const
 
@@ -57,7 +57,8 @@ export const textStyles = {
 
 export const spacing = { 0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 8: 32, 10: 40, 12: 48 } as const
 
-export const radius = { sm: 6, md: 10, lg: 16, full: 9999 } as const
+// UI1 console shapes: list rows / cards 12–16, command bar ~14, pills full-round.
+export const radius = { sm: 8, md: 12, lg: 16, xl: 20, full: 9999 } as const
 
 export type ThemeMode = 'light' | 'dark'
 export type Theme = (typeof colors)[ThemeMode]

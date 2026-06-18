@@ -1,9 +1,9 @@
 import React from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Appearance } from 'react-native'
-import * as Sentry from '@sentry/react-native'
 import { useSettingsStore } from '@store/settingsStore'
 import { themes } from '@design/themes'
 import { getTranslations } from '@services/i18n'
+import { captureException } from '@services/sentry'
 
 type Props = { children: React.ReactNode }
 type State = { hasError: boolean; message: string; stack: string }
@@ -23,9 +23,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     // Surface the component stack on-device in dev so the failing screen is
     // identifiable without a remote logger (Cross-Module Rule 8).
     this.setState({ stack: info.componentStack ?? '' })
-    try {
-      Sentry.captureException(error, { extra: { componentStack: info.componentStack ?? '' } })
-    } catch {}
+    captureException(error, { extra: { componentStack: info.componentStack ?? '' } })
   }
 
   render() {
