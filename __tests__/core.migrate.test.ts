@@ -6,6 +6,7 @@ const mockDb = {
 
 const mockGetDb = jest.fn()
 const mockInitFinanceSchema = jest.fn()
+const mockDedupSystemCategories = jest.fn()
 const mockInitSettingsSchema = jest.fn()
 const mockCreateReminderSchema = jest.fn()
 const mockCreateJournalSchema = jest.fn()
@@ -25,7 +26,7 @@ function loadMigrations() {
     getDb: mockGetDb,
     nowIso: () => '2026-01-01T00:00:00.000Z',
   }))
-  jest.doMock('../database/finance/schema', () => ({ initFinanceSchema: mockInitFinanceSchema }))
+  jest.doMock('../database/finance/schema', () => ({ initFinanceSchema: mockInitFinanceSchema, dedupSystemCategories: mockDedupSystemCategories }))
   jest.doMock('../database/settings/schema', () => ({ initSettingsSchema: mockInitSettingsSchema }))
   jest.doMock('../database/reminders/schema', () => ({ createReminderSchema: mockCreateReminderSchema }))
   jest.doMock('../database/journals/schema', () => ({ createJournalSchema: mockCreateJournalSchema }))

@@ -12,6 +12,7 @@ import {
 import { useTheme, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
+import { percentDelta } from '@services/stats'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { track } from '@services/analytics'
@@ -173,8 +174,7 @@ export function JournalsReportScreen() {
     }
   }, [period, anchorDate, journals])
 
-  const calcDelta = (cur: number, prev: number): number | undefined =>
-    prev === 0 ? undefined : Math.round(((cur - prev) / Math.abs(prev)) * 100)
+  const calcDelta = percentDelta
 
   const range = getRange()
   const exportSummary = async () => {

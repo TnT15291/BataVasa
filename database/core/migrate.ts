@@ -1,10 +1,11 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
 import { getDb } from './db'
-import { initFinanceSchema } from '../finance/schema'
+import { initFinanceSchema, dedupSystemCategories } from '../finance/schema'
 import { initSettingsSchema } from '../settings/schema'
 import { createReminderSchema } from '../reminders/schema'
 import { createJournalSchema } from '../journals/schema'
 import { createHabitSchema } from '../habits/schema'
+import { createGoalSchema } from '../goals/schema'
 import { createSyncQueueSchema } from '../sync/schema'
 import { logger } from '@services/logger'
 import { uuid } from '@services/uuid'
@@ -150,6 +151,16 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   // categories. initFinanceSchema is idempotent and seeds missing categories.
   async (db) => {
     await initFinanceSchema(db)
+  },
+  // v20 - collapse duplicate system categories onto stable ids. Fixes the
+  // sync-multiplied "Food & Groceries"/"Transport"/… duplicates by remapping
+  // transactions/rules/plan-items onto canonical sys_* ids and deleting dups.
+  async (db) => {
+    await dedupSystemCategories(db)
+  },
+  // v21 - Goals MVP: derived progress projection over finance/habits.
+  async (db) => {
+    await createGoalSchema(db)
   },
 ]
 

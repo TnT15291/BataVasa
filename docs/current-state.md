@@ -7,10 +7,10 @@
 | Tier | Status |
 |---|---|
 | Personal MVP | Done |
-| Closed beta | Ready |
-| Public launch | Blocked by verification, tests, and store submission work |
+| Closed beta | Keep open until the beta-close scope below is finished |
+| Public launch | Blocked by beta-close scope, verification, tests, and store submission work |
 
-**Production score: 7/10.** Architecture, UX, sync, and business-logic coverage are strong enough for closed beta. Public launch should still wait until Google Auth is verified on a native build, CI stays clean, and fresh store screenshots are captured after the latest UI polish pass.
+**Production score: 7/10.** Architecture, UX, sync, and business-logic coverage are strong enough for closed beta usage, but the beta should not be closed yet. The updated direction is to finish the assistant/differentiator layer first, then close beta, then move into store submission/public-launch work.
 
 ## What Is Built
 
@@ -18,13 +18,13 @@
 
 - Supabase Auth: email/password, login wall, account UI, session-aware store reloads.
 - Google OAuth: implemented through Supabase OAuth and app callback handling; not yet manually tested.
-- Offline-first SQLite: WAL, FK on, `PRAGMA user_version`, migration v12.
+- Offline-first SQLite: WAL, FK on, `PRAGMA user_version`, migration v21.
 - Cloud sync engine: local `sync_queue`, queued writes for all 4 modules, AppState drain worker, per-module sync toggles, Supabase RLS SQL in `docs/supabase-setup.sql`.
 - Biometric lock: `expo-local-authentication`, 30s AppState lock timer, Settings privacy toggle.
 - Error boundary, analytics wrapper, PII-scrubbed logger, Sentry forwarding.
 - i18n: 6 languages in `services/i18n/translations/`.
 - Theme system: 5 themes with light/dark support.
-- Onboarding: language, AI key, feature intro.
+- Onboarding: language, feature intro (2 steps). AI is fully backend-managed (provider + key set by the publisher via Supabase secrets), so there is no AI-key/provider onboarding step.
 - Data management: export and wipe per module with double confirmation.
 
 ### Finance
@@ -94,6 +94,8 @@
 - Journal list keeps only the primary create FAB floating; reflection and report actions live in the content action row.
 - Report and AI output uses `components/InsightText.tsx` to render concise markdown as section cards instead of raw markdown text.
 - Main-screen FABs and report footers use safe-area bottom spacing.
+- Global Search MVP (2026-06-19): `services/search.ts` searches Finance transactions, Tasks, Habits, Journals, and Goals with grouped results in `SearchScreen` (`/search`). Home search now opens Global Search; Modules includes Search.
+- Goals MVP (2026-06-19): `goal` table (migration v21), `database/goals/queries.ts`, `features/goals/services.ts`, `store/goalsStore.ts`, and screens `/goals`, `/goal`, `/goal-detail`. MVP supports manual goal creation with derived progress from Finance category totals and Habit completion rate. Goals are synced (`goal` table), exportable/wipeable, and included in Supabase RLS SQL.
 - Cross-module AI analysis (2026-06-12): `services/ai/crossModuleInsight.ts` now computes rule-based correlation blocks locally and asks the model only to explain them: per-habit kept-vs-missed comparison (mood, avg daily spend with "notable" flag at ≥15% delta, reminder completion rate, other-habit completion), spending by time-of-day and weekday, spending on journal-tagged activity days, and a reminders completion summary. AnalysisScreen feeds it habit logs (`listRecentLogs(30)` via new `listLogsSince` query) and reminders. Prompt requests 6 sections incl. habit impact, when/at-which-activities spending peaks, and recommendations for finance + mood; phrased as observations, not causation.
 
 ## Key Files
@@ -164,20 +166,33 @@ Repo-side assets and copy are mostly ready. Manual store work remains:
 
 Work in this order:
 
-1. **Closed beta verification**
+1. **Stabilize and commit the current pass**
+   - Review the managed-AI, UI, sync/schema, Supabase function, and docs changes currently in the worktree.
+   - Run `npx tsc --noEmit` and `npm test -- --runInBand`.
+   - Commit the current coherent batch before starting the beta-close feature sequence.
+2. **Beta-close feature sequence**
+   - **DONE MVP:** M38 Global search: one search across transactions, reminders, habits, journals, and goals.
+   - **DONE MVP:** Goals MVP: manual goal creation + derived progress for finance category totals and habit completion rate.
+   - **Weekly Life Review**: flagship cross-module weekly report using deterministic metrics plus AI explanation.
+   - **Context memory layer**: user goals/preferences/facts available to AI prompts and review summaries.
+   - **M37 Proactive weekly insights**: opt-in weekly notification/deep link after Weekly Life Review is stable.
+   - **Habit selective enhancements**: ship 1-2 calm improvements, starting with never-miss-twice and/or identity field.
+   - **M21 Backup/restore file UI**: trust-building recovery flow on top of existing local/export foundations.
+3. **Beta-close verification**
    - Sync is verified working.
    - Verify Google Auth on device/emulator.
    - Spot check email/password Auth on device/emulator.
    - Run smoke test for all 4 modules.
-2. **B5 coverage push**
-   - Continue raising global coverage toward the 70% public-launch target.
+   - Run a full smoke test of Global Search, Goals, Weekly Life Review, memory-aware AI, proactive notifications, and backup/restore.
+4. **B5 coverage push**
+   - Continue raising global coverage toward the 70% beta-close/public-launch target.
    - Prioritize high-risk remaining gaps in stores, service error paths, reports, and UI workflows.
    - Keep `services/` and `database/` coverage as the hardening focus.
-3. **H18 store readiness**
+5. **H18 store readiness**
    - Capture production screenshots.
    - Finalize App Store / Play Console metadata.
    - Run production build smoke test.
-4. **Small product improvements before broader beta**
+6. **Small product improvements already completed**
    - **DONE:** Journal important flag: DB field, form toggle/star, list marker, dashboard count, report count/list, and AI parser hint.
    - **DONE:** Reminder priority/inbox: DB fields, form selector, list badge, Today/Important/Inbox filters, unscheduled inbox items, and priority-aware notifications.
    - **DONE:** Habit skip/rest day: DB field, skip action, non-streak-breaking skip logs, report count/history, and heatmap display.
@@ -189,20 +204,15 @@ Work in this order:
    - **DONE MVP:** Reminder calendar view.
    - **DONE MVP:** Habit strength score.
    - **DONE MVP:** Journal tag/activity chips.
-   - Remaining: continue hardening and visual QA before broader beta.
-5. **UI polish follow-up**
+   - Remaining: continue hardening and visual QA before beta close.
+7. **UI polish follow-up**
    - **DONE:** AI/report markdown is rendered as section cards via `InsightText`.
    - **DONE:** Assistant quick prompts added.
    - **DONE:** Journal floating actions simplified.
    - **DONE:** Home/module hero density reduced and FAB safe-area spacing added.
    - **DONE:** Finance sign/category mismatch is surfaced as a review state.
    - Remaining: capture updated screenshots and do a visual QA pass on a real device.
-6. **Differentiators after stability**
-   - **M36 Cross-module behavioral patterns**: correlate Finance, Habits, and Journals, e.g. spending changes on low-mood days or habit completion patterns.
-   - **M38 Global search**: one search across transactions, reminders, habits, and journals.
-   - **M37 Proactive weekly insights**: background weekly summary notification via `expo-task-manager`.
-7. **Later launch/business work**
-   - **M21 Backup/restore**: user-facing recovery flow built on top of Auth and Sync.
+8. **Later launch/business work**
    - **M19 Duplicate detection**: reduce false positives in finance.
    - **L4 Monetization/API key model** — **DECIDED: phased hybrid** (revisit before public launch, not a beta blocker).
      - **Closed beta:** keep current **BYO key** (multi-provider, free path via Groq/Gemini). Don't build billing before validating retention.
@@ -309,9 +319,9 @@ Ordered priority list — make all module reports and the analysis screen both c
    - Comparison card: this month vs last month delta badges for Finance expense and Journal mood.
    - AI Patterns card: existing AI text wrapped in a labeled card with header icon instead of raw text dump.
 
-### P2 - Differentiators After Stability
+### P2 - Beta-Close Differentiators
 
-These are the features that make BataVasa meaningfully different from single-purpose apps.
+These are now part of the beta-close scope. Finish these before declaring closed beta complete.
 
 1. **Weekly Life Review**
    - Flagship report across money, mood, habits, and reminders.
@@ -339,7 +349,7 @@ These are the features that make BataVasa meaningfully different from single-pur
 
 ## Long-Term Product Vision: From Tracker to Life Assistant
 
-> **Strategic direction after closed beta.** BataVasa is currently a "personal OS" (~90% coverage) but only a "life assistant" (~50%). The gaps are not missing modules, but missing **intelligence layers**: proactivity, cross-module understanding, and goal-oriented memory.
+> **Strategic direction before beta close.** BataVasa is currently a "personal OS" (~90% coverage) but only a "life assistant" (~50%). The gaps are not missing modules, but missing **intelligence layers**: proactivity, cross-module understanding, and goal-oriented memory. These gaps should be closed before ending closed beta.
 
 **TL;DR:** 4 modules (Finance, Reminders, Habits, Journals) are feature-complete for MVP. To move from "tracker" to "assistant," the roadmap adds **3 intelligence layers + 1 unifying Goals module**, not new domains.
 
@@ -365,7 +375,7 @@ These are table-stakes for "personal OS" — dull but critical.
 - **Problem:** Users write daily but rarely retrieve → data becomes "write-only archive."
 - **Solution:** Unified search across all 4 modules (transactions, reminders, habits, journal entries) filtered by text, date range, amount, or tags.
 - **Implementation:** `services/search.ts` queries all domain tables in parallel; optional AI layer translates natural language questions into deterministic filters (amount/date arithmetic remains rule-based per CLAUDE.md Rule 2).
-- **Scope:** low risk (read-only), medium value (high engagement). Recommended: **do early in post-beta.**
+- **Scope:** low risk (read-only), medium value (high engagement). Recommended: **do first in the beta-close sequence.**
 - **UX:** `app/search.tsx` with debounce, results grouped by module; can start minimal (exact-match string search) and add AI later.
 
 #### 1b. Backup / Restore (M21)
@@ -375,7 +385,7 @@ These are table-stakes for "personal OS" — dull but critical.
   - **Cloud restore:** new device → login → pull from Supabase (sync infra exists; needs UX clarity + B1/B2 verification).
   - **Manual file backup:** export all 4 modules as single file + import wizard for users skeptical of cloud.
 - **Implementation:** `services/backup.ts` orchestrates module exports/imports; Settings → Data Management → Backup/Restore.
-- **Scope:** medium-high risk (import versioning, deduplication, conflict resolution). Build after closed-beta sync is proven.
+- **Scope:** medium-high risk (import versioning, deduplication, conflict resolution). Build during the beta-close sequence after sync verification is complete.
 
 ### LAYER 2 — The Brain (Insight → Action)
 
@@ -479,7 +489,7 @@ BataVasa's habits module should **embody the 4 Laws** rather than re-implement e
 - ✅ **Ease** — notification times (v13, fully integrated), skip/rest day (no streak penalty), recurring vs one-time reminder (flexible).
 - ✅ **Satisfaction** — streak milestones, heatmap visual feedback, "never miss twice" opportunity.
 
-#### Selective Additions (Post-Beta)
+#### Selective Additions (Beta-Close)
 
 | ✅ Do (High Leverage) | 🟡 Conditional | ❌ Skip (Not a Feature) |
 |---|---|---|
@@ -497,7 +507,7 @@ BataVasa's habits module should **embody the 4 Laws** rather than re-implement e
 
 - **Never gamify heavily** (BataVasa is "calm").
 - **All habit features are opt-in** — defaults are minimal; user chooses complexity.
-- **Ship 1–2 per cycle post-beta**, not a whole feature dump. Observe user response before adding more.
+- **Ship 1–2 in the beta-close sequence**, not a whole feature dump. Observe user response before adding more.
 - **Measurement is motivating only if voluntary** — remove any pressure.
 
 ### What NOT To Build (Philosophy)
@@ -508,15 +518,18 @@ BataVasa's habits module should **embody the 4 Laws** rather than re-implement e
 - ❌ **Aggressive gamification (badges, leaderboards, streaks as currency)** — conflicts with "calm."
 - ❌ **Rich media (audio/video/OCR)** — storage/sync complexity not worth it pre-launch.
 
-### Implementation Sequence (Post-Closed Beta)
+### Implementation Sequence (Before Closing Beta)
 
-1. **Global Search (M38)** — low risk, high engagement. ~2 weeks.
-2. **Goals MVP (1–2 types)** — foundation for Weekly Review. ~3–4 weeks.
+Current status: Global Search and Goals MVP are now DONE at MVP scope. Continue with Weekly Life Review next.
+
+1. **Global Search (M38) — DONE MVP**: grouped search across the 4 modules plus Goals.
+2. **Goals MVP — DONE MVP**: manual goals with finance category amount and habit completion-rate progress.
 3. **Weekly Life Review** — flagship differentiator. ~2 weeks (leverages goals + existing insights).
 4. **Context memory layer** — feeds into AI personalization. ~1 week.
 5. **Proactive notifications** — requires stable Review + memory. ~2 weeks.
 6. **Habits selective enhancements** — ship 1–2 (never-miss-twice, identity). Observe, then iterate.
 7. **Backup/Restore file UI** — low risk, trust-building. ~1 week.
+8. **Close beta gate** — full verification, coverage pass, real-device visual QA, fresh screenshots, and release-readiness smoke test.
 
 ---
 
@@ -544,7 +557,7 @@ BataVasa's habits module should **embody the 4 Laws** rather than re-implement e
 - Category names use canonical DB values and translate at display time.
 - Locale-aware formatting must use `getDateFnsLocale(language)` and `getIntlLocale(language)`.
 - Create and edit screens are shared via route params.
-- Latest local migration is v19: `finance_debt` table + Lending/Borrowing system categories (system-category seeding is now idempotent by name, so older installs pick up new seed rows).
+- Latest local migration is v21: `goal` table. v19 added `finance_debt` + Lending/Borrowing system categories; v20 deduplicated system categories.
 - `enqueue()` is try/catch wrapped for test compatibility.
 - Cross-module timeline/life stream is a presentation/read-model layer over domain tables, not a unified `life_events` source-of-truth table.
 - Reminders/notifications are treated as a capability attached to tasks/habits where appropriate; the current Reminders UI is task-oriented.
@@ -561,6 +574,12 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-06-19 (cont.) managed-AI finalization + home dedup:
+  - AI is now fully **backend-managed**: removed the in-app provider chooser. `AISettingsScreen` keeps only the parse-confirm toggle (`aiAutoConfirm`); the main Settings AI section is a single link (the duplicate inline toggle was removed). `ai_server_managed` copy updated in all 6 languages.
+  - Removed the AI step from onboarding (now 2 steps: language → feature intro). Provider + key are set by the publisher via Supabase secrets, so there is nothing for the user to configure.
+  - Added the missing **Edge Functions** the client already calls: `supabase/functions/ai-chat` (chat-completion proxy) + `supabase/functions/ai-transcribe` (Whisper proxy) + `supabase/functions/_shared/` (CORS + server provider registry) + `supabase/config.toml` (verify_jwt = true). Provider is resolved server-side via the `AI_PROVIDER` secret; key from `<PROVIDER>_API_KEY`; optional `AI_MODEL` override. Setup steps in `docs/ai-integration.md`.
+  - Renamed the reminders module insight title to "Task" wording (`reminder_insight_title`) across all 6 languages to match the Reminders→Tasks/Công việc rename.
+  - Home: the "Phân tích thông minh" AI-insight card action now opens `/analysis` (was `/chat`), removing the duplicate assistant entry point next to the "Trợ lý" quick action.
 - 2026-06-18/19 New UI "Personal OS Console" overhaul + rollout:
   - 2026-06-18: redesigned the main screens (Home/Daily Digest, the 4 module list screens, Settings, Analysis, Auth) around a new `components/ui/` console design system (`AppHeader`, `CommandBar`, `ModuleTabBar`, `SectionHeader`, `ListRow`, `ModuleOverview`, `AIInsightCard`, `Chip`, `StatusPill`, `SignalsTimeline`, `QuickActionRow`, `BrandMark`/`Sparkle`). Retuned `design/tokens.ts`, `design/themes.ts`, `design/moduleColors.ts`. Rules in `docs/design-system.md` ("UI1 Personal OS Console").
   - 2026-06-19: finished the rollout on the secondary (pushed) screens. Added `components/ui/EmptyState.tsx` (tinted module-color icon badge + title/body/optional CTA) and replaced the old 48px-emoji empty states across all 4 AI insight screens (finance/habits/journals/reminders) and all 4 report screens (finance/habits/journals/reminders) + AnalysisScreen. AI result cards now carry a `Sparkle` "AI INSIGHT" header for console identity. No new i18n keys (reused existing titles).

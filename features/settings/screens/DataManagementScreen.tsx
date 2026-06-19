@@ -9,13 +9,15 @@ import { exportAllData } from '@features/finance/services'
 import { exportAllHabits } from '@features/habits/services'
 import { exportAllJournals } from '@features/journals/services'
 import { exportAllReminders } from '@features/reminders/services'
+import { exportAllGoals } from '@features/goals/services'
 import { useFinanceStore } from '@store/financeStore'
 import { useHabitsStore } from '@store/habitsStore'
 import { useJournalsStore } from '@store/journalsStore'
 import { useRemindersStore } from '@store/remindersStore'
+import { useGoalsStore } from '@store/goalsStore'
 import { useSettingsStore } from '@store/settingsStore'
 
-type DataModule = 'finance' | 'habits' | 'journals' | 'reminders'
+type DataModule = 'finance' | 'habits' | 'journals' | 'reminders' | 'goals'
 
 type ModuleConfig = {
   key: DataModule
@@ -51,14 +53,17 @@ export function DataManagementScreen() {
   const wipeHabits = useHabitsStore((s) => s.wipeAll)
   const wipeJournals = useJournalsStore((s) => s.wipeAll)
   const wipeReminders = useRemindersStore((s) => s.wipeAll)
+  const wipeGoals = useGoalsStore((s) => s.wipeAll)
   const financeRecords = useFinanceStore((s) => s.transactions.length + s.categories.length)
   const habitRecords = useHabitsStore((s) => s.habits.length)
   const journalRecords = useJournalsStore((s) => s.journals.length)
   const reminderRecords = useRemindersStore((s) => s.reminders.length)
+  const goalRecords = useGoalsStore((s) => s.goals.length)
   const syncFinance = useSettingsStore((s) => s.syncFinance)
   const syncHabits = useSettingsStore((s) => s.syncHabits)
   const syncJournals = useSettingsStore((s) => s.syncJournals)
   const syncReminders = useSettingsStore((s) => s.syncReminders)
+  const syncGoals = useSettingsStore((s) => s.syncGoals)
   const [busy, setBusy] = useState<'export' | 'delete' | null>(null)
 
   const configs = useMemo<Record<DataModule, ModuleConfig>>(() => ({
@@ -118,23 +123,40 @@ export function DataManagementScreen() {
       exportData: exportAllReminders,
       wipe: wipeReminders,
     },
+    goals: {
+      key: 'goals',
+      title: t.goals,
+      body: t.goal_empty_hint,
+      exportTitle: t.export_data,
+      exportHint: t.export_data_hint,
+      deleteTitle: t.delete_all_data,
+      deleteHint: t.confirm_wipe_msg,
+      fileName: 'batavasa-goals.json',
+      recordCount: goalRecords,
+      syncEnabled: syncGoals,
+      exportData: exportAllGoals,
+      wipe: wipeGoals,
+    },
   }), [
     t,
     wipeFinance,
     wipeHabits,
     wipeJournals,
     wipeReminders,
+    wipeGoals,
     financeRecords,
     habitRecords,
     journalRecords,
     reminderRecords,
+    goalRecords,
     syncFinance,
     syncHabits,
     syncJournals,
     syncReminders,
+    syncGoals,
   ])
 
-  const moduleKey = (params.module === 'habits' || params.module === 'journals' || params.module === 'reminders')
+  const moduleKey = (params.module === 'habits' || params.module === 'journals' || params.module === 'reminders' || params.module === 'goals')
     ? params.module
     : 'finance'
   const config = configs[moduleKey]

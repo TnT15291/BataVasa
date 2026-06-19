@@ -7,12 +7,11 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native'
-import { usePathname, useRouter } from 'expo-router'
+import { usePathname } from 'expo-router'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore, type Language } from '@store/settingsStore'
-import { AI_PROVIDERS } from '@services/ai/providers'
 import { FlowDiagram } from '@components/FlowDiagram'
 
 const LANGUAGE_OPTIONS: Language[] = ['vi', 'en', 'zh', 'ja', 'ko', 'fr']
@@ -20,11 +19,9 @@ const LANGUAGE_OPTIONS: Language[] = ['vi', 'en', 'zh', 'ja', 'ko', 'fr']
 export function OnboardingModal({ visible }: { visible: boolean }) {
   const theme = useTheme()
   const { t } = useTranslation()
-  const router = useRouter()
   const pathname = usePathname()
   const language = useSettingsStore((s) => s.language)
   const setLanguage = useSettingsStore((s) => s.setLanguage)
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
   const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding)
   const [step, setStep] = useState(0)
   const isIndexRoute = pathname === '/'
@@ -34,20 +31,15 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
     setStep(0)
   }, [visible])
 
-  const providerName = AI_PROVIDERS[aiProvider]?.name ?? aiProvider
+  // AI is fully backend-managed (provider + key set by the publisher), so there
+  // is no AI setup step — onboarding is just language → feature intro.
   const stepLabel = t.onboarding_step
     .replace('{{step}}', String(step + 1))
-    .replace('{{total}}', '3')
+    .replace('{{total}}', '2')
 
   const handleContinue = async () => {
     if (step === 0) {
       setStep(1)
-      return
-    }
-    if (step === 1) {
-      // AI is optional — never block onboarding on an API key. The
-      // "Open AI settings" button above handles setup for those who want it.
-      setStep(2)
       return
     }
     await setHasSeenOnboarding(true)
@@ -90,28 +82,6 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
                   ))}
                 </View>
               </View>
-            ) : step === 1 ? (
-              <View style={styles.section}>
-                <Text style={[styles.title, { color: theme.text.primary }]}>{t.onboarding_ai_title}</Text>
-                <Text style={[styles.description, { color: theme.text.muted }]}>{t.onboarding_ai_desc}</Text>
-                <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-                  <Text style={[styles.cardLabel, { color: theme.text.muted }]}>{t.ai_settings}</Text>
-                  <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{providerName}</Text>
-                  <Text style={[styles.cardStatus, { color: theme.semantic.success }]}>
-                    ✅ {t.onboarding_api_key_ready}
-                  </Text>
-                  <Text style={[styles.cardHint, { color: theme.text.muted }]}>
-                    {t.ai_server_managed}
-                  </Text>
-                </View>
-
-                <Pressable
-                  onPress={() => router.push('/ai-settings')}
-                  style={[styles.button, { backgroundColor: theme.brand.primary }]}
-                >
-                  <Text style={[styles.buttonText, { color: '#fff' }]}>{t.onboarding_open_ai_settings}</Text>
-                </Pressable>
-              </View>
             ) : (
               <View style={styles.section}>
                 <Text style={[styles.title, { color: theme.text.primary }]}>{t.onboarding_intro_title}</Text>
@@ -145,7 +115,7 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
               style={[styles.footerButton, { backgroundColor: theme.brand.primary }]}
             >
               <Text style={[styles.footerText, { color: '#fff' }]}>
-                {step === 2 ? t.onboarding_start : t.onboarding_next}
+                {step === 1 ? t.onboarding_start : t.onboarding_next}
               </Text>
             </Pressable>
           </View>
@@ -210,39 +180,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
-  },
-  card: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing[4],
-    gap: spacing[2],
-  },
-  cardLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  cardStatus: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  cardHint: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  button: {
-    paddingVertical: spacing[3],
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing[2],
-  },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   bulletList: {
     borderRadius: radius.lg,

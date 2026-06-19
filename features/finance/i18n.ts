@@ -29,13 +29,13 @@ const KIND_KEY: Record<CategoryKind, keyof Translations> = {
   savings: 'kind_savings',
 }
 
-// System rows have user_id === null and their name matches a known seed.
-// User-custom rows return their name as-is.
+// System rows (user_id === null, canonical sys_* id) translate via lookup.
+// We translate ANY row whose name matches a known seed — including residual
+// pre-v20 duplicates not yet cleaned — so the UI never shows the English name.
+// User-custom rows (no seed-name match) return their name as-is.
 export function translateCategoryName(category: Category, t: Translations): string {
-  if (category.user_id == null) {
-    const key = SYSTEM_CATEGORY_KEY[category.name]
-    if (key) return t[key]
-  }
+  const key = SYSTEM_CATEGORY_KEY[category.name]
+  if (key) return t[key]
   return category.name
 }
 

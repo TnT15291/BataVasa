@@ -84,8 +84,6 @@ export function SettingsScreen() {
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const locationAccess = useSettingsStore((s) => s.locationAccess)
   const setLocationAccess = useSettingsStore((s) => s.setLocationAccess)
-  const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
-  const setAIAutoConfirm = useSettingsStore((s) => s.setAIAutoConfirm)
   const syncFinance = useSettingsStore((s) => s.syncFinance)
   const setSyncFinance = useSettingsStore((s) => s.setSyncFinance)
   const syncReminders = useSettingsStore((s) => s.syncReminders)
@@ -248,14 +246,7 @@ export function SettingsScreen() {
 
       <SectionHeader label="AI" />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <SettingRow label={t.ai_settings} onPress={() => router.push('/ai-settings')} />
-        <View style={[styles.row, styles.rowLast, { borderColor: theme.border.subtle }]}>
-          <View style={{ flex: 1, paddingRight: spacing[3] }}>
-            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.ai_auto_confirm}</Text>
-            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.ai_auto_confirm_hint}</Text>
-          </View>
-          <SettingsSwitch value={aiAutoConfirm} onValueChange={setAIAutoConfirm} />
-        </View>
+        <SettingRow label={t.ai_settings} onPress={() => router.push('/ai-settings')} last />
       </View>
 
       <SectionHeader label={t.finance_settings} />

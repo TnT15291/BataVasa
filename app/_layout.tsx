@@ -161,6 +161,18 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="settings" options={{ title: t.nav_settings }} />
+          <Stack.Screen name="search" options={{ title: t.nav_search }} />
+          <Stack.Screen name="goals" options={{ title: t.nav_goals }} />
+          <Stack.Screen name="goal-detail" options={{ title: t.nav_goals }} />
+          <Stack.Screen
+            name="goal"
+            options={{
+              title: t.new_goal,
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              gestureDirection: 'vertical',
+            }}
+          />
           <Stack.Screen name="help" options={{ title: t.help_title }} />
           <Stack.Screen name="data-management" options={{ title: t.data_management }} />
           <Stack.Screen name="appearance" options={{ title: t.nav_appearance }} />

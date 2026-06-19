@@ -30,6 +30,7 @@ import {
 import { useTheme, getCardStyle, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation, type Translations } from '@services/i18n'
+import { percentDelta } from '@services/stats'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
 import { translateCategoryName } from '../i18n'
 import { generateReport, type ReportType } from '@services/ai/reports'
@@ -425,8 +426,7 @@ export function ReportsScreen() {
     return { count: prevTxs.length, income, expense }
   }, [period, anchorDate, allTxs, amountInReportCurrency])
 
-  const calcDelta = (cur: number, prev: number): number | undefined =>
-    prev === 0 ? undefined : Math.round(((cur - prev) / Math.abs(prev)) * 100)
+  const calcDelta = percentDelta
 
   const expenseBreakdown = useMemo(() => buildCategoryBreakdown({
     transactions: rangeTxs,

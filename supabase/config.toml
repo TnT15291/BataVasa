@@ -1,0 +1,13 @@
+# Supabase local project config. Update `project_id` to your own ref if you run
+# `supabase init` fresh; `supabase link --project-ref <ref>` connects to the
+# hosted project for deploys.
+project_id = "batavasa"
+
+# Both AI proxies require a signed-in user. verify_jwt = true makes the platform
+# reject anonymous requests before the function code runs (the app's login wall
+# guarantees a session). Set to false ONLY for local unauthenticated testing.
+[functions.ai-chat]
+verify_jwt = true
+
+[functions.ai-transcribe]
+verify_jwt = true

@@ -116,6 +116,10 @@ export function AnalysisScreen() {
       if (amount === null) continue
       const abs = Math.abs(amount)
       totalExpense += abs
+      // An income-kind category on a negative tx is a mis-categorization; don't
+      // let it surface as "top spending" (e.g. "Other Income" as biggest expense).
+      const cat = catMap.get(tx.category_id)
+      if (cat?.kind === 'income') continue
       catTotals.set(tx.category_id, (catTotals.get(tx.category_id) ?? 0) + abs)
     }
     let topCatId = ''
@@ -256,7 +260,7 @@ export function AnalysisScreen() {
                 <HighlightItem
                   icon="🔥"
                   label={t.report_current_streak}
-                  value={highlights.bestStreak > 0 ? `${highlights.bestStreak} ${t.report_days}` : '—'}
+                  value={`${highlights.bestStreak} ${t.report_days}`}
                   theme={theme}
                 />
               )}

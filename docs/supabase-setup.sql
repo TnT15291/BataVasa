@@ -253,6 +253,34 @@ CREATE INDEX IF NOT EXISTS idx_reminder_remind_at
 CREATE INDEX IF NOT EXISTS idx_reminder_completed
   ON reminder (user_id, completed) WHERE deleted_at IS NULL;
 
+-- Goals -----------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS goal (
+  id             TEXT        PRIMARY KEY,
+  user_id        UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title          TEXT        NOT NULL,
+  description    TEXT,
+  target_type    TEXT        NOT NULL CHECK (target_type IN ('amount','rate','count')),
+  target_value   REAL        NOT NULL CHECK (target_value > 0),
+  unit           TEXT        NOT NULL,
+  start_date     TIMESTAMPTZ NOT NULL,
+  due_date       TIMESTAMPTZ,
+  metric_binding TEXT        NOT NULL,
+  status         TEXT        NOT NULL DEFAULT 'active'
+                              CHECK (status IN ('active','paused','done','archived')),
+  created_at     TIMESTAMPTZ NOT NULL,
+  updated_at     TIMESTAMPTZ NOT NULL,
+  deleted_at     TIMESTAMPTZ,
+  synced_at      TIMESTAMPTZ
+);
+ALTER TABLE goal ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their goals" ON goal;
+CREATE POLICY "users own their goals" ON goal
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+CREATE INDEX IF NOT EXISTS idx_goal_user_status
+  ON goal (user_id, status, due_date) WHERE deleted_at IS NULL;
+
 -- ─── Backward compat (existing Supabase projects only) ────────────────────────
 -- Safe to run on fresh projects too — IF NOT EXISTS / ADD COLUMN IF NOT EXISTS.
 

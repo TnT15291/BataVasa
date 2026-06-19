@@ -132,7 +132,7 @@ export function DailyDigestScreen() {
         }
       >
         <AppHeader
-          onSearch={() => router.push('/chat')}
+          onSearch={() => router.push('/search')}
           onSettings={() => router.push('/settings')}
         />
 
@@ -214,8 +214,8 @@ export function DailyDigestScreen() {
         <AIInsightCard
           label={t.ai_insights}
           text={insightText}
-          actionLabel={t.nav_chat}
-          onAction={() => router.push('/chat')}
+          actionLabel={t.nav_insights}
+          onAction={() => router.push('/analysis')}
         />
 
         {/* ── Quick actions ── */}

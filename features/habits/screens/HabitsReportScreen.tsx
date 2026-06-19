@@ -14,6 +14,7 @@ import {
 import { useTheme, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
+import { percentDelta } from '@services/stats'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { exportAllHabits } from '../services'
@@ -180,8 +181,7 @@ export function HabitsReportScreen() {
     }
   }, [period, anchorDate, allLogs, habits])
 
-  const calcDelta = (cur: number, prev: number): number | undefined =>
-    prev === 0 ? undefined : Math.round(((cur - prev) / Math.abs(prev)) * 100)
+  const calcDelta = percentDelta
 
   const range = getRange()
 
@@ -348,7 +348,7 @@ export function HabitsReportScreen() {
               <View style={[styles.heatWeekRow, { gap: CELL_GAP }]}>
                 {weekdayLabels.map((lbl, i) => (
                   <View key={i} style={{ width: CELL, alignItems: 'center' }}>
-                    <Text style={[styles.heatWeekLabel, { color: theme.text.muted }]}>{lbl}</Text>
+                    <Text style={[styles.heatWeekLabel, { color: theme.text.muted }]} numberOfLines={1} adjustsFontSizeToFit>{lbl}</Text>
                   </View>
                 ))}
               </View>
@@ -361,8 +361,8 @@ export function HabitsReportScreen() {
                   <View style={{ flex: 1, gap: CELL_GAP }}>
                     <View style={styles.habitNameRow}>
                       <Text style={[styles.habitName, { color: theme.text.primary }]}>{h.name}</Text>
-                      <Text style={[styles.habitMeta, { color: theme.text.muted }]}>
-                        {h.streak}{t.report_days[0]}
+                      <Text style={[styles.habitMeta, { color: theme.text.muted }]} numberOfLines={1}>
+                        {h.streak} {t.report_days}
                       </Text>
                     </View>
                     {heatmapGrid.weeks.map((week, wi) => (

@@ -2,6 +2,7 @@ import { AppState } from 'react-native'
 import { supabase } from './supabase'
 import { logger } from './logger'
 import { getDb, nowIso } from '@db/core/db'
+import { SYSTEM_CATEGORY_NAMES } from '@db/finance/schema'
 import * as syncQueue from '@db/sync/queue'
 import { useAuthStore } from '@store/authStore'
 import { useSettingsStore } from '@store/settingsStore'
@@ -9,6 +10,7 @@ import { useFinanceStore } from '@store/financeStore'
 import { useHabitsStore } from '@store/habitsStore'
 import { useJournalsStore } from '@store/journalsStore'
 import { useRemindersStore } from '@store/remindersStore'
+import { useGoalsStore } from '@store/goalsStore'
 
 const MODULE = 'sync'
 
@@ -23,6 +25,7 @@ const TABLE_MODULE: Record<string, keyof SyncToggles> = {
   habit_log:          'syncHabits',
   journal:            'syncJournals',
   reminder:           'syncReminders',
+  goal:               'syncGoals',
 }
 
 const SYNC_TABLES = Object.keys(TABLE_MODULE)
@@ -32,6 +35,7 @@ type SyncToggles = {
   syncHabits: boolean
   syncJournals: boolean
   syncReminders: boolean
+  syncGoals: boolean
 }
 
 function sanitizePayloadForRemote(tableName: string, row: Record<string, unknown>): Record<string, unknown> {
@@ -60,14 +64,17 @@ async function markSyncedAt(tableName: string, rowId: string): Promise<void> {
 
 let draining = false
 
-async function pushVisibleFinanceCategories(userId: string): Promise<void> {
+async function pushCustomFinanceCategories(userId: string): Promise<void> {
   if (!supabase) return
 
+  // Only the user's OWN custom categories sync. System categories (user_id NULL)
+  // are seeded locally with stable ids on every device and must never be pushed —
+  // doing so previously multiplied them across devices.
   const db = await getDb()
   const rows = await db.getAllAsync<Record<string, unknown>>(
     `SELECT * FROM finance_category
      WHERE deleted_at IS NULL
-       AND (user_id IS NULL OR user_id = ?)`,
+       AND user_id = ?`,
     [userId]
   )
   if (rows.length === 0) return
@@ -99,6 +106,13 @@ async function getLocalUpdatedAt(tableName: string, rowId: string): Promise<stri
 
 async function upsertPulledRow(tableName: string, row: Record<string, unknown>): Promise<boolean> {
   if (!row.id || typeof row.id !== 'string') return false
+
+  // Skip system categories leaked into the cloud by older versions (they were
+  // pushed as user-owned rows). They are seeded locally on every device, so
+  // pulling them back would re-create the duplicates we cleaned up in v20.
+  if (tableName === 'finance_category' && typeof row.name === 'string' && SYSTEM_CATEGORY_NAMES.has(row.name)) {
+    return false
+  }
 
   const localUpdatedAt = await getLocalUpdatedAt(tableName, row.id)
   const remoteUpdatedAt = typeof row.updated_at === 'string' ? row.updated_at : null
@@ -153,10 +167,12 @@ async function enqueueUnsyncedLocalRows(settings: SyncToggles & Record<string, u
     const toggleKey = TABLE_MODULE[tableName]
     if (toggleKey && settings[toggleKey] === false) continue
     try {
+      // user_id IS NULL only ever applies to system finance categories, which
+      // must not sync — so scan the user's own rows only.
       const rows = await db.getAllAsync<{ id: string }>(
         `SELECT id FROM ${tableName}
          WHERE synced_at IS NULL
-           AND (user_id = ? OR user_id IS NULL)
+           AND user_id = ?
          LIMIT 500`,
         [userId]
       )
@@ -178,6 +194,7 @@ async function refreshLoadedStores(settings: SyncToggles): Promise<void> {
   if (settings.syncHabits) tasks.push(useHabitsStore.getState().loadHabits())
   if (settings.syncJournals) tasks.push(useJournalsStore.getState().loadJournals())
   if (settings.syncReminders) tasks.push(useRemindersStore.getState().loadReminders())
+  if (settings.syncGoals) tasks.push(useGoalsStore.getState().loadGoals())
   await Promise.allSettled(tasks)
 }
 
@@ -221,7 +238,7 @@ export async function drainQueue(): Promise<void> {
     await syncQueue.purgeFailed()
     if (settings.syncFinance !== false) {
       try {
-        await pushVisibleFinanceCategories(userId)
+        await pushCustomFinanceCategories(userId)
       } catch (e) {
         logger.warn(MODULE, 'finance category pre-sync failed', { error: String(e) })
       }

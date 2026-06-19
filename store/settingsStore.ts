@@ -23,6 +23,7 @@ type SettingsState = {
   syncReminders: boolean
   syncHabits: boolean
   syncJournals: boolean
+  syncGoals: boolean
   hasSeenOnboarding: boolean
   biometricLock: boolean
   hideMicPermissionPrompt: boolean
@@ -48,6 +49,7 @@ type SettingsState = {
   setSyncReminders: (enabled: boolean) => Promise<void>
   setSyncHabits: (enabled: boolean) => Promise<void>
   setSyncJournals: (enabled: boolean) => Promise<void>
+  setSyncGoals: (enabled: boolean) => Promise<void>
   setHasSeenOnboarding: (value: boolean) => Promise<void>
   setBiometricLock: (enabled: boolean) => Promise<void>
   setHideMicPermissionPrompt: (hidden: boolean) => Promise<void>
@@ -75,6 +77,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   syncReminders: true,
   syncHabits: true,
   syncJournals: true,
+  syncGoals: true,
   hasSeenOnboarding: false,
   biometricLock: false,
   hideMicPermissionPrompt: false,
@@ -103,6 +106,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       syncReminders: all['sync_reminders'] !== 'false',
       syncHabits: all['sync_habits'] !== 'false',
       syncJournals: all['sync_journals'] !== 'false',
+      syncGoals: all['sync_goals'] !== 'false',
       hasSeenOnboarding: all['has_seen_onboarding'] === 'true',
       biometricLock: all['biometric_lock'] === 'true',
       hideMicPermissionPrompt: all['hide_mic_permission_prompt'] === 'true',
@@ -186,6 +190,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   async setSyncJournals(enabled) {
     set({ syncJournals: enabled })
     await db.setSetting('sync_journals', enabled ? 'true' : 'false')
+  },
+
+  async setSyncGoals(enabled) {
+    set({ syncGoals: enabled })
+    await db.setSetting('sync_goals', enabled ? 'true' : 'false')
   },
 
   async setBiometricLock(enabled) {

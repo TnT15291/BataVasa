@@ -1,5 +1,4 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
-import { uuid } from '@services/uuid'
 import { nowIso } from '@db/core/db'
 
 const CREATE_CATEGORY_SQL = `
@@ -111,29 +110,39 @@ CREATE INDEX IF NOT EXISTS idx_plan_item_user_due ON finance_plan_item(user_id, 
 CREATE INDEX IF NOT EXISTS idx_debt_user_status ON finance_debt(user_id, status, due_at) WHERE deleted_at IS NULL;
 `
 
-type SystemCategory = { name: string; icon: string; color: string; kind: 'essential' | 'discretionary' | 'income' | 'savings' }
+type SystemCategory = { id: string; name: string; icon: string; color: string; kind: 'essential' | 'discretionary' | 'income' | 'savings' }
 
-const SYSTEM_CATEGORIES: SystemCategory[] = [
-  { name: 'Food & Groceries', icon: 'shopping-cart', color: '#E57373', kind: 'essential' },
-  { name: 'Transport', icon: 'car', color: '#FFB74D', kind: 'essential' },
-  { name: 'Housing', icon: 'home', color: '#A1887F', kind: 'essential' },
-  { name: 'Utilities', icon: 'zap', color: '#FFD54F', kind: 'essential' },
-  { name: 'Healthcare', icon: 'heart', color: '#F06292', kind: 'essential' },
-  { name: 'Dining Out', icon: 'utensils', color: '#FF8A65', kind: 'discretionary' },
-  { name: 'Entertainment', icon: 'music', color: '#9575CD', kind: 'discretionary' },
-  { name: 'Shopping', icon: 'shopping-bag', color: '#F48FB1', kind: 'discretionary' },
-  { name: 'Subscriptions', icon: 'repeat', color: '#7986CB', kind: 'discretionary' },
-  { name: 'Salary', icon: 'briefcase', color: '#81C784', kind: 'income' },
-  { name: 'Freelance', icon: 'edit', color: '#AED581', kind: 'income' },
-  { name: 'Other Income', icon: 'plus-circle', color: '#C5E1A5', kind: 'income' },
-  { name: 'Emergency Fund', icon: 'shield', color: '#64B5F6', kind: 'discretionary' },
-  { name: 'Learning Fund', icon: 'book-open', color: '#7D5A86', kind: 'discretionary' },
-  { name: 'Investments', icon: 'trending-up', color: '#4FC3F7', kind: 'discretionary' },
+// System categories use STABLE, deterministic ids (same on every device) so they
+// never duplicate across devices/reinstalls and transactions referencing them
+// resolve everywhere. They are seeded locally on each device and MUST NOT be
+// synced (see services/sync.ts). Previously these used random uuid() ids, which
+// — combined with the sync push — multiplied them on every device. Migration v20
+// collapses the old random-id duplicates onto these canonical ids.
+export const SYSTEM_CATEGORIES: SystemCategory[] = [
+  { id: 'sys_food_groceries', name: 'Food & Groceries', icon: 'shopping-cart', color: '#E57373', kind: 'essential' },
+  { id: 'sys_transport',      name: 'Transport',        icon: 'car', color: '#FFB74D', kind: 'essential' },
+  { id: 'sys_housing',        name: 'Housing',          icon: 'home', color: '#A1887F', kind: 'essential' },
+  { id: 'sys_utilities',      name: 'Utilities',        icon: 'zap', color: '#FFD54F', kind: 'essential' },
+  { id: 'sys_healthcare',     name: 'Healthcare',       icon: 'heart', color: '#F06292', kind: 'essential' },
+  { id: 'sys_dining_out',     name: 'Dining Out',       icon: 'utensils', color: '#FF8A65', kind: 'discretionary' },
+  { id: 'sys_entertainment',  name: 'Entertainment',    icon: 'music', color: '#9575CD', kind: 'discretionary' },
+  { id: 'sys_shopping',       name: 'Shopping',         icon: 'shopping-bag', color: '#F48FB1', kind: 'discretionary' },
+  { id: 'sys_subscriptions',  name: 'Subscriptions',    icon: 'repeat', color: '#7986CB', kind: 'discretionary' },
+  { id: 'sys_salary',         name: 'Salary',           icon: 'briefcase', color: '#81C784', kind: 'income' },
+  { id: 'sys_freelance',      name: 'Freelance',        icon: 'edit', color: '#AED581', kind: 'income' },
+  { id: 'sys_other_income',   name: 'Other Income',     icon: 'plus-circle', color: '#C5E1A5', kind: 'income' },
+  { id: 'sys_emergency_fund', name: 'Emergency Fund',   icon: 'shield', color: '#64B5F6', kind: 'discretionary' },
+  { id: 'sys_learning_fund',  name: 'Learning Fund',    icon: 'book-open', color: '#7D5A86', kind: 'discretionary' },
+  { id: 'sys_investments',    name: 'Investments',      icon: 'trending-up', color: '#4FC3F7', kind: 'discretionary' },
   // Debt book (sổ nợ): money going out (lend out / repay what I borrowed) vs
   // money coming in (borrow / collect what I lent). Translated at display time.
-  { name: 'Lending', icon: 'user-minus', color: '#8D6E63', kind: 'essential' },
-  { name: 'Borrowing', icon: 'user-plus', color: '#90A4AE', kind: 'income' },
+  { id: 'sys_lending',        name: 'Lending',          icon: 'user-minus', color: '#8D6E63', kind: 'essential' },
+  { id: 'sys_borrowing',      name: 'Borrowing',        icon: 'user-plus', color: '#90A4AE', kind: 'income' },
 ]
+
+// Exact English seed names — used to detect system rows leaking through sync so
+// the pull can skip them (services/sync.ts) and the migration can dedup them.
+export const SYSTEM_CATEGORY_NAMES: ReadonlySet<string> = new Set(SYSTEM_CATEGORIES.map((c) => c.name))
 
 export async function initFinanceSchema(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(CREATE_CATEGORY_SQL)
@@ -145,22 +154,62 @@ export async function initFinanceSchema(db: SQLiteDatabase): Promise<void> {
   await seedSystemCategories(db)
 }
 
-// Insert any system category that is missing by name, so existing installs
-// pick up categories added in later app versions (e.g. Lending/Borrowing).
+// Insert any system category that is missing by its stable id, so existing
+// installs pick up categories added in later app versions (e.g. Lending/
+// Borrowing) and fresh installs get the canonical ids. Idempotent by id.
 async function seedSystemCategories(db: SQLiteDatabase): Promise<void> {
-  const rows = await db.getAllAsync<{ name: string }>(
-    'SELECT name FROM finance_category WHERE user_id IS NULL'
+  const rows = await db.getAllAsync<{ id: string }>(
+    'SELECT id FROM finance_category WHERE id LIKE ?',
+    ['sys_%']
   )
-  const existing = new Set(rows.map((r) => r.name))
+  const existing = new Set(rows.map((r) => r.id))
 
   const ts = nowIso()
   for (let i = 0; i < SYSTEM_CATEGORIES.length; i++) {
     const cat = SYSTEM_CATEGORIES[i]!
-    if (existing.has(cat.name)) continue
+    if (existing.has(cat.id)) continue
     await db.runAsync(
       `INSERT INTO finance_category (id, user_id, name, icon, color, kind, sort_order, created_at, updated_at)
        VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
-      [uuid(), cat.name, cat.icon, cat.color, cat.kind, i, ts, ts]
+      [cat.id, cat.name, cat.icon, cat.color, cat.kind, i, ts, ts]
+    )
+  }
+}
+
+/**
+ * Collapse legacy duplicate system categories onto their canonical stable ids.
+ *
+ * Root cause: system categories used random per-device ids and were pushed to
+ * the cloud as user-owned rows, so every device/reinstall multiplied them. This
+ * remaps every transaction / rule / plan-item / debt-link that points at a
+ * duplicate (any row whose name matches a system seed but whose id is not the
+ * canonical `sys_*` id) onto the canonical row, then deletes the duplicates.
+ *
+ * Matches by exact English seed name. A user who created a custom category with
+ * the exact English name (e.g. "Transport") would be merged too — accepted as a
+ * rare edge case for this cleanup.
+ */
+export async function dedupSystemCategories(db: SQLiteDatabase): Promise<void> {
+  // Ensure the canonical rows exist first.
+  await seedSystemCategories(db)
+
+  for (const cat of SYSTEM_CATEGORIES) {
+    const dups = await db.getAllAsync<{ id: string }>(
+      'SELECT id FROM finance_category WHERE name = ? AND id <> ?',
+      [cat.name, cat.id]
+    )
+    for (const dup of dups) {
+      await db.runAsync('UPDATE finance_transaction SET category_id = ? WHERE category_id = ?', [cat.id, dup.id])
+      await db.runAsync('UPDATE finance_rule SET category_id = ? WHERE category_id = ?', [cat.id, dup.id])
+      await db.runAsync('UPDATE finance_plan_item SET category_id = ? WHERE category_id = ?', [cat.id, dup.id])
+      await db.runAsync('DELETE FROM finance_category WHERE id = ?', [dup.id])
+    }
+    // Canonical row must be a proper, non-deleted system row.
+    await db.runAsync(
+      `UPDATE finance_category
+       SET user_id = NULL, name = ?, icon = ?, color = ?, kind = ?, deleted_at = NULL
+       WHERE id = ?`,
+      [cat.name, cat.icon, cat.color, cat.kind, cat.id]
     )
   }
 }

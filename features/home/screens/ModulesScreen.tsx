@@ -23,6 +23,8 @@ export function ModulesScreen() {
     { key: 'journal',   icon: 'book-open',   title: t.nav_journal,   subtitle: t.nav_insights,        color: MODULE_COLORS.journal,  route: '/journals' },
     { key: 'reminders', icon: 'bell',        title: t.nav_reminders, subtitle: t.nav_insights,        color: MODULE_COLORS.tasks,    route: '/reminders' },
     { key: 'insights',  icon: 'bar-chart-2', title: t.nav_insights,  subtitle: t.ai_insight,          color: MODULE_COLORS.analysis, route: '/analysis' },
+    { key: 'search',    icon: 'search',      title: t.nav_search,    subtitle: t.search_title,        color: MODULE_COLORS.analysis, route: '/search' },
+    { key: 'goals',     icon: 'target',      title: t.nav_goals,     subtitle: t.goal_auto_progress,  color: MODULE_COLORS.analysis, route: '/goals' },
   ]
 
   return (
