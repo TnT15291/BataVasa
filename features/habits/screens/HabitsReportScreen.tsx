@@ -19,6 +19,8 @@ import { getDateFnsLocale } from '@services/locale'
 import { exportAllHabits } from '../services'
 import { track } from '@services/analytics'
 import { useHabitsBootstrap, useHabits } from '../hooks/useHabits'
+import { EmptyState } from '@components/ui'
+import { MODULE_COLORS } from '@design/moduleColors'
 import type { Habit, HabitLog } from '../types'
 
 type Period = 'weekly' | 'monthly' | 'yearly' | 'custom'
@@ -308,15 +310,9 @@ export function HabitsReportScreen() {
         {loading ? (
           <ActivityIndicator style={{ marginTop: spacing[8] }} color={theme.brand.primary} />
         ) : habits.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>✅</Text>
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_habits}</Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.no_habits_msg}</Text>
-          </View>
+          <EmptyState icon="check-circle" accent={MODULE_COLORS.habits} title={t.no_habits} body={t.no_habits_msg} />
         ) : !stats ? (
-          <View style={styles.empty}>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.report_no_data}</Text>
-          </View>
+          <EmptyState icon="bar-chart-2" accent={MODULE_COLORS.habits} title={t.report_no_data} />
         ) : (
           <>
             <View style={styles.statsGrid}>
@@ -478,10 +474,6 @@ const styles = StyleSheet.create({
   heatWeekLabel: { fontSize: 9, fontWeight: '600' },
   heatCell: { borderRadius: 3 },
   skipRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2] },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
-  emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
-  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[6] },
   exportBtn: { paddingVertical: spacing[3], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
   exportText: { fontSize: 14, fontWeight: '600' },
 })

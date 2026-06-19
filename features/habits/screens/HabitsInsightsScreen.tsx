@@ -10,6 +10,8 @@ import { generateHabitInsight, type HabitInsight } from '@services/ai/habitInsig
 import { exportAllHabits } from '../services'
 import { useHabitsBootstrap, useHabits } from '../hooks/useHabits'
 import { track } from '@services/analytics'
+import { EmptyState, Sparkle } from '@components/ui'
+import { MODULE_COLORS } from '@design/moduleColors'
 import type { Habit, HabitLog } from '../types'
 
 export function HabitsInsightsScreen() {
@@ -66,6 +68,10 @@ export function HabitsInsightsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {insight ? (
           <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <View style={styles.aiHeader}>
+              <Sparkle size={11} color={theme.brand.primary} />
+              <Text style={[styles.aiLabel, { color: theme.text.muted }]}>{t.habit_insight_title.toUpperCase()}</Text>
+            </View>
             {([
               { key: t.habit_insight_consistency, val: insight.consistency_summary },
               { key: t.habit_insight_strongest, val: insight.strongest_habit },
@@ -80,11 +86,12 @@ export function HabitsInsightsScreen() {
             ))}
           </View>
         ) : !loading ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🧠</Text>
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.habit_insight_title}</Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.habit_insight_min_data}</Text>
-          </View>
+          <EmptyState
+            icon="cpu"
+            accent={MODULE_COLORS.habits}
+            title={t.habit_insight_title}
+            body={t.habit_insight_min_data}
+          />
         ) : null}
       </ScrollView>
 
@@ -106,13 +113,11 @@ export function HabitsInsightsScreen() {
 const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
+  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  aiLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
   row: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2], gap: 3 },
   label: { fontSize: 12, fontWeight: '700' },
   value: { fontSize: 14, lineHeight: 20 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
-  emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
-  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[6] },
   footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth },
   btn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },

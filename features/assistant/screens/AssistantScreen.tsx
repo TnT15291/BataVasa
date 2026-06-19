@@ -128,7 +128,7 @@ export function AssistantScreen() {
   const [loading, setLoading] = useState(false)
   const quickPrompts: QuickPrompt[] = [
     { icon: 'sun', text: t.assistant_prompt_today },
-    { icon: 'dollar-sign', text: t.assistant_prompt_finance },
+    { icon: 'trending-up', text: t.assistant_prompt_finance },
     { icon: 'check-circle', text: t.assistant_prompt_habits },
     { icon: 'book-open', text: t.assistant_prompt_journal },
   ]

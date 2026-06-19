@@ -349,7 +349,8 @@ export function JournalFormScreen() {
         onPress={() => setShowDatePicker(true)}
         style={[styles.datePill, { backgroundColor: theme.bg.elevated, borderColor: theme.border.strong }]}
       >
-        <Text style={{ color: theme.text.primary, fontSize: 15 }}>📅 {dateStr}</Text>
+        <Feather name="calendar" size={16} color={theme.brand.primary} />
+        <Text style={{ color: theme.text.primary, fontSize: 15 }}>{dateStr}</Text>
       </Pressable>
       {showDatePicker && (
         <DateTimePicker
@@ -549,7 +550,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   label: { fontSize: 12, fontWeight: '600' },
-  datePill: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3] },
+  datePill: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   moodRow: { flexDirection: 'row', gap: spacing[3] },
   moodBtn: {
     flex: 1, alignItems: 'center', paddingVertical: spacing[3],

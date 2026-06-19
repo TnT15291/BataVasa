@@ -80,7 +80,7 @@ export function ModulePicker({ visible, onClose }: Props) {
 
   const modules: Module[] = useMemo(
     () => [
-      { icon: 'dollar-sign',  label: t.nav_finance,   color: MODULE_COLORS.finance, route: '/finance'   },
+      { icon: 'trending-up',  label: t.nav_finance,   color: MODULE_COLORS.finance, route: '/finance'   },
       { icon: 'check-circle', label: t.habits,        color: MODULE_COLORS.habits,  route: '/habits'    },
       { icon: 'book-open',    label: t.nav_journal,   color: MODULE_COLORS.journal, route: '/journals'  },
       { icon: 'bell',         label: t.nav_reminders, color: MODULE_COLORS.tasks,   route: '/reminders' },

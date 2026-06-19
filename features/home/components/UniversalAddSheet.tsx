@@ -42,7 +42,7 @@ type IconName = keyof typeof Feather.glyphMap
 
 function getModuleMeta(): Record<string, { icon: IconName; color: string }> {
   return {
-    finance:  { icon: 'dollar-sign', color: MODULE_COLORS.finance },
+    finance:  { icon: 'trending-up', color: MODULE_COLORS.finance },
     finance_debt: { icon: 'users', color: MODULE_COLORS.finance },
     reminder: { icon: 'bell', color: MODULE_COLORS.tasks },
     habits:   { icon: 'check-circle', color: MODULE_COLORS.habits },
@@ -296,7 +296,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   }))
 
   const quickModules: { route: string; icon: IconName; color: string; label: string }[] = [
-    { route: '/new', icon: 'dollar-sign', color: MODULE_COLORS.finance, label: t.nav_new_transaction },
+    { route: '/new', icon: 'trending-up', color: MODULE_COLORS.finance, label: t.nav_new_transaction },
     { route: '/reminder', icon: 'bell', color: MODULE_COLORS.tasks, label: t.new_reminder },
     { route: '/habit', icon: 'check-circle', color: MODULE_COLORS.habits, label: t.new_habit },
     { route: '/journal', icon: 'book-open', color: MODULE_COLORS.journal, label: t.new_journal },

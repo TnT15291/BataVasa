@@ -84,7 +84,9 @@ const styles = StyleSheet.create({
   noteText: { flex: 1, fontSize: 13, lineHeight: 19 },
   sectionLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
     marginLeft: spacing[1],
     marginTop: spacing[2],
   },

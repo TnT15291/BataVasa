@@ -16,6 +16,8 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { track } from '@services/analytics'
+import { EmptyState } from '@components/ui'
+import { MODULE_COLORS } from '@design/moduleColors'
 import { useRemindersBootstrap, useReminders } from '../hooks/useReminders'
 import type { ReminderPriority } from '../types'
 
@@ -260,15 +262,9 @@ export function RemindersReportScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         {reminders.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🔔</Text>
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_reminders}</Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.no_reminders_msg}</Text>
-          </View>
+          <EmptyState icon="bell" accent={MODULE_COLORS.tasks} title={t.no_reminders} body={t.no_reminders_msg} />
         ) : !stats || stats.total === 0 ? (
-          <View style={styles.empty}>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.report_no_data}</Text>
-          </View>
+          <EmptyState icon="bar-chart-2" accent={MODULE_COLORS.tasks} title={t.report_no_data} />
         ) : (
           <>
             {/* Donut + summary */}
@@ -396,10 +392,6 @@ const styles = StyleSheet.create({
   overdueDot: { width: 8, height: 8, borderRadius: radius.full },
   overdueTitle: { flex: 1, fontSize: 14 },
   overdueDate: { fontSize: 12 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
-  emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
-  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[6] },
   exportBtn: { paddingVertical: spacing[3], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
   exportText: { fontSize: 14, fontWeight: '600' },
 })

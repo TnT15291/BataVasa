@@ -10,6 +10,8 @@ import { getProviderKey } from '@services/ai/openai'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
 import { generateFinanceInsights } from '@services/ai/financeInsight'
 import { InsightText } from '@/components/InsightText'
+import { EmptyState, Sparkle } from '@components/ui'
+import { MODULE_COLORS } from '@design/moduleColors'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export function InsightsScreen() {
@@ -60,18 +62,19 @@ export function InsightsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {result ? (
           <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <View style={styles.aiHeader}>
+              <Sparkle size={11} color={theme.brand.primary} />
+              <Text style={[styles.aiLabel, { color: theme.text.muted }]}>{t.ai_insights.toUpperCase()}</Text>
+            </View>
             <InsightText text={result} />
           </View>
         ) : !loading ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>{keyChecked && !hasApiKey ? '🔑' : '🧠'}</Text>
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>
-              {keyChecked && !hasApiKey ? t.setup_ai_first : t.ai_insights}
-            </Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>
-              {keyChecked && !hasApiKey ? t.no_api_key_msg : t.no_insights_msg}
-            </Text>
-          </View>
+          <EmptyState
+            icon={keyChecked && !hasApiKey ? 'key' : 'cpu'}
+            accent={MODULE_COLORS.finance}
+            title={keyChecked && !hasApiKey ? t.setup_ai_first : t.ai_insights}
+            body={keyChecked && !hasApiKey ? t.no_api_key_msg : t.no_insights_msg}
+          />
         ) : null}
       </ScrollView>
 
@@ -107,11 +110,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     padding: spacing[4],
+    gap: spacing[2],
   },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
-  emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
-  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[6] },
+  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  aiLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
   footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth },
   btn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },

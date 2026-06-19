@@ -19,7 +19,8 @@ import { translateCategoryName } from '@features/finance/i18n'
 import { convertMinorAmount, getRates } from '@services/fx'
 import { InsightText } from '@/components/InsightText'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { AppHeader, ModuleOverview } from '@components/ui'
+import { AppHeader, ModuleOverview, EmptyState, Sparkle } from '@components/ui'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 export function AnalysisScreen() {
   useFinanceBootstrap()
@@ -304,23 +305,27 @@ export function AnalysisScreen() {
         {result ? (
           <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardHeaderIcon}>✨</Text>
+              <Sparkle size={12} color={theme.brand.primary} />
               <Text style={[styles.sectionLabel, { color: theme.text.muted }]}>{t.analysis_patterns}</Text>
             </View>
             <InsightText text={result} />
           </View>
         ) : !loading ? (
-          <View style={[styles.empty, !hasData && { flex: 1 }]}>
-            {!hasData && <Text style={styles.emptyIcon}>🔮</Text>}
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>
-              {hasData ? t.analysis_subtitle : t.analysis_title}
-            </Text>
-            {moduleCount < 2 && (
-              <Text style={[styles.emptyBody, { color: theme.text.muted }]}>
-                {t.analysis_no_data_msg}
-              </Text>
-            )}
-          </View>
+          hasData ? (
+            <View style={styles.empty}>
+              <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.analysis_subtitle}</Text>
+              {moduleCount < 2 && (
+                <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.analysis_no_data_msg}</Text>
+              )}
+            </View>
+          ) : (
+            <EmptyState
+              icon="cpu"
+              accent={MODULE_COLORS.analysis}
+              title={t.analysis_title}
+              body={moduleCount < 2 ? t.analysis_no_data_msg : undefined}
+            />
+          )
         ) : (
           <View style={styles.spinner}>
             <ActivityIndicator size="large" color={theme.brand.primary} />
@@ -428,14 +433,12 @@ const styles = StyleSheet.create({
   highlightLabel: { fontSize: 12, marginTop: 2 },
   highlightValue: { fontSize: 14, fontWeight: '600' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  cardHeaderIcon: { fontSize: 14 },
   compRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   compLabel: { flex: 1, fontSize: 13 },
   compValue: { fontSize: 13, fontWeight: '600' },
   deltaBadge: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
   deltaText: { fontSize: 12, fontWeight: '600' },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: spacing[6] },
-  emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
   emptyTitle: { fontSize: 16, fontWeight: '600', marginBottom: spacing[2], textAlign: 'center' },
   emptyBody: { fontSize: 13, textAlign: 'center', paddingHorizontal: spacing[4] },
   spinner: { alignItems: 'center', paddingTop: spacing[6] },

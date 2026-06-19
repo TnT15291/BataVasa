@@ -99,7 +99,9 @@ const styles = StyleSheet.create({
   container: { padding: spacing[4], gap: spacing[1] },
   sectionLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
     marginTop: spacing[4],
     marginBottom: spacing[2],
     marginLeft: spacing[1],

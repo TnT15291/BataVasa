@@ -95,7 +95,9 @@ const styles = StyleSheet.create({
   intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing[2] },
   sectionHeader: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
     marginTop: spacing[4],
     marginBottom: spacing[2],
     marginLeft: spacing[1],

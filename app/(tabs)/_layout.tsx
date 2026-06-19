@@ -131,7 +131,7 @@ export default function TabsLayout() {
           title: t.nav_finance,
           tabBarLabel: t.nav_finance,
           tabBarActiveTintColor: MODULE_COLORS.finance,
-          tabBarIcon: ({ focused }) => <ModuleTabIcon name="dollar-sign" color={MODULE_COLORS.finance} focused={focused} />,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name="trending-up" color={MODULE_COLORS.finance} focused={focused} />,
         }}
       />
 

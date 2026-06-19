@@ -18,7 +18,7 @@ export function ModulesScreen() {
   const { t } = useTranslation()
 
   const modules: ModuleEntry[] = [
-    { key: 'finance',   icon: 'dollar-sign', title: t.nav_finance,   subtitle: t.finance_settings,   color: MODULE_COLORS.finance,  route: '/finance' },
+    { key: 'finance',   icon: 'trending-up', title: t.nav_finance,   subtitle: t.finance_settings,   color: MODULE_COLORS.finance,  route: '/finance' },
     { key: 'habits',    icon: 'check-circle',title: t.habits,        subtitle: t.nav_insights,        color: MODULE_COLORS.habits,   route: '/habits' },
     { key: 'journal',   icon: 'book-open',   title: t.nav_journal,   subtitle: t.nav_insights,        color: MODULE_COLORS.journal,  route: '/journals' },
     { key: 'reminders', icon: 'bell',        title: t.nav_reminders, subtitle: t.nav_insights,        color: MODULE_COLORS.tasks,    route: '/reminders' },

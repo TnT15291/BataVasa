@@ -9,6 +9,8 @@ import { getProviderKey } from '@services/ai/openai'
 import { generateJournalReflection, type JournalReflection } from '@services/ai/journalInsight'
 import { useJournalsBootstrap, useJournals } from '../hooks/useJournals'
 import { track } from '@services/analytics'
+import { EmptyState, Sparkle } from '@components/ui'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 export function JournalsInsightsScreen() {
   useJournalsBootstrap()
@@ -47,6 +49,10 @@ export function JournalsInsightsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {reflection ? (
           <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <View style={styles.aiHeader}>
+              <Sparkle size={11} color={theme.brand.primary} />
+              <Text style={[styles.aiLabel, { color: theme.text.muted }]}>{t.journal_reflection_title.toUpperCase()}</Text>
+            </View>
             <View style={[styles.row, { borderColor: theme.border.subtle }]}>
               <Text style={[styles.label, { color: theme.brand.primary }]}>{t.journal_reflection_mood}</Text>
               <Text style={[styles.value, { color: theme.text.primary }]}>{reflection.mood_summary}</Text>
@@ -73,11 +79,12 @@ export function JournalsInsightsScreen() {
             </View>
           </View>
         ) : !loading ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>✨</Text>
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.journal_reflection_title}</Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.journal_reflection_min_data}</Text>
-          </View>
+          <EmptyState
+            icon="cpu"
+            accent={MODULE_COLORS.journal}
+            title={t.journal_reflection_title}
+            body={t.journal_reflection_min_data}
+          />
         ) : null}
       </ScrollView>
 
@@ -99,14 +106,12 @@ export function JournalsInsightsScreen() {
 const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
+  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  aiLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
   row: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2], gap: 3 },
   promptCard: { borderRadius: radius.md, borderWidth: 1, padding: spacing[3], gap: spacing[1] },
   label: { fontSize: 12, fontWeight: '700' },
   value: { fontSize: 14, lineHeight: 20 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
-  emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
-  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[6] },
   footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth },
   btn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },

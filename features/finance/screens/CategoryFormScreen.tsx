@@ -4,6 +4,7 @@ import {
   ScrollView, Alert, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
+import { Feather } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -190,6 +191,7 @@ export function CategoryFormScreen() {
 
       {isEditing && (
         <Pressable onPress={onDelete} style={styles.deleteBtn}>
+          <Feather name="trash-2" size={16} color={theme.semantic.danger} />
           <Text style={[styles.deleteBtnText, { color: theme.semantic.danger }]}>{t.delete_category}</Text>
         </Pressable>
       )}
@@ -232,6 +234,6 @@ const styles = StyleSheet.create({
   hint: { fontSize: 12, marginTop: -spacing[2] },
   saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center', marginTop: spacing[2] },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteBtn: { alignItems: 'center', paddingVertical: spacing[3] },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], paddingVertical: spacing[3] },
   deleteBtnText: { fontSize: 15 },
 })

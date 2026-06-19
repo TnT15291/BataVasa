@@ -25,13 +25,14 @@ Journal, Reminders, Insights, Settings). Codified in `design/tokens.ts`,
 - **Status pill / chip (`StatusPill`, `Chip`):** full-round, tinted bg + bold colored
   text for status ("On Track" = success); quiet neutral chips for tags.
 - **Signals timeline (`SignalsTimeline`):** one calm lane per module on a shared time
-  axis, module-colored dots, a "now" marker. Thin, never a heavy chart.
+  axis, each lane keyed by its module-color icon (not a tiny text label — language-proof
+  + consistent with `ListRow`), module-colored dots, a "now" marker. Thin, never a heavy chart.
 - **AI insight (`AIInsightCard`):** "AI INSIGHT" label + one grounded sentence +
   quiet rationale tags. Inline, never a modal.
 - **Quick actions (`QuickActionRow`):** evenly distributed ghost actions (Capture ·
   Plan · Review · Sync) under a hairline rule.
 - **Module colors (`MODULE_COLORS`):** Finance = blue `#3B6FE0`, Habits = green
-  `#1F9D74`, Journal = amber `#E0892C`, Reminders = purple `#7A5AF0`, Analysis =
+  `#1F9D74`, Journal = amber `#E0892C`, Reminders = soft teal `#0EA5A8`, Analysis =
   indigo `#5654D4`. Accent = action/selection/state only, never decoration.
 - **Type:** one sans for all UI + mono only for `>_` / `⌘K` / command hints. Fixed
   scale, floor 12px, max weight 700. Section labels uppercase tracked 700.
@@ -99,7 +100,7 @@ Location: `components/` (shared) and `features/<module>/components/` (module-spe
 - `<Sheet>` — bottom sheet
 - `<Toast>` — non-blocking notifications with optional Undo action (used by AI auto-confirm-off path)
 - `<Skeleton>` — loading placeholder
-- `<EmptyState image, title, body, cta>` — empty list placeholder
+- `<EmptyState icon, accent, title, body, cta>` (`components/ui/EmptyState.tsx`) — console empty state: soft tinted circular module-color icon badge + title + muted body + optional pill CTA. Replaces 48px-emoji empties; used on every AI insight + report screen so secondary screens match the new list-screen look.
 - `<Badge variant="success|warning|danger|neutral">`
 - `<Divider>`
 - `<DateRow value, onChange>` — tappable date/time row used in every module's create/edit screen (Cross-Module Rule 4)

@@ -1030,7 +1030,7 @@ export function TransactionListScreen() {
           ) : (
             <View style={styles.empty}>
               <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.finance + '1F' }]}>
-                <Feather name="dollar-sign" size={34} color={MODULE_COLORS.finance} />
+                <Feather name="trending-up" size={34} color={MODULE_COLORS.finance} />
               </View>
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_transactions}</Text>
               <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.tap_to_add}</Text>

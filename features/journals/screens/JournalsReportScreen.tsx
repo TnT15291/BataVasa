@@ -15,6 +15,8 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { track } from '@services/analytics'
+import { EmptyState } from '@components/ui'
+import { MODULE_COLORS } from '@design/moduleColors'
 import { useJournalsBootstrap, useJournals } from '../hooks/useJournals'
 
 type Period = 'weekly' | 'monthly' | 'yearly' | 'custom'
@@ -246,15 +248,9 @@ export function JournalsReportScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         {journals.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📔</Text>
-            <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_journals}</Text>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.no_journals_msg}</Text>
-          </View>
+          <EmptyState icon="book-open" accent={MODULE_COLORS.journal} title={t.no_journals} body={t.no_journals_msg} />
         ) : !stats || stats.entries === 0 ? (
-          <View style={styles.empty}>
-            <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.report_no_data}</Text>
-          </View>
+          <EmptyState icon="bar-chart-2" accent={MODULE_COLORS.journal} title={t.report_no_data} />
         ) : (
           <>
             <View style={styles.statsGrid}>
@@ -367,10 +363,6 @@ const styles = StyleSheet.create({
   importantRow: { flexDirection: 'row', gap: spacing[3], borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: spacing[2] },
   importantDate: { width: 44, fontSize: 12, fontWeight: '700' },
   importantText: { flex: 1, fontSize: 14, lineHeight: 20 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing[12] },
-  emptyIcon: { fontSize: 48, marginBottom: spacing[3] },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
-  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[6] },
   exportBtn: { paddingVertical: spacing[3], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
   exportText: { fontSize: 14, fontWeight: '600' },
 })
