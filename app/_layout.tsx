@@ -170,7 +170,6 @@ export default function RootLayout() {
           <Stack.Screen name="insights" options={{ title: t.nav_insights }} />
           <Stack.Screen name="reports" options={{ title: t.nav_reports }} />
           <Stack.Screen name="chat" options={{ title: t.nav_chat }} />
-          <Stack.Screen name="batavasa" options={{ title: 'Hỏi BataVasa' }} />
           <Stack.Screen name="categories" options={{ title: t.nav_categories }} />
           <Stack.Screen name="category" options={{ title: t.new_category }} />
           <Stack.Screen name="debts" options={{ title: t.debt_book }} />

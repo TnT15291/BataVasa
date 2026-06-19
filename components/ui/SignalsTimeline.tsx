@@ -1,10 +1,15 @@
 import { View, Text, StyleSheet } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { spacing } from '@design/tokens'
 
+type IconName = keyof typeof Feather.glyphMap
+
 export type SignalLane = {
   key: string
+  /** Module name — kept for the screen-reader label even though the lane renders an icon. */
   label: string
+  icon: IconName
   color: string
   marks: number[]
 }
@@ -16,7 +21,7 @@ type Props = {
   nowLabel?: string
 }
 
-const GUTTER = 54
+const GUTTER = 30
 const TRACK_H = 6
 const clamp = (n: number) => Math.min(Math.max(n, 0), 1)
 
@@ -50,9 +55,13 @@ export function SignalsTimeline({ lanes, axisLabels, nowFraction, nowLabel }: Pr
 
       {lanes.map((lane) => (
         <View key={lane.key} style={styles.laneRow}>
-          <Text style={[styles.laneLabel, { color: theme.text.secondary }]} numberOfLines={1}>
-            {lane.label}
-          </Text>
+          <View
+            style={styles.laneIcon}
+            accessibilityRole="image"
+            accessibilityLabel={lane.label}
+          >
+            <Feather name={lane.icon} size={13} color={lane.color} />
+          </View>
           <View style={[styles.track, { backgroundColor: theme.bg.secondary }]}>
             {nowPct !== null ? (
               <View style={[styles.nowLine, { left: `${nowPct}%`, backgroundColor: theme.text.muted }]} />
@@ -86,7 +95,7 @@ const styles = StyleSheet.create({
   axisLabels: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
   axisLabel: { fontSize: 8, fontWeight: '500' },
   laneRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  laneLabel: { width: GUTTER - 8, fontSize: 9, fontWeight: '500' },
+  laneIcon: { width: GUTTER - 8, alignItems: 'center' },
   track: {
     flex: 1,
     height: TRACK_H,

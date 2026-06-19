@@ -1,6 +1,6 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-06-13.
+> Single source of truth for project status. Last updated: 2026-06-19.
 
 ## Overall
 
@@ -133,8 +133,8 @@ Code is implemented. Sync has been manually verified as working; Google Auth sti
 
 Current test infrastructure is ready, but global coverage is still below the public-launch target.
 
-- Latest automated run on 2026-06-13: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
-- Current status: 463 tests across 31 suites.
+- Latest automated run on 2026-06-19: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
+- Current status: 476 tests across 31 suites.
 - Current coverage: 70.08% statements / 64.04% branches / 71.81% functions / 72.41% lines.
 - Current CI floor: 37% statements / 35% branches / 31% functions / 39% lines.
 - Target before public launch: keep statements/functions/lines above 70% and continue raising branch coverage toward 70%.
@@ -561,6 +561,13 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-06-18/19 New UI "Personal OS Console" overhaul + rollout:
+  - 2026-06-18: redesigned the main screens (Home/Daily Digest, the 4 module list screens, Settings, Analysis, Auth) around a new `components/ui/` console design system (`AppHeader`, `CommandBar`, `ModuleTabBar`, `SectionHeader`, `ListRow`, `ModuleOverview`, `AIInsightCard`, `Chip`, `StatusPill`, `SignalsTimeline`, `QuickActionRow`, `BrandMark`/`Sparkle`). Retuned `design/tokens.ts`, `design/themes.ts`, `design/moduleColors.ts`. Rules in `docs/design-system.md` ("UI1 Personal OS Console").
+  - 2026-06-19: finished the rollout on the secondary (pushed) screens. Added `components/ui/EmptyState.tsx` (tinted module-color icon badge + title/body/optional CTA) and replaced the old 48px-emoji empty states across all 4 AI insight screens (finance/habits/journals/reminders) and all 4 report screens (finance/habits/journals/reminders) + AnalysisScreen. AI result cards now carry a `Sparkle` "AI INSIGHT" header for console identity. No new i18n keys (reused existing titles).
+  - 2026-06-19 (cont.) language + settings polish: fixed the home screen mixing Vietnamese into the otherwise-translated UI — `DailyDigestScreen` had hardcoded Vietnamese goal text + an untranslated `LIFE_GOALS` rotation; restored the existing `home_ai_tip_review/habits/empty` keys, used `t.ai_insights` for the AI card label, and made the signals axis labels locale-neutral 24h (`6/9/12/15/18/21` instead of English `AM/PM`). Unified settings sub-screen section headers (`AppearanceScreen`, `AISettingsScreen`, `HelpScreen`) to the UPPERCASE-tracked style used by `SettingsScreen` and the list/home screens.
+  - 2026-06-19 (cont.) signals + form audit: `SignalsTimeline` lanes now render a module-color **icon** (language-proof) instead of a tiny truncated text label; gutter tightened. Audited all 5 create/edit forms (Habit/Journal/Reminder/Debt/Category) — already on the new design system (tokens, `t.*`, Feather icon-chip headers, `DateRow`, `ConfirmEntrySheet`); only fixes needed were JournalForm's date pill (📅 emoji → Feather calendar icon) and CategoryForm's delete button (added trash icon). Mood/habit-preset emojis are intentional data, left as-is.
+  - Deleted dead `app/batavasa.tsx` ("Hỏi BataVasa" guide) + its `Stack.Screen` registration — it was hardcoded Vietnamese and unreachable (no `router.push('/batavasa')`; the home assistant routes to `/chat` → `AssistantScreen`). This removed the last hardcoded-Vietnamese user-facing string. The `batavasa://` deep-link scheme (auth callback / reset-password) is unrelated and untouched.
+  - Verification: `npx tsc --noEmit` clean; 476 tests across 31 suites pass.
 - 2026-06-13 follow-up pass (dual notifications, smart-entry missing fields):
   - Reminders now schedule a second notification at the event time when `advance_minutes > 0` (early warning + at-deadline ping). Covers debts, recurring bills, and manual reminders.
   - Smart entry across modules: missing fields prompt the user ("Bổ sung / Lưu với mặc định") instead of silent drops or validation errors. `universalEntry.ts` tracks `missing` per candidate; `aiParser.ts` (reminders) falls back title→input text and flags missing dates; missing reminder date can save to the unscheduled inbox; missing debt counterparty saves as "Không xác định"; finance smart entry without an amount asks for the amount specifically.

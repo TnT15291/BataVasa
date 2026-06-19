@@ -35,7 +35,7 @@ type IconName = keyof typeof Feather.glyphMap
 // Review-row icons tuned to the UI1.png reference (transaction card, activity,
 // pencil, bell) — each in its module identity color.
 const KIND_META: Record<ReviewInboxItem['kind'], { icon: IconName; color: string }> = {
-  finance: { icon: 'dollar-sign', color: MODULE_COLORS.finance },
+  finance: { icon: 'trending-up', color: MODULE_COLORS.finance },
   task:    { icon: 'bell',        color: MODULE_COLORS.tasks },
   habit:   { icon: 'check-circle',color: MODULE_COLORS.habits },
   journal: { icon: 'book-open',   color: MODULE_COLORS.journal },
@@ -55,14 +55,6 @@ const relShort = (iso: string | undefined, now: Date): string | undefined => {
   const h = Math.round(m / 60)
   return h < 24 ? `${h}h` : `${Math.round(h / 24)}d`
 }
-
-const LIFE_GOALS = [
-  'Giữ cơ thể khỏe hơn hôm qua: hoàn thành một thói quen nhỏ trước khi ngày trôi qua.',
-  'Giữ tiền rõ ràng: ghi lại khoản chi đầu tiên trong ngày ngay khi phát sinh.',
-  'Giữ đầu óc nhẹ hơn: viết một dòng nhật ký thật ngắn về điều đáng nhớ hôm nay.',
-  'Giữ lời hứa với chính mình: chọn một việc quan trọng và xử lý trước.',
-  'Giữ nhịp sống ổn định: xem lại các tín hiệu hôm nay trước khi thêm việc mới.',
-]
 
 export function DailyDigestScreen() {
   const theme = useTheme()
@@ -112,19 +104,18 @@ export function DailyDigestScreen() {
   const laneFor = (kind: ReviewInboxItem['kind']) =>
     timelineItems.filter((i) => i.kind === kind).map((i) => frac(i.occurredAt))
   const lanes: SignalLane[] = [
-    { key: 'finance',   label: t.nav_finance,   color: MODULE_COLORS.finance,  marks: laneFor('finance') },
-    { key: 'habits',    label: t.habits,        color: MODULE_COLORS.habits,   marks: laneFor('habit') },
-    { key: 'journal',   label: t.nav_journal,   color: MODULE_COLORS.journal,  marks: laneFor('journal') },
-    { key: 'reminders', label: t.nav_reminders, color: MODULE_COLORS.tasks,    marks: laneFor('task') },
+    { key: 'finance',   label: t.nav_finance,   icon: 'trending-up',  color: MODULE_COLORS.finance,  marks: laneFor('finance') },
+    { key: 'habits',    label: t.habits,        icon: 'check-circle', color: MODULE_COLORS.habits,   marks: laneFor('habit') },
+    { key: 'journal',   label: t.nav_journal,   icon: 'book-open',    color: MODULE_COLORS.journal,  marks: laneFor('journal') },
+    { key: 'reminders', label: t.nav_reminders, icon: 'bell',         color: MODULE_COLORS.tasks,    marks: laneFor('task') },
   ]
-  const axisLabels = ['6 AM', '9', '12 PM', '3', '6', '9 PM']
+  const axisLabels = ['6', '9', '12', '15', '18', '21']
 
-  const dailyGoal = LIFE_GOALS[Math.floor(now.getTime() / 86_400_000) % LIFE_GOALS.length]
   const insightText = reviewCount > 0
-    ? `Mục tiêu hôm nay: xử lý ${reviewCount} mục cần xem lại, rồi hỏi Trợ lý nên ưu tiên gì tiếp theo.`
+    ? t.home_ai_tip_review.replace('{{count}}', String(reviewCount))
     : habitsTotal > 0
-      ? `Mục tiêu hôm nay: hoàn thành ${habitsDoneCount}/${habitsTotal} thói quen. ${dailyGoal}`
-      : `Mục tiêu hôm nay: ${dailyGoal}`
+      ? t.home_ai_tip_habits.replace('{{done}}', String(habitsDoneCount)).replace('{{total}}', String(habitsTotal))
+      : t.home_ai_tip_empty
 
   return (
     <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
@@ -221,9 +212,8 @@ export function DailyDigestScreen() {
 
         {/* ── AI Insight ── */}
         <AIInsightCard
-          label="Mục tiêu hôm nay"
+          label={t.ai_insights}
           text={insightText}
-          tags={['Mục tiêu']}
           actionLabel={t.nav_chat}
           onAction={() => router.push('/chat')}
         />
