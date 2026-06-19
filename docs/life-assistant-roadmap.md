@@ -151,3 +151,39 @@ Là domain module nên phải đủ: **Rule 1** (sync/export/wipe), **Rule 2** (
 - ❌ Tracker lĩnh vực rời rạc (sleep/nutrition/fitness riêng lẻ) — giá trị biên thấp, làm app nặng. Nên là *thuộc tính* trong Habits/Journals.
 - ❌ Tích hợp calendar/email/bank — phức tạp, lệ thuộc bên thứ 3 (doc đã defer đúng).
 - ❌ Social / chia sẻ / gamification — lệch hướng "calm personal OS".
+
+---
+
+## Module Habits — góp ý theo *Atomic Habits* (chọn lọc, KHÔNG làm hết)
+
+> Khung sách: **4 Quy luật** (Rõ ràng · Hấp dẫn · Dễ dàng · Thỏa mãn) + **bản dạng > kết quả** + **hệ thống > mục tiêu**. Sách *trực tiếp khuyến nghị* habit tracker, nhưng cảnh báo: chỉ tốt khi **không tạo ma sát**.
+
+### Nguyên tắc chọn
+
+> App tốt nhất **không** phải app có nhiều tính năng Atomic Habits nhất, mà là app có **default *thấm* các quy luật**. Nhồi 8–9 khái niệm thành 8–9 tính năng = trái cả sách ("make it easy") lẫn BataVasa ("AI assists, not overwhelms"). Nhiều ý trong sách là **hành vi của user**, không phải **tính năng của app**.
+
+### Đã có sẵn
+
+- **Giờ nhắc thói quen** — `habit.notification_times` (mảng `"HH:MM"`, migration **v13**), time picker trong form, lên/hủy lịch thật ở `services/notifications.ts`, reschedule khi mở app. *(Lưu ý: `current-state.md` ghi v12 là cũ — thực tế đã có v13.)*
+- **Streak + heatmap** (Quy luật 4 — "don't break the chain").
+- **Skip/rest day** không phá streak — đã đúng tinh thần "calm".
+
+### Quyết định cắt
+
+| ✅ Làm (nhỏ, đòn bẩy cao) | 🟡 Để dành / có điều kiện | ❌ Bỏ (không phải tính năng) |
+|---|---|---|
+| **"Đừng bỏ lỡ hai lần"** — chỉnh logic streak/nhắc: lỡ 1 ngày không phạt, lỡ 2 ngày liên tiếp mới nhắc nhẹ | **Habit stacking** ("sau [habit cũ] → làm [mới]") — chỉ làm nếu user thực sự cần | **Quy tắc 2 phút** → chỉ là *gợi ý lúc tạo*, không cần feature |
+| **Bản dạng** — 1 field tùy chọn ("Tôi là người khỏe mạnh"), đưa vào prompt AI/Weekly Review | **Thói quen đo được** (số/thời lượng) — V2, opt-in, mặc định vẫn boolean | **Environment design / temptation bundling** → hành vi user, không code |
+| **Câu "ý định thực thi"** — gần như free: gộp `notification_times` (giờ) + `location_*` (nơi) thành 1 câu rõ ràng | | **Habit Scorecard** → chỉ là 1 journal template, không phải tính năng riêng |
+
+### 3 ưu tiên (nếu làm)
+
+1. **"Đừng bỏ lỡ hai lần"** — đòn bẩy cao nhất, chi phí thấp, giao điểm hoàn hảo giữa sách và "calm UX".
+2. **Thói quen dựa trên bản dạng** — 1 field, biến insight từ *"hoàn thành 5/7"* thành *"bạn đang sống đúng kiểu người bạn muốn trở thành"*.
+3. **Câu "ý định thực thi"** — gần free vì dữ liệu (giờ + nơi) đã có; chỉ là cách trình bày.
+
+### Lưu ý thực thi
+
+- **Thời điểm: sau closed beta** (verify + test trước).
+- Ngay cả khi đó: **ship 1–2 cái, quan sát, rồi mới làm tiếp** — đừng tung cả gói (chính là "1% mỗi ngày" áp vào việc phát triển sản phẩm).
+- Mọi thứ giữ **tùy chọn, default tối giản** — sách cảnh báo đừng để đo lường thành áp lực.
