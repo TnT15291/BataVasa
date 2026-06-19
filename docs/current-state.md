@@ -333,6 +333,201 @@ These are the features that make BataVasa meaningfully different from single-pur
 
 - Bank import / Plaid-style aggregation: high compliance, privacy, cost, and support burden.
 - Investment/net-worth tracking: useful, but not core to BataVasa's current positioning.
+- Sleep/nutrition/fitness as separate trackers: better as attributes in Habits/Journals, not standalone modules.
+- Calendar/email/bank integrations: high dependency risk and engineering complexity.
+- Social/sharing/gamification: diverges from "calm personal OS" positioning.
+
+## Long-Term Product Vision: From Tracker to Life Assistant
+
+> **Strategic direction after closed beta.** BataVasa is currently a "personal OS" (~90% coverage) but only a "life assistant" (~50%). The gaps are not missing modules, but missing **intelligence layers**: proactivity, cross-module understanding, and goal-oriented memory.
+
+**TL;DR:** 4 modules (Finance, Reminders, Habits, Journals) are feature-complete for MVP. To move from "tracker" to "assistant," the roadmap adds **3 intelligence layers + 1 unifying Goals module**, not new domains.
+
+### Why Not A Full Assistant Yet
+
+| Dimension | Current | Status | Target |
+|---|---|---|---|
+| **Multi-domain capture** (4 modules) | ✅ Finance, Reminders, Habits, Journals + CRUD + sync | ✅ Done | ✅ Achieved |
+| **Per-module analysis** (AI insights) | ✅ Module-specific insights | ✅ Done | ✅ Achieved |
+| **Proactivity** (auto-reminders/alerts) | ❌ Pull-only, M37 not started | ❌ Missing | Checklists, mood dips, budget overages → calm notifications |
+| **Cross-module understanding** (correlations) | 🟡 Highlights + comparison (M36 started) | 🟡 Partial | Spending ↔ mood ↔ habits; recommendations from patterns |
+| **Goal/context memory** (who you are, what you're trying to do) | ❌ Stateless AI, no goal framework | ❌ Missing | Goals module + user context store for AI |
+| **Action loop** (insight → suggestion → 1-tap accept) | ❌ Insights only, no follow-up | ❌ Missing | Weekly Review suggestions → quick actions |
+
+**Verdict:** Full backbone (data from 4 mods) exists. **Brain** (memory, proactivity, connections) is mostly missing. Roadmap below fixes that without adding more domains.
+
+### LAYER 1 — Trust Foundations (Hygiene, Not Differentiator)
+
+These are table-stakes for "personal OS" — dull but critical.
+
+#### 1a. Global Search (M38)
+
+- **Problem:** Users write daily but rarely retrieve → data becomes "write-only archive."
+- **Solution:** Unified search across all 4 modules (transactions, reminders, habits, journal entries) filtered by text, date range, amount, or tags.
+- **Implementation:** `services/search.ts` queries all domain tables in parallel; optional AI layer translates natural language questions into deterministic filters (amount/date arithmetic remains rule-based per CLAUDE.md Rule 2).
+- **Scope:** low risk (read-only), medium value (high engagement). Recommended: **do early in post-beta.**
+- **UX:** `app/search.tsx` with debounce, results grouped by module; can start minimal (exact-match string search) and add AI later.
+
+#### 1b. Backup / Restore (M21)
+
+- **Problem:** Users only trust apps that survive device loss. "Sync to cloud" is implementation, but users think "backup."
+- **Current state:** 80% done — sync queue + Supabase remote + per-module `exportAllData()` exist. Missing:
+  - **Cloud restore:** new device → login → pull from Supabase (sync infra exists; needs UX clarity + B1/B2 verification).
+  - **Manual file backup:** export all 4 modules as single file + import wizard for users skeptical of cloud.
+- **Implementation:** `services/backup.ts` orchestrates module exports/imports; Settings → Data Management → Backup/Restore.
+- **Scope:** medium-high risk (import versioning, deduplication, conflict resolution). Build after closed-beta sync is proven.
+
+### LAYER 2 — The Brain (Insight → Action)
+
+These are the "assistant" features that make the app *know* your context and *help* you act.
+
+#### 2a. Weekly Life Review (Flagship)
+
+- **What:** Unified weekly narrative across all 4 modules + goals, replacing 4 separate reports.
+- **Example:** *"Week of May 26: You spent 2.1M (−12% vs prev). Completed 5/7 habits. Journaled 3×, avg mood was calm. Overdue: 1 reminder. Insight: low mood on Wed correlated with 400k spending spike — journaling on those days might help. Next week: focus on [goal] and try [habit]."*
+- **Implementation:** Deterministic aggregation (same as Reports), AI explains + suggests (never arithmetic). Timestamp-aware prompt so AI resolves relative dates correctly.
+- **Scope:** medium (design, prompt tuning, scheduling).
+- **Timing:** ship after Goals module exists (so Review can reference goals).
+
+#### 2b. Goal/Context Memory Layer
+
+- **Problem:** AI is stateless — each prompt rebuilds from recent data, missing long-term context.
+- **Solution:** Store user-provided facts + inferred insights (goals, preferences, patterns) → inject into every AI system prompt.
+  - **Explicit:** "I want to save 50M this year. Budget for dining is 2M/month."
+  - **Inferred:** "You typically spend more on weekends" or "You tend to journal when stressed."
+- **Implementation:** Table `user_context` (text field for goals + facts) + baked into system prompts via a helper. Follows Cross-Module Rule 1 (wipe/export/sync).
+- **Example:** Without memory: *"You spent a lot on food."* With memory: *"You spent 3M on food — that's 1.5× your usual 2M weekly budget, and above your goal of dining < 2M/month."*
+- **Scope:** small-medium; is a prerequisite for Weekly Review to be truly personalized.
+
+#### 2c. Proactive (Background Summaries)
+
+- **Problem:** User has to open the app to read Weekly Review or learn about anomalies.
+- **Solution:** `expo-task-manager` runs weekly (e.g., Sunday 9 AM) → calculates summary → `expo-notifications` → deep-link to relevant screen.
+- **Scope:** low-medium implementation; medium polish (ensure notifications are not annoying).
+- **Timing:** late (do after Weekly Review exists and is solid).
+- **Design principle:** "Calm" = opt-in, daily frequency ceiling, allow-list of events (anomalies, milestones, reviews only).
+
+### The Goals Module — The Unifying Spine
+
+**Why 5th module?** Not a new tracker, but a *projection layer* that **connects goals to drifts in Finance, Habits, Reminders, Journals**. Adds long-term intent, keeps app focused, feeds AI memory and Weekly Review.
+
+#### Vision
+
+A goal = an intention with a measurable, time-bounded target that auto-derives progress from existing modules.
+
+| Goal Example | Auto-Source | Calculation |
+|---|---|---|
+| "Save 50M in 2026" | Finance category `Savings` | SUM(amount) WHERE category.kind='savings' AND year(occurred_at)=2026 |
+| "Gym 4×/week" | Habit `Gym` | completion_rate(last 30 days) vs target |
+| "Journal daily" | Journals module | COUNT(entries) / days_elapsed |
+| "Reduce dining to <2M/month" | Finance category `Dining` | SUM(amount) WHERE category='Dining' AND month(occurred_at)=current |
+| "Stress level down" | Journals mood tag | manual check-in weekly, or derive from mood field if collected |
+
+**Key principle:** Progress is **derived**, not manually entered. App calculates like it does for Reports → low friction + always current.
+
+#### Data Model
+
+- `goals` table: `id, user_id, title, description, target_type (amount, rate, count, mood), target_value, unit, start_date, due_date, metric_binding (JSON: which module + how to extract), status`
+- Metric binding = the query logic, e.g. `{ "module": "finance", "category_id": "X", "aggregation": "sum_amount" }`
+- Progress is a **derived view**, recalculated on-demand or cached + invalidated on module writes.
+
+#### UX
+
+- **List:** cards with circular progress, title, metric (e.g. "4.2M / 50M saved"), due date.
+- **Detail:** full progress bar, monthly/weekly breakdown, linked entries (e.g. "Dining transactions this month"), AI-generated nudge (e.g. "You're on track; keep it up").
+- **Create:** choose goal type → app suggests metric binding → user picks dates + target value. Minimal form.
+- **Universal Add:** can create goals via text (e.g. "save 50M by dec") → AI parse + confirm per Rule 5.
+
+#### Cross-Module Benefits
+
+1. **Weekly Life Review has a spine:** "On track for 3 of 4 goals; focus on X."
+2. **AI gets context:** *"Current goal: save 50M (at 8M, 16% done). Latest insight: dining budgets are busting month-end. Suggestion: front-load dining budget to early month."*
+3. **Reminders know intent:** Habit reminder can mention goal progress (e.g. *"3/4 gym sessions done this week; one more to hit your goal"*).
+4. **Proactive notifications:** Milestone reached (e.g. 50% saved), goal at-risk (overspending), or streak broken.
+
+#### Cross-Module Rules Compliance
+
+Must implement all 8 mandatory rules (Rule 1: sync/export/wipe; Rule 2: i18n + locale format; Rule 3: universal add; Rule 4: backdated entries; Rule 5: AI parse → confirm; Rule 6: location; Rule 7: CRUD; Rule 8: error boundary + logger).
+
+**Feature folder structure:**
+```
+features/goals/
+  screens/GoalsListScreen.tsx
+  screens/GoalsDetailScreen.tsx
+  screens/GoalsFormScreen.tsx
+store/goalsStore.ts
+database/goals/queries.ts
+database/goals/schema.ts
+ai/goalInsight.ts
+services/goalProgress.ts  ← derive progress from modules
+```
+
+#### Phased Rollout (To Avoid Scope Creep)
+
+- **Phase 1 (MVP):** Manual goal creation + progress derivation for 2–3 goal types (savings + habit tracking). No universal add yet. Context memory layer (optional).
+- **Phase 2:** Universal add goal parsing, goal-based reminders/notifications, Weekly Review integration.
+- **Constraint:** keep `metric_binding` types small; add new types only after validating demand.
+
+### Habits Module — Atomic Habits Framework (Selective)
+
+BataVasa's habits module should **embody the 4 Laws** rather than re-implement every Atomic Habits concept as a feature.
+
+#### Already Implemented
+
+- ✅ **Clarity** — habit name, goal/target, schedule, notification times.
+- ✅ **Attractiveness** — streak, heatmap, completion badges (done).
+- ✅ **Ease** — notification times (v13, fully integrated), skip/rest day (no streak penalty), recurring vs one-time reminder (flexible).
+- ✅ **Satisfaction** — streak milestones, heatmap visual feedback, "never miss twice" opportunity.
+
+#### Selective Additions (Post-Beta)
+
+| ✅ Do (High Leverage) | 🟡 Conditional | ❌ Skip (Not a Feature) |
+|---|---|---|
+| **"Never miss twice"** — auto-adjust notification if user consistently misses by reschedule + gentle nudge | **Habit stacking** ("After [cue habit] → do [new habit]") — only if user explicitly links | "2-minute rule" → coaching tip, not a feature |
+| **Identity-based framing** — optional text field "I am a…" — surface in insights + Weekly Review | **Numeric habits** (reps, duration) — v2+, opt-in, mutable | "Environment design" → user responsibility, not gamified |
+| **Implementation intention** — auto-compose from habit name + notification time + optional location → clear "When & Where" statement | **Habit scorecard** → just a journal template | "Temptation bundling" → user choice, not coded |
+
+#### 3 Priorities (If Time Allows Before Beta Closes)
+
+1. **"Never miss twice"** — adjust reminder logic; low cost, high impact.
+2. **Identity field** — 1 optional text input; transforms insight tone from "you completed 5/7" to "you're living as someone who [identity]."
+3. **Implementation intention statement** — auto-generate from habit + time + location (data already exists) → display as a reminder preview or in weekly review.
+
+#### Guardrails
+
+- **Never gamify heavily** (BataVasa is "calm").
+- **All habit features are opt-in** — defaults are minimal; user chooses complexity.
+- **Ship 1–2 per cycle post-beta**, not a whole feature dump. Observe user response before adding more.
+- **Measurement is motivating only if voluntary** — remove any pressure.
+
+### What NOT To Build (Philosophy)
+
+- ❌ **Fitness/sleep/nutrition as separate trackers** — clutters the app. Habits already cover these; add preset templates instead (e.g. "Sleep 8hrs" habit).
+- ❌ **Full calendar/email/bank integrations** — high platform dependency. Better as future add-ons (post-public-launch).
+- ❌ **Collaboration/family sharing** — diverges from "personal OS" mission.
+- ❌ **Aggressive gamification (badges, leaderboards, streaks as currency)** — conflicts with "calm."
+- ❌ **Rich media (audio/video/OCR)** — storage/sync complexity not worth it pre-launch.
+
+### Implementation Sequence (Post-Closed Beta)
+
+1. **Global Search (M38)** — low risk, high engagement. ~2 weeks.
+2. **Goals MVP (1–2 types)** — foundation for Weekly Review. ~3–4 weeks.
+3. **Weekly Life Review** — flagship differentiator. ~2 weeks (leverages goals + existing insights).
+4. **Context memory layer** — feeds into AI personalization. ~1 week.
+5. **Proactive notifications** — requires stable Review + memory. ~2 weeks.
+6. **Habits selective enhancements** — ship 1–2 (never-miss-twice, identity). Observe, then iterate.
+7. **Backup/Restore file UI** — low risk, trust-building. ~1 week.
+
+---
+
+## Key Principles For The Roadmap
+
+1. **No more modules.** Goals is the last domain; everything else is intelligence layers on the 4 existing modules.
+2. **Calm and low-friction.** Every feature must reduce app fatigue, not add tasks.
+3. **Rules before AI.** Deterministic aggregation (sums, counts, rates) never goes to AI. AI explains and suggests only.
+4. **Transparent progress.** Goals and insights always show their working (which data, which period, which formula).
+5. **Backwards-compatible.** New features must work for existing users with no data migration trauma.
+6. **Iterative shipping.** Don't build the whole vision at once. Ship 1–2 items, validate, iterate.
 - Credit score, bill negotiation, subscription cancellation: market-specific and partnership-heavy.
 - Shared family/couple collaboration: wait until single-user sync is proven.
 - Habit gamification/social challenges: likely to distract from the calm personal OS direction.
