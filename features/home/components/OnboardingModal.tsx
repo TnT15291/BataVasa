@@ -143,24 +143,26 @@ const styles = StyleSheet.create({
     gap: spacing[4],
   },
   heading: {
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 26,
+    lineHeight: 34,
     fontWeight: '700',
   },
   step: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+    color: '#8B96A3',
+    marginBottom: spacing[2],
   },
   section: {
     gap: spacing[3],
   },
   title: {
-    fontSize: 19,
+    fontSize: 21,
     fontWeight: '700',
   },
   description: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 16,
+    lineHeight: 24,
   },
   optionGrid: {
     flexDirection: 'row',
@@ -177,7 +179,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   languageText: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '600',
     textAlign: 'center',
   },
@@ -186,13 +188,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: spacing[4],
     gap: spacing[2],
+    backgroundColor: '#F8FAFC',
   },
   bulletItem: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 16,
+    lineHeight: 24,
   },
   flowTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     marginTop: spacing[1],
   },
@@ -200,11 +203,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     padding: spacing[3],
-    marginTop: spacing[1],
+    marginTop: spacing[2],
   },
   syncNoteText: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
   },
   footer: {
     flexDirection: 'row',
@@ -217,11 +220,12 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing[1],
     paddingVertical: spacing[3],
     borderRadius: radius.md,
+    minWidth: 110,
     alignItems: 'center',
     justifyContent: 'center',
   },
   footerText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
 })

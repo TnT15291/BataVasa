@@ -511,6 +511,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
             </GestureDetector>
 
             <Text style={[styles.sheetTitle, { color: theme.text.primary }]}>{t.universal_add_title}</Text>
+            <Text style={[styles.sheetHint, { color: theme.text.secondary }]}>{t.universal_add_examples}</Text>
 
             {step === 'input' ? (
               <>
@@ -621,13 +622,14 @@ const styles = StyleSheet.create({
     marginHorizontal: -spacing[5],
   },
   handle: { width: 40, height: 4, borderRadius: 2, marginBottom: spacing[1] },
-  sheetTitle: { fontSize: 18, fontWeight: '700' },
+  sheetTitle: { fontSize: 20, fontWeight: '700' },
+  sheetHint: { fontSize: 14, lineHeight: 20 },
   input: {
     borderWidth: 1, borderRadius: radius.md,
-    padding: spacing[3], fontSize: 15, minHeight: 80, textAlignVertical: 'top',
+    padding: spacing[3], fontSize: 16, minHeight: 92, textAlignVertical: 'top',
   },
-  examples: { fontSize: 12, marginTop: -spacing[2] },
-  analyzeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  examples: { fontSize: 14, marginTop: -spacing[2] },
+  analyzeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: spacing[2] },
   analyzeBtn: { flex: 1, paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   analyzeBtnContent: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   analyzeBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
@@ -643,6 +645,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
+    minHeight: 44,
   },
   quickChipText: { fontSize: 13, fontWeight: '600' },
   youSaid: { fontSize: 13, fontStyle: 'italic' },

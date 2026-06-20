@@ -94,6 +94,11 @@ export function DailyDigestScreen() {
   // ── Today Priority — your main forward-looking task ──
   const priorityReminder = nextReminder ?? nextFutureReminder
   const priorityTitle = priorityReminder?.title ?? nextHabit?.name ?? null
+  const priorityDone = priorityReminder
+    ? priorityReminder.completed === 1
+    : nextHabit
+      ? nextHabit.todayCount >= nextHabit.target_per_period
+      : false
   const prioritySubtitle = priorityReminder
     ? (priorityReminder.remind_at ? format(new Date(priorityReminder.remind_at), 'EEEE · HH:mm', { locale }) : t.nav_reminders)
     : nextHabit
@@ -132,13 +137,15 @@ export function DailyDigestScreen() {
         }
       >
         <AppHeader
-          onSearch={() => router.push('/search')}
+          onSearch={() => router.push('/quick-batavasa')}
+          searchIcon="help-circle"
+          searchLabel={t.command_placeholder}
           onSettings={() => router.push('/settings')}
         />
 
         <CommandBar
-          placeholder={t.command_placeholder}
-          onPress={() => router.push('/quick-batavasa')}
+          placeholder={t.nav_search}
+          onPress={() => router.push('/search')}
         />
 
         {/* ── Today Priority ── */}
@@ -154,7 +161,7 @@ export function DailyDigestScreen() {
                   {priorityTitle}
                 </Text>
                 <View style={styles.priorityMetaRow}>
-                  <Chip label={t.top_priority} icon="flag" />
+                  <Chip label={t.priority_item} icon="flag" />
                   {prioritySubtitle ? (
                     <Text style={[styles.prioritySub, { color: theme.text.muted }]} numberOfLines={1}>
                       {prioritySubtitle}
@@ -162,7 +169,11 @@ export function DailyDigestScreen() {
                   ) : null}
                 </View>
               </View>
-              <StatusPill label={t.on_track} tone="success" />
+              <StatusPill
+                label={priorityDone ? t.priority_done : t.priority_not_done}
+                tone={priorityDone ? 'success' : 'warning'}
+                icon={priorityDone ? 'check-circle' : 'clock'}
+              />
             </View>
           </View>
         ) : null}
@@ -222,27 +233,30 @@ export function DailyDigestScreen() {
         <QuickActionRow
           actions={[
             { key: 'assistant', icon: 'message-circle', label: t.quick_assistant, color: theme.brand.primary, onPress: () => router.push('/chat') },
-            { key: 'goals',     icon: MODULE_ICONS.goals, label: t.nav_goals, color: MODULE_COLORS.analysis, onPress: () => router.push('/goals') },
-            { key: 'reports',   icon: 'bar-chart-2',    label: t.quick_reports, color: MODULE_COLORS.analysis, onPress: () => router.push('/weekly-review') },
+            { key: 'goals',     icon: MODULE_ICONS.goals, label: t.nav_goals, color: theme.brand.primary, onPress: () => router.push('/goals') },
+            { key: 'reports',   icon: 'bar-chart-2',    label: t.quick_reports, color: theme.brand.primary, onPress: () => router.push('/weekly-review') },
           ]}
         />
       </ScrollView>
 
-      <Pressable
-        onPress={() => setShowAdd(true)}
-        accessibilityRole="button"
-        accessibilityLabel={t.quick_capture}
-        style={({ pressed }) => [
-          styles.quickAddFab,
-          {
-            backgroundColor: theme.brand.primary,
-            borderColor: theme.bg.elevated,
-            opacity: pressed ? 0.78 : 1,
-          },
-        ]}
-      >
-        <Feather name="plus" size={26} color="#fff" />
-      </Pressable>
+      <View style={[styles.quickAddGroup, { bottom: insets.bottom + spacing[4] }]}> 
+        <Text style={[styles.quickAddLabel, { color: theme.text.secondary }]}>{t.quick_capture}</Text>
+        <Pressable
+          onPress={() => setShowAdd(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t.quick_capture}
+          style={({ pressed }) => [
+            styles.quickAddFab,
+            {
+              backgroundColor: theme.brand.primary,
+              borderColor: theme.bg.elevated,
+              opacity: pressed ? 0.78 : 1,
+            },
+          ]}
+        >
+          <Feather name="plus" size={26} color="#fff" />
+        </Pressable>
+      </View>
 
       <UniversalAddSheet
         visible={showAdd}
@@ -279,9 +293,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   priorityBody: { flex: 1, gap: 4 },
-  priorityTitle: { fontSize: 12, fontWeight: '700' },
+  priorityTitle: { fontSize: 14, fontWeight: '700' },
   priorityMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  prioritySub: { fontSize: 10, fontWeight: '500', flexShrink: 1 },
+  prioritySub: { fontSize: 12, fontWeight: '500', flexShrink: 1 },
 
   // Signals
   signalsCard: {
@@ -289,10 +303,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  quickAddFab: {
+  quickAddGroup: {
     position: 'absolute',
     right: spacing[5],
     bottom: 58,
+    alignItems: 'center',
+  },
+  quickAddFab: {
     width: 54,
     height: 54,
     borderRadius: radius.lg,
@@ -303,5 +320,10 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 5,
+  },
+  quickAddLabel: {
+    marginBottom: spacing[2],
+    fontSize: 12,
+    fontWeight: '700',
   },
 })
