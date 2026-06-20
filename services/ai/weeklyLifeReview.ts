@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, fmtAI } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import { subWeeks, startOfWeek, endOfWeek } from 'date-fns'
 import type { Transaction, Category } from '@features/finance/types'
 import type { Habit, HabitLog } from '@features/habits/types'
@@ -240,7 +241,7 @@ export async function generateWeeklyLifeReview(snapshot: WeeklyLifeReviewSnapsho
   return chatCompletion([
     {
       role: 'system',
-      content: `You are BataVasa's weekly life review assistant. Reply in ${language} only. Be calm, practical, specific, and non-judgmental. Use concise markdown sections with ## headings.`,
+      content: withUserContext(`You are BataVasa's weekly life review assistant. Reply in ${language} only. Be calm, practical, specific, and non-judgmental. Use concise markdown sections with ## headings.`),
     },
     {
       role: 'user',

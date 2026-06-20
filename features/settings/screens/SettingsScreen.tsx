@@ -1,6 +1,7 @@
 import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Linking } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
+import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -8,6 +9,9 @@ import { useSettingsStore } from '@store/settingsStore'
 import { requestLocationPermission } from '@services/location'
 import { requestMicPermission } from '@services/voice'
 import { requestNotificationPermission } from '@services/notifications'
+import { syncWeeklyReviewNotification } from '@services/proactiveNotifications'
+import { weekdayToDate } from '@services/proactiveSchedule'
+import { getDateFnsLocale } from '@services/locale'
 import { useAuthStore } from '@store/authStore'
 import { getBiometricSupport } from '@services/biometric'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -79,7 +83,7 @@ export function SettingsScreen() {
   const theme = useTheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const currency = useSettingsStore((s) => s.currency)
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const locationAccess = useSettingsStore((s) => s.locationAccess)
@@ -102,6 +106,13 @@ export function SettingsScreen() {
   const setSafeToSpendCarryOver = useSettingsStore((s) => s.setSafeToSpendCarryOver)
   const biometricLock = useSettingsStore((s) => s.biometricLock)
   const setBiometricLock = useSettingsStore((s) => s.setBiometricLock)
+  const notificationAccess = useSettingsStore((s) => s.notificationAccess)
+  const proactiveWeeklyReview = useSettingsStore((s) => s.proactiveWeeklyReview)
+  const setProactiveWeeklyReview = useSettingsStore((s) => s.setProactiveWeeklyReview)
+  const proactiveWeeklyDay = useSettingsStore((s) => s.proactiveWeeklyDay)
+  const setProactiveWeeklyDay = useSettingsStore((s) => s.setProactiveWeeklyDay)
+  const proactiveWeeklyHour = useSettingsStore((s) => s.proactiveWeeklyHour)
+  const setProactiveWeeklyHour = useSettingsStore((s) => s.setProactiveWeeklyHour)
   const authConfigured = useAuthStore((s) => s.configured)
   const session = useAuthStore((s) => s.session)
   const signOut = useAuthStore((s) => s.signOut)
@@ -164,6 +175,38 @@ export function SettingsScreen() {
       { text: t.go_to_settings, onPress: () => { void Linking.openSettings() } },
     ])
   }
+
+  const toggleProactiveWeekly = async (next: boolean) => {
+    if (next) {
+      if (!notificationAccess) {
+        Alert.alert(t.weekly_review_reminder, t.weekly_review_needs_notifications)
+        return
+      }
+      const granted = await requestNotificationPermission()
+      if (!granted) {
+        Alert.alert(t.notification_permission_title, t.notification_permission_denied_msg, [
+          { text: t.cancel, style: 'cancel' },
+          { text: t.go_to_settings, onPress: () => { void Linking.openSettings() } },
+        ])
+        return
+      }
+    }
+    await setProactiveWeeklyReview(next)
+    await syncWeeklyReviewNotification()
+  }
+
+  const changeWeeklyDay = async (day: number) => {
+    await setProactiveWeeklyDay(day)
+    await syncWeeklyReviewNotification()
+  }
+
+  const changeWeeklyHour = async (delta: number) => {
+    await setProactiveWeeklyHour(proactiveWeeklyHour + delta)
+    await syncWeeklyReviewNotification()
+  }
+
+  const weekdayLabel = (weekday: number): string =>
+    format(weekdayToDate(weekday), 'EEE', { locale: getDateFnsLocale(language) })
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing[2] }]}>
@@ -249,6 +292,70 @@ export function SettingsScreen() {
       <SectionHeader label="AI" />
       <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <SettingRow label={t.ai_settings} onPress={() => router.push('/ai-settings')} last />
+      </View>
+
+      <SectionHeader label={t.weekly_life_review} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, proactiveWeeklyReview ? null : styles.rowLast, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.weekly_review_reminder}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.weekly_review_reminder_hint}</Text>
+          </View>
+          <SettingsSwitch value={proactiveWeeklyReview} onValueChange={toggleProactiveWeekly} />
+        </View>
+        {proactiveWeeklyReview && (
+          <>
+            <View style={[styles.row, { borderColor: theme.border.subtle, flexDirection: 'column', alignItems: 'stretch', gap: spacing[2] }]}>
+              <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.weekly_review_reminder_day}</Text>
+              <View style={styles.dayChipsRow}>
+                {[1, 2, 3, 4, 5, 6, 7].map((day) => {
+                  const active = proactiveWeeklyDay === day
+                  return (
+                    <Pressable
+                      key={day}
+                      onPress={() => { void changeWeeklyDay(day) }}
+                      style={[
+                        styles.dayChip,
+                        {
+                          backgroundColor: active ? theme.brand.primary : theme.bg.secondary,
+                          borderColor: active ? theme.brand.primary : theme.border.subtle,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.dayChipText, { color: active ? '#FFFFFF' : theme.text.secondary }]}>
+                        {weekdayLabel(day)}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </View>
+            <View style={[styles.row, styles.rowLast, { borderColor: theme.border.subtle }]}>
+              <View style={{ flex: 1, paddingRight: spacing[3] }}>
+                <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.weekly_review_reminder_time}</Text>
+              </View>
+              <View style={styles.stepper}>
+                <Pressable
+                  onPress={() => { void changeWeeklyHour(-1) }}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  style={[styles.stepBtn, { borderColor: theme.border.strong, backgroundColor: theme.bg.secondary }]}
+                >
+                  <Text style={[styles.stepBtnText, { color: theme.text.primary }]}>−</Text>
+                </Pressable>
+                <Text style={[styles.stepValue, { color: theme.text.primary }]}>{`${String(proactiveWeeklyHour).padStart(2, '0')}:00`}</Text>
+                <Pressable
+                  onPress={() => { void changeWeeklyHour(1) }}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  style={[styles.stepBtn, { borderColor: theme.border.strong, backgroundColor: theme.bg.secondary }]}
+                >
+                  <Text style={[styles.stepBtnText, { color: theme.text.primary }]}>+</Text>
+                </Pressable>
+              </View>
+            </View>
+          </>
+        )}
       </View>
 
       <SectionHeader label={t.finance_settings} />
@@ -502,5 +609,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepBtnText: { fontSize: 18, fontWeight: '400' },
-  stepValue: { fontSize: 16, fontWeight: '700', minWidth: 26, textAlign: 'center' },
+  stepValue: { fontSize: 16, fontWeight: '700', minWidth: 48, textAlign: 'center' },
+  dayChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  dayChip: {
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  dayChipText: { fontSize: 13, fontWeight: '600' },
 })

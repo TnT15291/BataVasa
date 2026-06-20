@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import type { Habit, HabitLog } from '@features/habits/types'
 
 export type HabitInsight = {
@@ -160,7 +161,7 @@ Rules:
       [
         {
           role: 'system',
-          content: `You are a supportive habit coach. Reply in ${language} ONLY. Return ONLY valid JSON, no explanation outside the JSON.`,
+          content: withUserContext(`You are a supportive habit coach. Reply in ${language} ONLY. Return ONLY valid JSON, no explanation outside the JSON.`),
         },
         { role: 'user', content: prompt },
       ],

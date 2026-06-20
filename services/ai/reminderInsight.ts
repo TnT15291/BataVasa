@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import type { Reminder } from '@features/reminders/types'
 
 export type ReminderInsight = {
@@ -67,7 +68,7 @@ Rules:
       [
         {
           role: 'system',
-          content: `You are a helpful productivity assistant. Reply in ${language} ONLY. Return ONLY valid JSON.`,
+          content: withUserContext(`You are a helpful productivity assistant. Reply in ${language} ONLY. Return ONLY valid JSON.`),
         },
         { role: 'user', content: prompt },
       ],

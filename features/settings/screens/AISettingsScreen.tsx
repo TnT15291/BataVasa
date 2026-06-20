@@ -4,8 +4,10 @@ import {
   StyleSheet,
   ScrollView,
   Switch,
+  Pressable,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -14,6 +16,7 @@ import { hapticSaveSuccess } from '@services/haptics'
 
 export function AISettingsScreen() {
   const theme = useTheme()
+  const router = useRouter()
   const { t } = useTranslation()
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
   const setAIAutoConfirm = useSettingsStore((s) => s.setAIAutoConfirm)
@@ -50,6 +53,21 @@ export function AISettingsScreen() {
           />
         </View>
       </View>
+
+      <Pressable
+        onPress={() => router.push('/ai-memory')}
+        style={({ pressed }) => [
+          styles.card,
+          styles.linkRow,
+          { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
+        ]}
+      >
+        <View style={styles.rowText}>
+          <Text style={[styles.rowName, { color: theme.text.primary }]}>{t.ai_memory}</Text>
+          <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.ai_memory_hint}</Text>
+        </View>
+        <Feather name="chevron-right" size={20} color={theme.text.muted} />
+      </Pressable>
     </ScrollView>
   )
 }
@@ -75,6 +93,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
     paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingVertical: spacing[4],
     paddingHorizontal: spacing[4],
   },
   rowText: { flex: 1, gap: 2 },

@@ -1,6 +1,6 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-06-19.
+> Single source of truth for project status. Last updated: 2026-06-20.
 
 ## Overall
 
@@ -136,8 +136,8 @@ Code is implemented. Sync has been manually verified as working; Google Auth sti
 
 Current test infrastructure is ready, but global coverage is still below the public-launch target.
 
-- Latest automated run on 2026-06-19: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
-- Current status: 491 tests across 35 suites.
+- Latest automated run on 2026-06-20: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
+- Current status: 505 tests across 38 suites.
 - Current coverage: 70.08% statements / 64.04% branches / 71.81% functions / 72.41% lines.
 - Current CI floor: 37% statements / 35% branches / 31% functions / 39% lines.
 - Target before public launch: keep statements/functions/lines above 70% and continue raising branch coverage toward 70%.
@@ -175,7 +175,7 @@ Work in this order:
    - **DONE MVP:** M38 Global search: one search across transactions, reminders, habits, journals, and goals.
    - **DONE MVP:** Goals MVP: manual goal creation + derived progress for finance category totals and habit completion rate.
    - **DONE MVP:** Weekly Life Review: flagship cross-module weekly report using deterministic metrics plus AI explanation.
-   - **Context memory layer**: user goals/preferences/facts available to AI prompts and review summaries.
+   - **DONE MVP:** Context memory layer: user goals/preferences/facts available to AI prompts and review summaries.
    - **M37 Proactive weekly insights**: opt-in weekly notification/deep link after Weekly Life Review is stable.
    - **Habit selective enhancements**: ship 1-2 calm improvements, starting with never-miss-twice and/or identity field.
    - **M21 Backup/restore file UI**: trust-building recovery flow on top of existing local/export foundations.
@@ -400,9 +400,14 @@ These are the "assistant" features that make the app *know* your context and *he
 - **Scope:** medium (design, prompt tuning, scheduling).
 - **Timing:** ship after Goals module exists (so Review can reference goals).
 
-#### 2b. Goal/Context Memory Layer
+#### 2b. Goal/Context Memory Layer — DONE MVP (2026-06-20)
 
-- **Problem:** AI is stateless — each prompt rebuilds from recent data, missing long-term context.
+- Implemented: `user_context` table (migration v23) holding short user-authored memories typed as `goal` / `preference` / `fact`. `database/context/{schema,queries}.ts`, `features/context/{types,services}.ts` (Result-based CRUD + export/wipe), `store/contextStore.ts`.
+- `services/ai/userContextPrompt.ts` keeps a DB-decoupled cache (fed by the store) and exposes `withUserContext(systemPrompt)`, injected into every generative AI surface: assistant chat, weekly life review, cross-module analysis, finance/habit/journal/reminder insights, finance reports, and the goal coach. Deterministic parsers (smart/universal entry) are intentionally NOT injected.
+- Management UI: `AIMemoryScreen` (`/ai-memory`, linked from AI settings) — add/edit/delete memories, plus per-Rule-1 sync toggle (`syncContext`), JSON export, and wipe. Synced (`user_context` in `services/sync.ts` + Supabase RLS), exported, and wiped.
+- 16 i18n keys × 6 languages. Cache warmed at app start in `app/_layout.tsx`.
+
+- **Problem (original):** AI is stateless — each prompt rebuilds from recent data, missing long-term context.
 - **Solution:** Store user-provided facts + inferred insights (goals, preferences, patterns) → inject into every AI system prompt.
   - **Explicit:** "I want to save 50M this year. Budget for dining is 2M/month."
   - **Inferred:** "You typically spend more on weekends" or "You tend to journal when stressed."
@@ -525,9 +530,9 @@ Current status: Global Search and Goals MVP are now DONE at MVP scope. Continue 
 
 1. **Global Search (M38) — DONE MVP**: grouped search across the 4 modules plus Goals.
 2. **Goals MVP — DONE MVP**: manual goals with finance category amount and habit completion-rate progress.
-3. **Weekly Life Review** — flagship differentiator. ~2 weeks (leverages goals + existing insights).
-4. **Context memory layer** — feeds into AI personalization. ~1 week.
-5. **Proactive notifications** — requires stable Review + memory. ~2 weeks.
+3. **Weekly Life Review — DONE MVP** — flagship differentiator (leverages goals + existing insights).
+4. **Context memory layer — DONE MVP** — `user_context` memories injected into all generative AI prompts.
+5. **Proactive notifications** — requires stable Review + memory. ~2 weeks. **← next**
 6. **Habits selective enhancements** — ship 1–2 (never-miss-twice, identity). Observe, then iterate.
 7. **Backup/Restore file UI** — low risk, trust-building. ~1 week.
 8. **Close beta gate** — full verification, coverage pass, real-device visual QA, fresh screenshots, and release-readiness smoke test.
@@ -558,7 +563,7 @@ Current status: Global Search and Goals MVP are now DONE at MVP scope. Continue 
 - Category names use canonical DB values and translate at display time.
 - Locale-aware formatting must use `getDateFnsLocale(language)` and `getIntlLocale(language)`.
 - Create and edit screens are shared via route params.
-- Latest local migration is v21: `goal` table. v19 added `finance_debt` + Lending/Borrowing system categories; v20 deduplicated system categories.
+- Latest local migration is v23: `user_context` (AI memory). v22 added finance plan recurrence; v21 added the `goal` table. v19 added `finance_debt` + Lending/Borrowing system categories; v20 deduplicated system categories.
 - `enqueue()` is try/catch wrapped for test compatibility.
 - Cross-module timeline/life stream is a presentation/read-model layer over domain tables, not a unified `life_events` source-of-truth table.
 - Reminders/notifications are treated as a capability attached to tasks/habits where appropriate; the current Reminders UI is task-oriented.
@@ -575,6 +580,11 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-06-20 Context memory layer (AI personalization):
+  - New `user_context` table (migration v23) of short user-authored memories (`goal` / `preference` / `fact`). DB layer in `database/context/`, feature CRUD in `features/context/`, store in `store/contextStore.ts`.
+  - `services/ai/userContextPrompt.ts` exposes `withUserContext()` and a DB-decoupled cache (kept in sync by the store, warmed in `app/_layout.tsx`). Injected into the assistant, weekly life review, cross-module analysis, finance/habit/journal/reminder insights, finance reports, and goal coach. NOT injected into deterministic smart/universal parsers.
+  - `AIMemoryScreen` at `/ai-memory` (linked from AI settings): add/edit/delete + sync toggle (`syncContext`) + JSON export + wipe (Cross-Module Rule 1). Registered in `services/sync.ts` and `docs/supabase-setup.sql` (RLS). 16 i18n keys × 6 languages.
+  - Verification: `npx tsc --noEmit` clean; `npm test -- --runInBand` passed with 505 tests across 38 suites. Note: a missing transitive dep (`expo-asset`) had to be reinstalled to run the AI-builder suites — keep `node_modules` fully installed.
 - 2026-06-20 Assistant module context:
   - Added `services/ai/assistantContext.ts`, a deterministic context builder for Finance, Tasks, Habits, Journals, and Goals. `AssistantScreen` now sends this grounded snapshot to the AI with stricter prompt rules and lower temperature, so answers can reference existing user data instead of generic advice.
   - Verification: `npx tsc --noEmit` clean; `npm test -- --runInBand` passed with 500 tests across 37 suites.

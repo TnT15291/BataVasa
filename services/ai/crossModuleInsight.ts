@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import { subDays } from 'date-fns'
 import type { Transaction, Category } from '@features/finance/types'
 import type { Habit, HabitLog } from '@features/habits/types'
@@ -408,7 +409,7 @@ export async function generateCrossModuleInsights(input: CrossModuleInput): Prom
   return chatCompletion([
     {
       role: 'system',
-      content: `You are a holistic personal life assistant. CRITICAL: Reply in ${language} ONLY. ALL headings and content MUST be in ${language}. Be concise, specific, empathetic, and non-judgmental. Use short markdown sections (## heading).`,
+      content: withUserContext(`You are a holistic personal life assistant. CRITICAL: Reply in ${language} ONLY. ALL headings and content MUST be in ${language}. Be concise, specific, empathetic, and non-judgmental. Use short markdown sections (## heading).`),
     },
     {
       role: 'user',

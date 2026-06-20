@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import type { Transaction, Category } from '@features/finance/types'
 
 export type ReportType = 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'custom'
@@ -59,7 +60,7 @@ export async function generateReport(
   return chatCompletion([
     {
       role: 'system',
-      content: `You are a finance assistant generating a report. CRITICAL: Reply in ${language} ONLY using concise markdown sections. Be calm, practical, and non-judgmental. Use minimal emojis.`,
+      content: withUserContext(`You are a finance assistant generating a report. CRITICAL: Reply in ${language} ONLY using concise markdown sections. Be calm, practical, and non-judgmental. Use minimal emojis.`),
     },
     {
       role: 'user',

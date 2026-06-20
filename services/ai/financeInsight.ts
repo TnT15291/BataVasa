@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import type { Transaction, Category } from '@features/finance/types'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -133,7 +134,7 @@ export async function generateFinanceInsights(
   return chatCompletion([
     {
       role: 'system',
-      content: `You are a personal finance assistant. CRITICAL: Reply in ${language} ONLY. ALL headings and content MUST be in ${language}. Be concise, specific, and non-judgmental. Use short markdown sections (## heading).`,
+      content: withUserContext(`You are a personal finance assistant. CRITICAL: Reply in ${language} ONLY. ALL headings and content MUST be in ${language}. Be concise, specific, and non-judgmental. Use short markdown sections (## heading).`),
     },
     {
       role: 'user',

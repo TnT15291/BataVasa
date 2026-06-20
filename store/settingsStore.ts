@@ -2,6 +2,12 @@ import { create } from 'zustand'
 import * as db from '@db/settings/queries'
 import type { AIProvider } from '@services/ai/providers'
 import { LANGUAGE_CURRENCY } from '@services/locale'
+import {
+  clampWeekday,
+  clampHour,
+  DEFAULT_WEEKLY_REVIEW_DAY,
+  DEFAULT_WEEKLY_REVIEW_HOUR,
+} from '@services/proactiveSchedule'
 
 export type Language = 'vi' | 'en' | 'zh' | 'ja' | 'ko' | 'fr'
 export type ColorMode = 'light' | 'dark' | 'system'
@@ -24,6 +30,7 @@ type SettingsState = {
   syncHabits: boolean
   syncJournals: boolean
   syncGoals: boolean
+  syncContext: boolean
   hasSeenOnboarding: boolean
   biometricLock: boolean
   hideMicPermissionPrompt: boolean
@@ -33,6 +40,12 @@ type SettingsState = {
   safeToSpendCountPlannedIncome: boolean
   /** Roll the previous cycle's leftover into this cycle's Safe to spend. Default off. */
   safeToSpendCarryOver: boolean
+  /** Opt-in weekly notification nudging the user to read their Weekly Life Review. */
+  proactiveWeeklyReview: boolean
+  /** Weekly review notification day (expo weekday: 1=Sunday … 7=Saturday). */
+  proactiveWeeklyDay: number
+  /** Weekly review notification hour (0-23, local). */
+  proactiveWeeklyHour: number
   loaded: boolean
 
   loadSettings: () => Promise<void>
@@ -50,12 +63,16 @@ type SettingsState = {
   setSyncHabits: (enabled: boolean) => Promise<void>
   setSyncJournals: (enabled: boolean) => Promise<void>
   setSyncGoals: (enabled: boolean) => Promise<void>
+  setSyncContext: (enabled: boolean) => Promise<void>
   setHasSeenOnboarding: (value: boolean) => Promise<void>
   setBiometricLock: (enabled: boolean) => Promise<void>
   setHideMicPermissionPrompt: (hidden: boolean) => Promise<void>
   setFinanceCycleStartDay: (day: number) => Promise<void>
   setSafeToSpendCountPlannedIncome: (enabled: boolean) => Promise<void>
   setSafeToSpendCarryOver: (enabled: boolean) => Promise<void>
+  setProactiveWeeklyReview: (enabled: boolean) => Promise<void>
+  setProactiveWeeklyDay: (day: number) => Promise<void>
+  setProactiveWeeklyHour: (hour: number) => Promise<void>
 }
 
 function clampCycleDay(day: number): number {
@@ -78,12 +95,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   syncHabits: true,
   syncJournals: true,
   syncGoals: true,
+  syncContext: true,
   hasSeenOnboarding: false,
   biometricLock: false,
   hideMicPermissionPrompt: false,
   financeCycleStartDay: 1,
   safeToSpendCountPlannedIncome: true,
   safeToSpendCarryOver: false,
+  proactiveWeeklyReview: false,
+  proactiveWeeklyDay: DEFAULT_WEEKLY_REVIEW_DAY,
+  proactiveWeeklyHour: DEFAULT_WEEKLY_REVIEW_HOUR,
   loaded: false,
 
   async loadSettings() {
@@ -107,6 +128,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       syncHabits: all['sync_habits'] !== 'false',
       syncJournals: all['sync_journals'] !== 'false',
       syncGoals: all['sync_goals'] !== 'false',
+      syncContext: all['sync_context'] !== 'false',
       hasSeenOnboarding: all['has_seen_onboarding'] === 'true',
       biometricLock: all['biometric_lock'] === 'true',
       hideMicPermissionPrompt: all['hide_mic_permission_prompt'] === 'true',
@@ -115,6 +137,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       safeToSpendCountPlannedIncome: all['safe_to_spend_count_planned_income'] !== 'false',
       // default false — only true if explicitly stored
       safeToSpendCarryOver: all['safe_to_spend_carry_over'] === 'true',
+      // default false (opt-in, calm) — only true if explicitly stored
+      proactiveWeeklyReview: all['proactive_weekly_review'] === 'true',
+      proactiveWeeklyDay: clampWeekday(Number(all['proactive_weekly_day'] ?? String(DEFAULT_WEEKLY_REVIEW_DAY))),
+      proactiveWeeklyHour: clampHour(Number(all['proactive_weekly_hour'] ?? String(DEFAULT_WEEKLY_REVIEW_HOUR))),
       loaded: true,
     })
   },
@@ -197,6 +223,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     await db.setSetting('sync_goals', enabled ? 'true' : 'false')
   },
 
+  async setSyncContext(enabled) {
+    set({ syncContext: enabled })
+    await db.setSetting('sync_context', enabled ? 'true' : 'false')
+  },
+
   async setBiometricLock(enabled) {
     set({ biometricLock: enabled })
     await db.setSetting('biometric_lock', enabled ? 'true' : 'false')
@@ -221,5 +252,22 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   async setSafeToSpendCarryOver(enabled) {
     set({ safeToSpendCarryOver: enabled })
     await db.setSetting('safe_to_spend_carry_over', enabled ? 'true' : 'false')
+  },
+
+  async setProactiveWeeklyReview(enabled) {
+    set({ proactiveWeeklyReview: enabled })
+    await db.setSetting('proactive_weekly_review', enabled ? 'true' : 'false')
+  },
+
+  async setProactiveWeeklyDay(day) {
+    const clamped = clampWeekday(day)
+    set({ proactiveWeeklyDay: clamped })
+    await db.setSetting('proactive_weekly_day', String(clamped))
+  },
+
+  async setProactiveWeeklyHour(hour) {
+    const clamped = clampHour(hour)
+    set({ proactiveWeeklyHour: clamped })
+    await db.setSetting('proactive_weekly_hour', String(clamped))
   },
 }))

@@ -110,7 +110,7 @@ export const CreatePlanItemInputSchema = z.object({
   kind: PlanItemKindSchema,
   amount_cents: z.number().int().positive(),
   currency: z.string().min(3).max(3).default('VND'),
-  category_id: z.string().uuid().nullable().optional(),
+  category_id: z.string().min(1).nullable().optional(),
   due_day: z.number().int().min(1).max(31),
   recurrence: PlanItemRecurrenceSchema.default('monthly'),
   applies_month: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
@@ -183,7 +183,7 @@ export type UpdateDebtInput = z.infer<typeof UpdateDebtInputSchema>
 const TransactionInputBaseSchema = z.object({
   amount_cents: z.number().int().refine((n) => n !== 0, 'Amount cannot be zero'),
   currency: z.string().min(3).max(3).default('VND'),
-  category_id: z.string().uuid(),
+  category_id: z.string().min(1),
   merchant: z.string().max(120).optional(),
   note: z.string().max(500).optional(),
   occurred_at: z.string().datetime(),

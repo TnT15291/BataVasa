@@ -3,15 +3,36 @@
 // The publisher's provider API key lives as a Supabase secret and is used ONLY
 // here. The app calls this with the signed-in user's JWT (verify_jwt = true, so
 // the platform rejects anonymous calls before this code runs). The active
-// provider is decided server-side via the AI_PROVIDER secret.
+// provider is decided server-side from Supabase Auth app_metadata.plan. The
+// AI_PROVIDER secret remains an emergency/global override.
 //
 // Request body: { provider?, messages, model?, temperature?, max_tokens? }
 // Response:     { content } | { error }
 
 import { corsHeaders, json } from '../_shared/cors.ts'
-import { PROVIDERS, resolveProvider } from '../_shared/providers.ts'
+import { PROVIDERS, resolveModel, resolveProvider } from '../_shared/providers.ts'
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+
+async function getUserPlan(req: Request): Promise<string> {
+  const auth = req.headers.get('authorization') || ''
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+
+  if (!auth || !supabaseUrl || !anonKey) return 'free'
+
+  const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      authorization: auth,
+      apikey: anonKey,
+    },
+  })
+
+  if (!res.ok) return 'free'
+
+  const user = await res.json().catch(() => null)
+  return user?.app_metadata?.plan || 'free'
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -24,7 +45,8 @@ Deno.serve(async (req) => {
       return json({ error: 'messages required' }, 400)
     }
 
-    const provider = resolveProvider(body.provider)
+    const userPlan = await getUserPlan(req)
+    const provider = resolveProvider(userPlan, body.provider)
     const cfg = PROVIDERS[provider]
     const key = Deno.env.get(cfg.keyEnv)
     if (!key) {
@@ -36,7 +58,7 @@ Deno.serve(async (req) => {
     // Model override precedence: server AI_MODEL secret → provider default.
     // The client never sends a provider-specific model today, so we ignore
     // body.model to avoid cross-provider model mismatches.
-    const model = Deno.env.get('AI_MODEL') || cfg.defaultModel
+    const model = resolveModel(provider)
 
     const upstream = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: 'POST',

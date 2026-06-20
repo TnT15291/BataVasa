@@ -1,5 +1,6 @@
 import { format, isSameDay, subDays } from 'date-fns'
 import { getAICurrency, getAILanguage, fmtAI } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import type { Category, Transaction } from '@features/finance/types'
 import type { Habit } from '@features/habits/types'
 import type { Journal } from '@features/journals/types'
@@ -152,7 +153,7 @@ export function buildAssistantContext(input: BuildAssistantContextInput): string
 export function buildAssistantSystemPrompt(ctx: string): string {
   const language = getAILanguage()
   const today = format(new Date(), 'yyyy-MM-dd')
-  return `You are BataVasa's smart personal assistant. BataVasa tracks Finance, Tasks, Habits, Journals, and Goals.
+  return withUserContext(`You are BataVasa's smart personal assistant. BataVasa tracks Finance, Tasks, Habits, Journals, and Goals.
 CRITICAL: Reply in ${language} ONLY. Never switch to another language.
 
 Today is ${today}.
@@ -162,5 +163,5 @@ Use the user's data context below as ground truth. You can answer questions abou
 User data context:
 ${ctx}
 
-Be concise, practical, specific, and non-judgmental. When useful, mention the exact module and the number/date/amount you used.`
+Be concise, practical, specific, and non-judgmental. When useful, mention the exact module and the number/date/amount you used.`)
 }

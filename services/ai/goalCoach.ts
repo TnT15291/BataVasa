@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import { getDb } from '@db/core/db'
 import { getCurrentUserId } from '@services/identity'
 import { listHabits } from '@db/habits/queries'
@@ -198,7 +199,7 @@ Rules:
   try {
     raw = await chatCompletion(
       [
-        { role: 'system', content: `You are a JSON-only goal coach. The user reads ${language}. Return ONLY valid JSON, nothing else.` },
+        { role: 'system', content: withUserContext(`You are a JSON-only goal coach. The user reads ${language}. Return ONLY valid JSON, nothing else.`) },
         { role: 'user', content: prompt },
       ],
       { temperature: 0.4, max_tokens: 900 }

@@ -11,6 +11,7 @@ import { useHabitsStore } from '@store/habitsStore'
 import { useJournalsStore } from '@store/journalsStore'
 import { useRemindersStore } from '@store/remindersStore'
 import { useGoalsStore } from '@store/goalsStore'
+import { useContextStore } from '@store/contextStore'
 
 const MODULE = 'sync'
 
@@ -26,6 +27,7 @@ const TABLE_MODULE: Record<string, keyof SyncToggles> = {
   journal:            'syncJournals',
   reminder:           'syncReminders',
   goal:               'syncGoals',
+  user_context:       'syncContext',
 }
 
 const SYNC_TABLES = Object.keys(TABLE_MODULE)
@@ -36,6 +38,7 @@ type SyncToggles = {
   syncJournals: boolean
   syncReminders: boolean
   syncGoals: boolean
+  syncContext: boolean
 }
 
 function sanitizePayloadForRemote(tableName: string, row: Record<string, unknown>): Record<string, unknown> {
@@ -195,6 +198,7 @@ async function refreshLoadedStores(settings: SyncToggles): Promise<void> {
   if (settings.syncJournals) tasks.push(useJournalsStore.getState().loadJournals())
   if (settings.syncReminders) tasks.push(useRemindersStore.getState().loadReminders())
   if (settings.syncGoals) tasks.push(useGoalsStore.getState().loadGoals())
+  if (settings.syncContext) tasks.push(useContextStore.getState().loadContext())
   await Promise.allSettled(tasks)
 }
 

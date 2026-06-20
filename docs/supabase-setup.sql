@@ -287,6 +287,28 @@ CREATE POLICY "users own their goals" ON goal
 CREATE INDEX IF NOT EXISTS idx_goal_user_status
   ON goal (user_id, status, due_date) WHERE deleted_at IS NULL;
 
+-- AI memory (user_context) -----------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS user_context (
+  id          TEXT        PRIMARY KEY,
+  user_id     UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  kind        TEXT        NOT NULL DEFAULT 'fact'
+                          CHECK (kind IN ('goal','preference','fact')),
+  content     TEXT        NOT NULL,
+  pinned      SMALLINT    NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL,
+  deleted_at  TIMESTAMPTZ,
+  synced_at   TIMESTAMPTZ
+);
+ALTER TABLE user_context ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "users own their context" ON user_context;
+CREATE POLICY "users own their context" ON user_context
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+CREATE INDEX IF NOT EXISTS idx_user_context_user
+  ON user_context (user_id) WHERE deleted_at IS NULL;
+
 -- ─── Backward compat (existing Supabase projects only) ────────────────────────
 -- Safe to run on fresh projects too — IF NOT EXISTS / ADD COLUMN IF NOT EXISTS.
 
@@ -298,6 +320,41 @@ ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS location_lng   REAL;
 ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS location_label TEXT;
 ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS plan_item_id   TEXT;
 ALTER TABLE finance_transaction ADD COLUMN IF NOT EXISTS plan_match_dismissed SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE finance_category    ADD COLUMN IF NOT EXISTS parent_id      TEXT;
+ALTER TABLE finance_plan_item   ADD COLUMN IF NOT EXISTS recurrence TEXT NOT NULL DEFAULT 'monthly'
+  CHECK (recurrence IN ('monthly','once'));
+ALTER TABLE finance_plan_item   ADD COLUMN IF NOT EXISTS applies_month TEXT;
+ALTER TABLE finance_debt        ADD COLUMN IF NOT EXISTS reminder_id    TEXT;
+ALTER TABLE finance_debt        ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+ALTER TABLE finance_debt        ADD COLUMN IF NOT EXISTS settled_transaction_id TEXT;
+
+-- Older hosted projects may have been created with UUID ids / foreign ids.
+-- Local SQLite uses TEXT ids, including stable system category ids like
+-- `sys_food_groceries`; Finance sync will fail with "invalid input syntax for
+-- type uuid" unless these remote id/link columns are TEXT too.
+ALTER TABLE finance_category
+  ALTER COLUMN id TYPE TEXT USING id::TEXT,
+  ALTER COLUMN parent_id TYPE TEXT USING parent_id::TEXT;
+
+ALTER TABLE finance_transaction
+  ALTER COLUMN id TYPE TEXT USING id::TEXT,
+  ALTER COLUMN category_id TYPE TEXT USING category_id::TEXT,
+  ALTER COLUMN plan_item_id TYPE TEXT USING plan_item_id::TEXT;
+
+ALTER TABLE finance_rule
+  ALTER COLUMN id TYPE TEXT USING id::TEXT,
+  ALTER COLUMN category_id TYPE TEXT USING category_id::TEXT;
+
+ALTER TABLE finance_plan_item
+  ALTER COLUMN id TYPE TEXT USING id::TEXT,
+  ALTER COLUMN category_id TYPE TEXT USING category_id::TEXT;
+
+ALTER TABLE finance_debt
+  ALTER COLUMN id TYPE TEXT USING id::TEXT,
+  ALTER COLUMN reminder_id TYPE TEXT USING reminder_id::TEXT,
+  ALTER COLUMN transaction_id TYPE TEXT USING transaction_id::TEXT,
+  ALTER COLUMN settled_transaction_id TYPE TEXT USING settled_transaction_id::TEXT;
+
 ALTER TABLE habit               ADD COLUMN IF NOT EXISTS schedule_days      TEXT;
 ALTER TABLE habit               ADD COLUMN IF NOT EXISTS notification_times TEXT;
 ALTER TABLE habit_log           ADD COLUMN IF NOT EXISTS skipped SMALLINT NOT NULL DEFAULT 0;

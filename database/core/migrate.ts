@@ -6,6 +6,7 @@ import { createReminderSchema } from '../reminders/schema'
 import { createJournalSchema } from '../journals/schema'
 import { createHabitSchema } from '../habits/schema'
 import { createGoalSchema } from '../goals/schema'
+import { createContextSchema } from '../context/schema'
 import { createSyncQueueSchema } from '../sync/schema'
 import { logger } from '@services/logger'
 import { uuid } from '@services/uuid'
@@ -166,6 +167,10 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   async (db) => {
     await safeAddColumn(db, 'finance_plan_item', 'recurrence', "TEXT NOT NULL DEFAULT 'monthly'")
     await safeAddColumn(db, 'finance_plan_item', 'applies_month', 'TEXT')
+  },
+  // v23 - user_context: the AI memory layer (goals/preferences/facts for prompts).
+  async (db) => {
+    await createContextSchema(db)
   },
 ]
 

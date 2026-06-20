@@ -4,6 +4,7 @@
 // read from Supabase secrets (Deno.env) at request time.
 
 export type ProviderId = 'openai' | 'gemini' | 'groq' | 'deepseek'
+export type UserPlan = 'free' | 'pro'
 
 export type ServerProvider = {
   baseUrl: string
@@ -34,14 +35,28 @@ export const PROVIDERS: Record<ProviderId, ServerProvider> = {
   },
 }
 
+export function normalizePlan(value?: unknown): UserPlan {
+  return String(value || '').toLowerCase() === 'pro' ? 'pro' : 'free'
+}
+
 /**
- * Resolve which provider to use. The publisher controls this server-side via the
- * `AI_PROVIDER` secret; the client-sent value is only a fallback (and the chooser
- * UI was removed, so in practice it is always the store default). Defaults to
- * OpenAI.
+ * Resolve which provider to use. `AI_PROVIDER` is a server-side emergency/global
+ * override; when unset, user plan routing decides: free -> Groq, pro -> DeepSeek.
  */
-export function resolveProvider(clientProvider?: string): ProviderId {
-  const candidate = (Deno.env.get('AI_PROVIDER') || clientProvider || 'openai')
-    .toLowerCase()
-  return (candidate in PROVIDERS ? candidate : 'openai') as ProviderId
+export function resolveProvider(userPlan?: unknown, clientProvider?: string): ProviderId {
+  const forced = Deno.env.get('AI_PROVIDER')
+  if (forced) {
+    const candidate = forced.toLowerCase()
+    return (candidate in PROVIDERS ? candidate : 'groq') as ProviderId
+  }
+
+  const plan = normalizePlan(userPlan)
+  if (plan === 'pro') return 'deepseek'
+
+  return 'groq'
+}
+
+export function resolveModel(provider: ProviderId): string {
+  const providerModel = Deno.env.get(`${provider.toUpperCase()}_MODEL`)
+  return providerModel || Deno.env.get('AI_MODEL') || PROVIDERS[provider].defaultModel
 }

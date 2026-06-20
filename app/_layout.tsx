@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { runMigrations } from '@db/core/migrate'
 import { useTheme } from '@design/useTheme'
 import { useSettingsStore } from '@store/settingsStore'
+import { useContextStore } from '@store/contextStore'
 import { useTranslation } from '@services/i18n'
 import { track } from '@services/analytics'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -19,6 +20,8 @@ import { UpdatePasswordScreen } from '@features/auth/UpdatePasswordScreen'
 import { usePasswordRecoveryLink } from '@features/auth/usePasswordRecoveryLink'
 import { useGoogleAuthCallback } from '@features/auth/useGoogleAuthCallback'
 import { startSyncWorker, drainQueue } from '@services/sync'
+import { syncWeeklyReviewNotification } from '@services/proactiveNotifications'
+import { useNotificationRouting } from '@features/notifications/useNotificationRouting'
 import { BiometricLockScreen } from '@/components/BiometricLockScreen'
 import { ToastHost } from '@/components/Toast'
 import { initSentry } from '@services/sentry'
@@ -46,6 +49,8 @@ export default function RootLayout() {
   // Handle `batavasa://reset-password` deep links from recovery emails.
   usePasswordRecoveryLink()
   useGoogleAuthCallback()
+  // Route notification taps (e.g. the weekly-review nudge → /weekly-review).
+  useNotificationRouting()
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [locked, setLocked] = useState(false)
@@ -56,6 +61,11 @@ export default function RootLayout() {
     runMigrations()
       .then(() => loadSettings())
       .then(() => useAuthStore.getState().init())
+      // Warm the AI memory cache so userContextPromptBlock() is populated before
+      // any insight/chat call. Non-blocking: failures degrade to an empty block.
+      .then(() => { void useContextStore.getState().loadContext() })
+      // Reconcile the opt-in weekly-review notification with saved settings.
+      .then(() => { void syncWeeklyReviewNotification() })
       .then(() => { stopSync = startSyncWorker() })
       .then(() => setReady(true))
       .catch((e) => setError(String(e)))
@@ -178,6 +188,7 @@ export default function RootLayout() {
           <Stack.Screen name="appearance" options={{ title: t.nav_appearance }} />
           <Stack.Screen name="language" options={{ title: t.nav_language }} />
           <Stack.Screen name="ai-settings" options={{ title: t.nav_ai_settings }} />
+          <Stack.Screen name="ai-memory" options={{ title: t.ai_memory }} />
           <Stack.Screen name="currency" options={{ title: t.nav_currency }} />
           <Stack.Screen name="insights" options={{ title: t.nav_insights }} />
           <Stack.Screen name="reports" options={{ title: t.nav_reports }} />

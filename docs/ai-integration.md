@@ -24,10 +24,11 @@ Main files:
 - `supabase/functions/_shared/`: CORS helper + server-side provider registry.
 
 Supported providers (OpenAI-compatible chat completions): OpenAI, Gemini, Groq,
-DeepSeek. The function resolves the provider via the `AI_PROVIDER` secret (the
-client-sent value is only a fallback), looks up that provider's key secret, and
-forwards the call. Model is the provider default unless an `AI_MODEL` secret
-overrides it.
+DeepSeek. By default, the function routes by user plan: `free` users use Groq,
+and `pro` users use DeepSeek. A server-side `AI_PROVIDER` secret can still force
+one provider for every user as an emergency/global override. Model is the provider
+default unless a provider-specific model secret (`GROQ_MODEL`, `DEEPSEEK_MODEL`,
+etc.) or `AI_MODEL` overrides it.
 
 > `services/ai/openai.ts` still exports a deprecated `getProviderKey()` shim that
 > only reports availability (returns a sentinel, never a real key) so legacy
@@ -44,24 +45,38 @@ The keys live in Supabase, never in the app bundle. One-time setup:
 supabase functions deploy ai-chat
 supabase functions deploy ai-transcribe
 
-# 2. Choose the active provider (publisher-controlled) + set its key.
-#    Set only the provider you actually use; AI_PROVIDER decides which one runs.
-supabase secrets set AI_PROVIDER=openai          # openai | gemini | groq | deepseek
-supabase secrets set OPENAI_API_KEY=sk-...
-# Optional extras / fallbacks:
-supabase secrets set GEMINI_API_KEY=...
+# 2. Set the provider keys used by plan routing.
+#    Default routing: free -> Groq, pro -> DeepSeek.
 supabase secrets set GROQ_API_KEY=gsk_...
 supabase secrets set DEEPSEEK_API_KEY=sk-...
-# Optional: pin a specific model (otherwise the provider default is used).
-supabase secrets set AI_MODEL=gpt-4o-mini
+# Optional extras / fallbacks:
+supabase secrets set OPENAI_API_KEY=sk-...
+supabase secrets set GEMINI_API_KEY=...
+# Optional: pin models. Provider-specific values are safest for mixed routing.
+supabase secrets set GROQ_MODEL=llama-3.3-70b-versatile
+supabase secrets set DEEPSEEK_MODEL=deepseek-chat
+# Optional emergency/global override for all users:
+supabase secrets set AI_PROVIDER=openai          # openai | gemini | groq | deepseek
 ```
 
 Notes:
 
 - `SUPABASE_URL` / `SUPABASE_ANON_KEY` are injected into functions automatically —
   do not set them as secrets.
-- `AI_PROVIDER` selects the chat provider server-side; the app's stored provider
-  value is ignored when this is set. Defaults to `openai` if unset.
+- When `AI_PROVIDER` is unset, `ai-chat` reads the signed-in user's Supabase Auth
+  metadata and routes `plan=pro` to DeepSeek; every other/missing plan is treated
+  as `free` and routed to Groq.
+- `AI_PROVIDER`, when set, selects the chat provider server-side for every user;
+  the app's stored provider value is ignored.
+- To mark a user as pro, set Supabase Auth app metadata:
+
+```sql
+update auth.users
+set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"plan":"pro"}'::jsonb
+where email = 'user@example.com';
+```
+
+Remove the key or set `"plan":"free"` to return the user to the free route.
 - Voice transcription (`ai-transcribe`) reuses `OPENAI_API_KEY` (preferred) or
   falls back to `GROQ_API_KEY`.
 - If the active provider's key secret is not set, the function returns 503 and the

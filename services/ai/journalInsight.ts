@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage } from './aiLanguage'
+import { withUserContext } from './userContextPrompt'
 import type { Journal } from '@features/journals/types'
 
 export type JournalReflection = {
@@ -115,7 +116,7 @@ Rules:
       [
         {
           role: 'system',
-          content: `You are a thoughtful reflection partner. Reply in ${language} ONLY. Return ONLY valid JSON. Never add explanation outside the JSON.`,
+          content: withUserContext(`You are a thoughtful reflection partner. Reply in ${language} ONLY. Return ONLY valid JSON. Never add explanation outside the JSON.`),
         },
         { role: 'user', content: prompt },
       ],
