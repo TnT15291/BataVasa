@@ -126,6 +126,7 @@ export const en: Translations = {
   assistant_prompt_finance: 'How is my spending?',
   assistant_prompt_habits: 'Suggest habit improvements',
   assistant_prompt_journal: 'What do recent journals show?',
+  assistant_prompt_growth: 'How have I grown over the years?',
   deleted_habit: 'Deleted habit',
   parse_btn: 'Parse',
   generate: 'Generate',

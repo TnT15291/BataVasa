@@ -5,6 +5,7 @@ import { getTranslations } from './i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { requestNotificationPermission } from './notifications'
 import { buildWeeklyReviewTrigger } from './proactiveSchedule'
+import { buildWeeklyTeaserBody } from './weeklyTeaser'
 
 // Data tag carried on the notification so the deep-link router (and the
 // cancel sweep) can recognize the weekly-review nudge.
@@ -41,10 +42,13 @@ async function scheduleWeeklyReviewNotification(): Promise<void> {
 
   const t = getTranslations()
   const { weekday, hour, minute } = buildWeeklyReviewTrigger(s.proactiveWeeklyDay, s.proactiveWeeklyHour)
+  // Smart teaser computed now (from the latest data) is stamped onto the
+  // scheduled notification; fall back to the static body when there's no data.
+  const teaser = await buildWeeklyTeaserBody()
   await Notifications.scheduleNotificationAsync({
     content: {
       title: t.weekly_review_notif_title,
-      body: t.weekly_review_notif_body,
+      body: teaser || t.weekly_review_notif_body,
       data: { type: WEEKLY_REVIEW_NOTIFICATION_TYPE },
     },
     trigger: {

@@ -133,6 +133,7 @@ export const fr: Translations = {
   assistant_prompt_finance: 'Comment sont mes dépenses ?',
   assistant_prompt_habits: 'Suggère des améliorations',
   assistant_prompt_journal: 'Que montrent mes journaux ?',
+  assistant_prompt_growth: 'Comment ai-je évolué au fil des ans ?',
   deleted_habit: 'Habitude supprimée',
   parse_btn: 'Analyser',
   generate: 'Générer',

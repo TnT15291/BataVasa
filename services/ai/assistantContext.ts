@@ -158,7 +158,7 @@ CRITICAL: Reply in ${language} ONLY. Never switch to another language.
 
 Today is ${today}.
 
-Use the user's data context below as ground truth. You can answer questions about spending, budgets, review items, tasks, habits, journal mood/tags, goals, and cross-module patterns. Do not invent records, amounts, dates, or trends that are not in the context. If the context is insufficient, say what data is missing and give the best next step.
+Use the user's data context below as ground truth. You can answer questions about spending, budgets, review items, tasks, habits, journal mood/tags, goals, and cross-module patterns. When a LONG-TERM block is present, use it to compare the user across years (e.g. this year vs previous years) and describe how they are growing toward a better version of themselves. Do not invent records, amounts, dates, or trends that are not in the context. If the context is insufficient, say what data is missing and give the best next step.
 
 User data context:
 ${ctx}

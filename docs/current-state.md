@@ -137,7 +137,7 @@ Code is implemented. Sync has been manually verified as working; Google Auth sti
 Current test infrastructure is ready, but global coverage is still below the public-launch target.
 
 - Latest automated run on 2026-06-20: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
-- Current status: 505 tests across 38 suites.
+- Current status: 521 tests across 42 suites.
 - Current coverage: 70.08% statements / 64.04% branches / 71.81% functions / 72.41% lines.
 - Current CI floor: 37% statements / 35% branches / 31% functions / 39% lines.
 - Target before public launch: keep statements/functions/lines above 70% and continue raising branch coverage toward 70%.
@@ -176,8 +176,8 @@ Work in this order:
    - **DONE MVP:** Goals MVP: manual goal creation + derived progress for finance category totals and habit completion rate.
    - **DONE MVP:** Weekly Life Review: flagship cross-module weekly report using deterministic metrics plus AI explanation.
    - **DONE MVP:** Context memory layer: user goals/preferences/facts available to AI prompts and review summaries.
-   - **M37 Proactive weekly insights**: opt-in weekly notification/deep link after Weekly Life Review is stable.
-   - **Habit selective enhancements**: ship 1-2 calm improvements, starting with never-miss-twice and/or identity field.
+   - **DONE MVP:** M37 Proactive weekly insights: opt-in weekly local notification → deep-links to Weekly Life Review.
+   - **Habit selective enhancements**: ship 1-2 calm improvements, starting with never-miss-twice and/or identity field. **← next**
    - **M21 Backup/restore file UI**: trust-building recovery flow on top of existing local/export foundations.
 3. **Beta-close verification**
    - Sync is verified working.
@@ -415,9 +415,15 @@ These are the "assistant" features that make the app *know* your context and *he
 - **Example:** Without memory: *"You spent a lot on food."* With memory: *"You spent 3M on food — that's 1.5× your usual 2M weekly budget, and above your goal of dining < 2M/month."*
 - **Scope:** small-medium; is a prerequisite for Weekly Review to be truly personalized.
 
-#### 2c. Proactive (Background Summaries)
+#### 2c. Proactive (Background Summaries) — DONE MVP (2026-06-20)
 
-- **Problem:** User has to open the app to read Weekly Review or learn about anomalies.
+- Implemented as an **opt-in scheduled local notification** (not a background task — far more reliable, works without `expo-task-manager`, and stays calm). `services/proactiveSchedule.ts` (pure, tested) computes a weekly trigger; `services/proactiveNotifications.ts` schedules/cancels/reconciles a single weekly `expo-notifications` WEEKLY trigger tagged `weekly_review`.
+- Settings (default OFF): `proactiveWeeklyReview` + `proactiveWeeklyDay` (expo weekday 1-7) + `proactiveWeeklyHour`. UI in `SettingsScreen` (toggle + locale-aware weekday chips + hour stepper). `syncWeeklyReviewNotification()` runs at app start and on every change.
+- Tapping the notification deep-links to `/weekly-review` via `features/notifications/useNotificationRouting.ts` (`useLastNotificationResponse`, handles cold start). 7 i18n keys × 6 languages.
+- **Smart teaser (2026-06-20):** `services/weeklyTeaser.ts` computes a deterministic one-glance week summary from SQLite (expense + % vs last week, habit completions, avg mood, overdue tasks) and stamps it onto the scheduled notification body (icon+number, language-proof; falls back to the static localized body when there's no data). Re-stamped on app start and on every foreground (`_layout` AppState `active`) so it reflects the latest session. Pure `formatWeeklyTeaser` is unit-tested.
+- Future enhancement (deferred): a true *background*-computed teaser via `expo-task-manager` (would refresh even if the app is never opened). The foreground-stamped teaser covers the value without the reliability/native cost.
+
+- **Problem (original):** User has to open the app to read Weekly Review or learn about anomalies.
 - **Solution:** `expo-task-manager` runs weekly (e.g., Sunday 9 AM) → calculates summary → `expo-notifications` → deep-link to relevant screen.
 - **Scope:** low-medium implementation; medium polish (ensure notifications are not annoying).
 - **Timing:** late (do after Weekly Review exists and is solid).
@@ -532,8 +538,8 @@ Current status: Global Search and Goals MVP are now DONE at MVP scope. Continue 
 2. **Goals MVP — DONE MVP**: manual goals with finance category amount and habit completion-rate progress.
 3. **Weekly Life Review — DONE MVP** — flagship differentiator (leverages goals + existing insights).
 4. **Context memory layer — DONE MVP** — `user_context` memories injected into all generative AI prompts.
-5. **Proactive notifications** — requires stable Review + memory. ~2 weeks. **← next**
-6. **Habits selective enhancements** — ship 1–2 (never-miss-twice, identity). Observe, then iterate.
+5. **Proactive notifications — DONE MVP** — opt-in weekly local notification → deep-link to Weekly Life Review.
+6. **Habits selective enhancements** — ship 1–2 (never-miss-twice, identity). Observe, then iterate. **← next**
 7. **Backup/Restore file UI** — low risk, trust-building. ~1 week.
 8. **Close beta gate** — full verification, coverage pass, real-device visual QA, fresh screenshots, and release-readiness smoke test.
 
@@ -580,6 +586,17 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-06-20 Smart teaser on the weekly-review notification:
+  - `services/weeklyTeaser.ts`: deterministic one-glance week summary (expense + % vs last week, habit completions, avg mood, overdue tasks) from SQLite, formatted as a language-proof icon+number line (`💸 2.1M (−12%)  ✅ 5  🙂 3.9/5  ⏰ 2`). Stamped onto the scheduled notification body in `proactiveNotifications.ts` (fallback to the static localized body when empty); re-stamped on app start + every foreground (`app/_layout.tsx`). Pure `formatWeeklyTeaser` is tested (`__tests__/weeklyTeaser.test.ts`). No background task — reliable + Expo-Go-safe.
+  - Verification: `npx tsc --noEmit` clean; `npm test -- --runInBand` passed with 521 tests across 42 suites.
+- 2026-06-20 Assistant long-term ("better version") context:
+  - `services/ai/longTermContext.ts` builds **deterministic per-year rollups** (finance income/expense/top category, habit done/skip/count, journal entries/avg mood/important, task completion) straight from SQLite — the whole history, not the paginated store — so the assistant can answer "what did I do over the past year?" and compare the user across years. Pure `formatLongTermSummary` is unit-tested; the async `buildLongTermSummary` queries the DB. Finance counts the primary currency only (no cross-currency summing without FX).
+  - `AssistantScreen` loads the block once on mount and appends it to the assistant context; `buildAssistantSystemPrompt` now invites year-over-year comparison ("growing toward a better version"). New `assistant_prompt_growth` quick prompt × 6 languages.
+  - Verification: `npx tsc --noEmit` clean; `npm test -- --runInBand` passed with 517 tests across 41 suites.
+- 2026-06-20 Proactive weekly-review notification (M37):
+  - Opt-in (default OFF) weekly local notification that deep-links to `/weekly-review`. Chosen over a background task for reliability and calm. Pure trigger math in `services/proactiveSchedule.ts` (tested); scheduling/cancel/reconcile in `services/proactiveNotifications.ts`; tap routing in `features/notifications/useNotificationRouting.ts`; reconciled at app start in `app/_layout.tsx`.
+  - Settings: `proactiveWeeklyReview` + `proactiveWeeklyDay` (1=Sun…7=Sat) + `proactiveWeeklyHour`, with a Weekly review section in `SettingsScreen` (toggle + locale-aware weekday chips + hour stepper). 7 i18n keys × 6 languages (`weekly_review_reminder*`, `weekly_review_notif_*`, `weekly_review_needs_notifications`).
+  - Verification: `npx tsc --noEmit` clean; `npm test -- --runInBand` passed with 513 tests across 40 suites.
 - 2026-06-20 Context memory layer (AI personalization):
   - New `user_context` table (migration v23) of short user-authored memories (`goal` / `preference` / `fact`). DB layer in `database/context/`, feature CRUD in `features/context/`, store in `store/contextStore.ts`.
   - `services/ai/userContextPrompt.ts` exposes `withUserContext()` and a DB-decoupled cache (kept in sync by the store, warmed in `app/_layout.tsx`). Injected into the assistant, weekly life review, cross-module analysis, finance/habit/journal/reminder insights, finance reports, and goal coach. NOT injected into deterministic smart/universal parsers.

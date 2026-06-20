@@ -133,6 +133,7 @@ export const zh: Translations = {
   assistant_prompt_finance: '我的支出如何？',
   assistant_prompt_habits: '给出习惯改进建议',
   assistant_prompt_journal: '最近日记显示什么？',
+  assistant_prompt_growth: '这些年我成长了多少？',
   deleted_habit: '已删除的习惯',
   parse_btn: '解析',
   generate: '生成报告',

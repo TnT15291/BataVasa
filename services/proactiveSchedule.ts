@@ -3,7 +3,7 @@
 // schedule math is shared by both the settings store and the notification
 // service without dragging native modules into either.
 
-// expo-notifications weekday convention: 1 = Sunday … 7 = Saturday.
+// expo-notifications weekday convention: 1 = Sunday ... 7 = Saturday.
 export const DEFAULT_WEEKLY_REVIEW_DAY = 1 // Sunday
 export const DEFAULT_WEEKLY_REVIEW_HOUR = 9 // 09:00 local
 
@@ -25,8 +25,8 @@ export function buildWeeklyReviewTrigger(weekday: number, hour: number): WeeklyR
 }
 
 // A reference week (2024-01-07 is a Sunday) so callers can turn an expo weekday
-// (1=Sun…7=Sat) into a real Date for locale-aware label formatting.
+// (1=Sun...7=Sat) into a real Date for locale-aware label formatting.
 export function weekdayToDate(weekday: number): Date {
   const w = clampWeekday(weekday)
-  return new Date(2024, 0, 6 + w) // 2024-01-07 = Sunday → weekday 1
+  return new Date(2024, 0, 6 + w) // 2024-01-07 = Sunday -> weekday 1
 }

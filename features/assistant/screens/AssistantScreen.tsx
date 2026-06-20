@@ -15,6 +15,7 @@ import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJ
 import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
 import { chatCompletion, type ChatMessage } from '@services/ai/openai'
 import { buildAssistantContext, buildAssistantSystemPrompt } from '@services/ai/assistantContext'
+import { buildLongTermSummary } from '@services/ai/longTermContext'
 import { useGoalsStore } from '@store/goalsStore'
 import { uuid } from '@services/uuid'
 import { VoiceButton } from '@components/VoiceButton'
@@ -51,6 +52,15 @@ export function AssistantScreen() {
     if (goalsLoadState === 'idle') void loadGoals()
   }, [goalsLoadState, loadGoals])
 
+  // Deterministic multi-year rollups so the assistant can compare the user
+  // across years. Computed once from SQLite (whole history, not the loaded page).
+  const [longTerm, setLongTerm] = useState('')
+  useEffect(() => {
+    let active = true
+    void buildLongTermSummary().then((summary) => { if (active) setLongTerm(summary) })
+    return () => { active = false }
+  }, [])
+
   const [kbHeight, setKbHeight] = useState(0)
   useEffect(() => {
     if (Platform.OS !== 'android') return
@@ -68,6 +78,7 @@ export function AssistantScreen() {
     { icon: 'trending-up', text: t.assistant_prompt_finance },
     { icon: 'check-circle', text: t.assistant_prompt_habits },
     { icon: 'book-open', text: t.assistant_prompt_journal },
+    { icon: 'award', text: t.assistant_prompt_growth },
   ]
 
   const send = useCallback(async () => {
@@ -79,7 +90,7 @@ export function AssistantScreen() {
     setInput('')
     setLoading(true)
 
-    const ctx = buildAssistantContext({
+    const baseCtx = buildAssistantContext({
       transactions: txs,
       categories: cats,
       habits,
@@ -87,6 +98,7 @@ export function AssistantScreen() {
       reminders,
       goals,
     })
+    const ctx = longTerm ? `${baseCtx}\n${longTerm}` : baseCtx
     const history: ChatMessage[] = [
       { role: 'system', content: buildAssistantSystemPrompt(ctx) },
       ...[...messages]
@@ -112,7 +124,7 @@ export function AssistantScreen() {
     } finally {
       setLoading(false)
     }
-  }, [input, loading, messages, txs, cats, habits, journals, reminders, goals, t, router])
+  }, [input, loading, messages, txs, cats, habits, journals, reminders, goals, longTerm, t, router])
 
   return (
     <KeyboardAvoidingView

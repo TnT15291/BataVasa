@@ -132,6 +132,7 @@ export const vi = {
   assistant_prompt_finance: 'Tôi đang chi tiêu thế nào?',
   assistant_prompt_habits: 'Gợi ý cải thiện thói quen',
   assistant_prompt_journal: 'Nhật ký gần đây nói gì?',
+  assistant_prompt_growth: 'Tôi đã tiến bộ thế nào qua các năm?',
   deleted_habit: 'Thói quen đã xóa',
   parse_btn: 'Phân tích',
   generate: 'Tạo báo cáo',

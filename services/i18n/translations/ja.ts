@@ -133,6 +133,7 @@ export const ja: Translations = {
   assistant_prompt_finance: '支出はどうですか？',
   assistant_prompt_habits: '習慣の改善案',
   assistant_prompt_journal: '最近の日記の傾向',
+  assistant_prompt_growth: 'この数年でどう成長した？',
   deleted_habit: '削除済みの習慣',
   parse_btn: '解析',
   generate: 'レポート生成',

@@ -133,6 +133,7 @@ export const ko: Translations = {
   assistant_prompt_finance: '지출은 어떤가요?',
   assistant_prompt_habits: '습관 개선 제안',
   assistant_prompt_journal: '최근 일기 흐름',
+  assistant_prompt_growth: '지난 몇 년간 얼마나 성장했나요?',
   deleted_habit: '삭제된 습관',
   parse_btn: '분석',
   generate: '보고서 생성',

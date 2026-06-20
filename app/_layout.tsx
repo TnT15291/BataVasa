@@ -90,6 +90,9 @@ export default function RootLayout() {
           setLocked(true)
         }
         backgroundedAt.current = null
+        // Re-stamp the weekly-review notification with a fresh teaser from the
+        // latest data each time the app is opened.
+        void syncWeeklyReviewNotification()
       }
     })
     return () => sub.remove()
@@ -124,6 +127,7 @@ export default function RootLayout() {
           <UpdatePasswordScreen />
         ) : (
         <Stack
+          initialRouteName="(tabs)"
           screenOptions={{
             headerStyle: { backgroundColor: theme.bg.elevated },
             headerTitleStyle: { color: theme.text.primary, fontWeight: '600' },
@@ -184,6 +188,7 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="help" options={{ title: t.help_title }} />
+          <Stack.Screen name="quick-batavasa" options={{ title: t.command_placeholder }} />
           <Stack.Screen name="data-management" options={{ title: t.data_management }} />
           <Stack.Screen name="appearance" options={{ title: t.nav_appearance }} />
           <Stack.Screen name="language" options={{ title: t.nav_language }} />
