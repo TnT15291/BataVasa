@@ -92,6 +92,8 @@ export function SettingsScreen() {
   const setSyncHabits = useSettingsStore((s) => s.setSyncHabits)
   const syncJournals = useSettingsStore((s) => s.syncJournals)
   const setSyncJournals = useSettingsStore((s) => s.setSyncJournals)
+  const syncGoals = useSettingsStore((s) => s.syncGoals)
+  const setSyncGoals = useSettingsStore((s) => s.setSyncGoals)
   const financeCycleStartDay = useSettingsStore((s) => s.financeCycleStartDay)
   const setFinanceCycleStartDay = useSettingsStore((s) => s.setFinanceCycleStartDay)
   const safeToSpendCountPlannedIncome = useSettingsStore((s) => s.safeToSpendCountPlannedIncome)
@@ -427,6 +429,31 @@ export function SettingsScreen() {
           <View style={{ flex: 1, paddingRight: spacing[3] }}>
             <Text style={[styles.rowLabel, { color: theme.text.danger }]}>{t.delete_all_journals}</Text>
             <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.delete_all_journals_hint}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      <SectionHeader label={t.nav_goals} />
+      <View style={[styles.section, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <View style={[styles.row, { borderColor: theme.border.subtle }]}>
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.sync_data}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.sync_data_hint}</Text>
+          </View>
+          <SettingsSwitch value={syncGoals} onValueChange={setSyncGoals} />
+        </View>
+        <SettingRow label={t.goals} onPress={() => router.push('/goals')} />
+        <Pressable
+          onPress={() => router.push('/data-management?module=goals')}
+          style={({ pressed }) => [
+            styles.row,
+            styles.rowLast,
+            { borderColor: theme.border.subtle, backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated },
+          ]}
+        >
+          <View style={{ flex: 1, paddingRight: spacing[3] }}>
+            <Text style={[styles.rowLabel, { color: theme.text.primary }]}>{t.data_management}</Text>
+            <Text style={[styles.rowHint, { color: theme.text.muted }]}>{t.data_management_hint}</Text>
           </View>
         </Pressable>
       </View>

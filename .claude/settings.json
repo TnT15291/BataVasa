@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(grep -v \"expo-router'\\\\$\")",
+      "PowerShell(npx tsc --noEmit)",
+      "PowerShell(npx jest --runInBand -t \"auth\" 2>&1)",
+      "PowerShell(npx jest --runInBand i18n 2>&1)"
+    ]
+  }
+}

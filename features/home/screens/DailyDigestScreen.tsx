@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
-import { MODULE_COLORS } from '@design/moduleColors'
+import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
@@ -35,7 +35,7 @@ type IconName = keyof typeof Feather.glyphMap
 // Review-row icons tuned to the UI1.png reference (transaction card, activity,
 // pencil, bell) — each in its module identity color.
 const KIND_META: Record<ReviewInboxItem['kind'], { icon: IconName; color: string }> = {
-  finance: { icon: 'trending-up', color: MODULE_COLORS.finance },
+  finance: { icon: MODULE_ICONS.finance, color: MODULE_COLORS.finance },
   task:    { icon: 'bell',        color: MODULE_COLORS.tasks },
   habit:   { icon: 'check-circle',color: MODULE_COLORS.habits },
   journal: { icon: 'book-open',   color: MODULE_COLORS.journal },
@@ -104,7 +104,7 @@ export function DailyDigestScreen() {
   const laneFor = (kind: ReviewInboxItem['kind']) =>
     timelineItems.filter((i) => i.kind === kind).map((i) => frac(i.occurredAt))
   const lanes: SignalLane[] = [
-    { key: 'finance',   label: t.nav_finance,   icon: 'trending-up',  color: MODULE_COLORS.finance,  marks: laneFor('finance') },
+    { key: 'finance',   label: t.nav_finance,   icon: MODULE_ICONS.finance, color: MODULE_COLORS.finance,  marks: laneFor('finance') },
     { key: 'habits',    label: t.habits,        icon: 'check-circle', color: MODULE_COLORS.habits,   marks: laneFor('habit') },
     { key: 'journal',   label: t.nav_journal,   icon: 'book-open',    color: MODULE_COLORS.journal,  marks: laneFor('journal') },
     { key: 'reminders', label: t.nav_reminders, icon: 'bell',         color: MODULE_COLORS.tasks,    marks: laneFor('task') },
@@ -174,7 +174,7 @@ export function DailyDigestScreen() {
               label={t.review_inbox_title}
               count={reviewCount}
               actionLabel={t.view_all}
-              onAction={() => router.push('/analysis')}
+              onAction={() => router.push('/timeline')}
             />
             <View style={styles.list}>
               {reviewItems.map((item) => {
@@ -222,7 +222,8 @@ export function DailyDigestScreen() {
         <QuickActionRow
           actions={[
             { key: 'assistant', icon: 'message-circle', label: t.quick_assistant, color: theme.brand.primary, onPress: () => router.push('/chat') },
-            { key: 'reports',   icon: 'bar-chart-2',    label: t.quick_reports, color: MODULE_COLORS.analysis, onPress: () => router.push('/analysis') },
+            { key: 'goals',     icon: MODULE_ICONS.goals, label: t.nav_goals, color: MODULE_COLORS.analysis, onPress: () => router.push('/goals') },
+            { key: 'reports',   icon: 'bar-chart-2',    label: t.quick_reports, color: MODULE_COLORS.analysis, onPress: () => router.push('/weekly-review') },
           ]}
         />
       </ScrollView>

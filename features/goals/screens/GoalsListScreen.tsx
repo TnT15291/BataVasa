@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
-import { MODULE_COLORS } from '@design/moduleColors'
+import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useGoalsStore } from '@store/goalsStore'
 import { ScreenTransition } from '@components/ScreenTransition'
@@ -24,6 +24,11 @@ export function GoalsListScreen() {
   const restoreGoal = useGoalsStore((s) => s.restoreGoal)
 
   useEffect(() => { void loadGoals() }, [loadGoals])
+
+  const moduleIcon = (m?: string) =>
+    m === 'finance' ? MODULE_ICONS.finance : m === 'journals' ? MODULE_ICONS.journal : m === 'reminders' ? MODULE_ICONS.tasks : MODULE_ICONS.habits
+  const moduleColor = (m?: string) =>
+    m === 'finance' ? MODULE_COLORS.finance : m === 'journals' ? MODULE_COLORS.journal : m === 'reminders' ? MODULE_COLORS.tasks : MODULE_COLORS.habits
 
   const active = goals.filter((g) => g.status === 'active')
   const done = goals.filter((g) => g.status === 'done')
@@ -54,7 +59,7 @@ export function GoalsListScreen() {
       {goals.length === 0 ? (
         <View style={[styles.empty, { paddingTop: insets.top + spacing[6] }]}>
           <EmptyState
-            icon="target"
+            icon={MODULE_ICONS.goals}
             accent={MODULE_COLORS.analysis}
             title={t.goal_empty}
             body={t.goal_empty_hint}
@@ -67,8 +72,8 @@ export function GoalsListScreen() {
           <ModuleOverview
             eyebrow={t.goals}
             value={`${avg}%`}
-            subtitle={active[0]?.title ?? t.goal_done}
-            icon="target"
+            subtitle={active[0]?.title ?? t.goal_module_hint}
+            icon={MODULE_ICONS.goals}
             accent={MODULE_COLORS.analysis}
             stats={[
               { key: 'active', label: t.goal_active, value: String(active.length), color: MODULE_COLORS.analysis },
@@ -76,14 +81,18 @@ export function GoalsListScreen() {
               { key: 'total', label: t.data_records, value: String(goals.length) },
             ]}
           />
+          <View style={[styles.infoCard, { backgroundColor: MODULE_COLORS.analysis + '14', borderColor: MODULE_COLORS.analysis + '33' }]}>
+            <Feather name="link-2" size={16} color={MODULE_COLORS.analysis} />
+            <Text style={[styles.infoText, { color: theme.text.secondary }]}>{t.goal_module_hint}</Text>
+          </View>
           <View style={styles.block}>
             <SectionHeader label={t.goal_active} count={active.length} />
             <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
               {(active.length > 0 ? active : done).map((goal) => (
                 <ListRow
                   key={goal.id}
-                  icon={goal.binding?.module === 'finance' ? 'trending-up' : 'check-circle'}
-                  color={goal.binding?.module === 'finance' ? MODULE_COLORS.finance : MODULE_COLORS.habits}
+                  icon={moduleIcon(goal.binding?.module)}
+                  color={moduleColor(goal.binding?.module)}
                   title={goal.title}
                   subtitle={`${goal.progress.label} · ${goal.progress.sourceLabel}`}
                   meta={`${goal.progress.percent}%`}
@@ -129,6 +138,8 @@ const styles = StyleSheet.create({
   content: { padding: spacing[4], paddingBottom: 112, gap: spacing[3] },
   empty: { flex: 1, padding: spacing[4], justifyContent: 'center' },
   block: { gap: spacing[2] },
+  infoCard: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  infoText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   card: { borderWidth: 1, borderRadius: radius.md, padding: spacing[2], gap: spacing[1] },
   fab: {
     position: 'absolute',

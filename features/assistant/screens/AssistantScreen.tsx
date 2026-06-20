@@ -6,7 +6,6 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Feather } from '@expo/vector-icons'
-import { subDays, format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -15,7 +14,8 @@ import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
 import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJournals'
 import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
 import { chatCompletion, type ChatMessage } from '@services/ai/openai'
-import { getAILanguage, getAICurrency, fmtAI } from '@services/ai/aiLanguage'
+import { buildAssistantContext, buildAssistantSystemPrompt } from '@services/ai/assistantContext'
+import { useGoalsStore } from '@store/goalsStore'
 import { uuid } from '@services/uuid'
 import { VoiceButton } from '@components/VoiceButton'
 
@@ -27,76 +27,6 @@ type QuickPrompt = {
 type UIMessage = { id: string; role: 'user' | 'assistant'; content: string }
 
 const GREETING_ID = 'greeting'
-
-function buildSystemPrompt(ctx: string): string {
-  const language = getAILanguage()
-  const today = format(new Date(), 'yyyy-MM-dd')
-  return `You are a smart personal AI assistant for BataVasa — an app that tracks Finance, Habits, Journals, and Reminders.
-CRITICAL: You MUST reply in ${language} ONLY. Never switch to another language.
-
-Today is ${today}.
-
-User's personal data:
-${ctx}
-
-Help with any question about their data: spending analysis, habit progress, journal reflection, upcoming tasks, or cross-module patterns (e.g. mood vs spending). Be concise and friendly.
-Always reply in ${language}.`
-}
-
-function buildContext(
-  txs: ReturnType<typeof useTransactions>,
-  cats: ReturnType<typeof useCategories>,
-  habits: ReturnType<typeof useHabits>,
-  journals: ReturnType<typeof useJournals>,
-  reminders: ReturnType<typeof useReminders>,
-): string {
-  const currency = getAICurrency()
-  const cutoff30 = subDays(new Date(), 30).toISOString()
-  const cutoff7 = subDays(new Date(), 7).toISOString()
-  const catMap = new Map(cats.map((c) => [c.id, c]))
-
-  // Finance
-  const recentTxs = txs.filter((tx) => tx.occurred_at >= cutoff30)
-  let income = 0, expense = 0
-  const catTotals = new Map<string, number>()
-  for (const tx of recentTxs) {
-    const name = catMap.get(tx.category_id)?.name ?? 'Other'
-    const abs = Math.abs(tx.amount_cents)
-    if (tx.amount_cents > 0) income += abs
-    else expense += abs
-    catTotals.set(name, (catTotals.get(name) ?? 0) + abs)
-  }
-  const topCats = Array.from(catTotals.entries())
-    .sort((a, b) => b[1] - a[1]).slice(0, 5)
-    .map(([n, a]) => `${n}: ${fmtAI(a, currency)}`).join(', ')
-  const financeLine = `Finance (30d): income ${fmtAI(income, currency)}, expense ${fmtAI(expense, currency)}, top: ${topCats || 'none'}`
-
-  // Habits
-  const habitsDue = habits.filter((h) => h.dueToday !== false)
-  const habitsDone = habitsDue.filter((h) => h.todayCount >= h.target_per_period).length
-  const bestStreak = habits.length > 0 ? Math.max(...habits.map((h) => h.streak)) : 0
-  const habitNames = habits.slice(0, 5).map((h) => `${h.name}(${h.streak}d)`).join(', ')
-  const habitsLine = `Habits: ${habitsDone}/${habitsDue.length} done today, best streak ${bestStreak}d, active: ${habitNames || 'none'}`
-
-  // Journals
-  const recentJournals = journals.filter((j) => j.occurred_at >= cutoff7)
-  const moodEntries = recentJournals.filter((j) => j.mood !== null)
-  const avgMood = moodEntries.length > 0
-    ? (moodEntries.reduce((s, j) => s + (j.mood ?? 0), 0) / moodEntries.length).toFixed(1)
-    : 'N/A'
-  const journalsLine = `Journals: ${recentJournals.length} entries (7d), avg mood ${avgMood}/5`
-
-  // Reminders
-  const now = new Date()
-  const upcoming = reminders
-    .filter((r) => r.completed === 0 && new Date(r.remind_at) >= now)
-    .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())
-    .slice(0, 3)
-    .map((r) => r.title)
-  const remindersLine = `Reminders upcoming: ${upcoming.join(', ') || 'none'}`
-
-  return [financeLine, habitsLine, journalsLine, remindersLine].join('\n')
-}
 
 export function AssistantScreen() {
   useFinanceBootstrap()
@@ -112,7 +42,14 @@ export function AssistantScreen() {
   const habits = useHabits()
   const journals = useJournals()
   const reminders = useReminders()
+  const goals = useGoalsStore((s) => s.goals)
+  const loadGoals = useGoalsStore((s) => s.loadGoals)
+  const goalsLoadState = useGoalsStore((s) => s.loadState)
   const listRef = useRef<FlatList>(null)
+
+  useEffect(() => {
+    if (goalsLoadState === 'idle') void loadGoals()
+  }, [goalsLoadState, loadGoals])
 
   const [kbHeight, setKbHeight] = useState(0)
   useEffect(() => {
@@ -142,9 +79,16 @@ export function AssistantScreen() {
     setInput('')
     setLoading(true)
 
-    const ctx = buildContext(txs, cats, habits, journals, reminders)
+    const ctx = buildAssistantContext({
+      transactions: txs,
+      categories: cats,
+      habits,
+      journals,
+      reminders,
+      goals,
+    })
     const history: ChatMessage[] = [
-      { role: 'system', content: buildSystemPrompt(ctx) },
+      { role: 'system', content: buildAssistantSystemPrompt(ctx) },
       ...[...messages]
         .reverse()
         .filter((m) => m.id !== GREETING_ID)
@@ -153,7 +97,7 @@ export function AssistantScreen() {
     ]
 
     try {
-      const reply = await chatCompletion(history, { max_tokens: 600 })
+      const reply = await chatCompletion(history, { max_tokens: 800, temperature: 0.4 })
       setMessages((prev) => [{ id: uuid(), role: 'assistant', content: reply }, ...prev])
     } catch (e: any) {
       if (e?.message === 'NO_API_KEY') {
@@ -163,12 +107,12 @@ export function AssistantScreen() {
         ])
         setMessages((prev) => prev.filter((m) => m.id !== userMsg.id))
       } else {
-        setMessages((prev) => [{ id: uuid(), role: 'assistant', content: `⚠️ ${e?.message ?? t.ai_error}` }, ...prev])
+        setMessages((prev) => [{ id: uuid(), role: 'assistant', content: `[!] ${e?.message ?? t.ai_error}` }, ...prev])
       }
     } finally {
       setLoading(false)
     }
-  }, [input, loading, messages, txs, cats, habits, journals, reminders, t, router])
+  }, [input, loading, messages, txs, cats, habits, journals, reminders, goals, t, router])
 
   return (
     <KeyboardAvoidingView

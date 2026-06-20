@@ -117,7 +117,8 @@
       "Bash(sed -i 's/  nav_finance: '\\\\''Tài chính'\\\\'',/  nav_home: '\\\\''Trang chủ'\\\\'',\\\\n  nav_finance: '\\\\''Tài chính'\\\\'',/' services/i18n/translations/vi.ts)",
       "Bash(sed -i 's/  nav_finance: '\\\\''財務'\\\\'',/  nav_home: '\\\\''ホーム'\\\\'',\\\\n  nav_finance: '\\\\''財務'\\\\'',/' services/i18n/translations/ja.ts)",
       "Bash(sed -i 's/  nav_finance: '\\\\''재정'\\\\'',/  nav_home: '\\\\''홈'\\\\'',\\\\n  nav_finance: '\\\\''재정'\\\\'',/' services/i18n/translations/ko.ts)",
-      "Bash(sed -i 's/  nav_finance: '\\\\''财务'\\\\'',/  nav_home: '\\\\''首页'\\\\'',\\\\n  nav_finance: '\\\\''财务'\\\\'',/' services/i18n/translations/zh.ts)"
+      "Bash(sed -i 's/  nav_finance: '\\\\''财务'\\\\'',/  nav_home: '\\\\''首页'\\\\'',\\\\n  nav_finance: '\\\\''财务'\\\\'',/' services/i18n/translations/zh.ts)",
+      "PowerShell(npx jest goals --silent 2>&1)"
     ],
     "additionalDirectories": [
       "\\tmp",

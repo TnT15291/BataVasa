@@ -265,6 +265,19 @@ export function getCycleRange(now: Date, cycleStartDay = 1): { from: Date; to: D
 
 const normalize = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
 
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+export function getCurrentPlanMonth(date = new Date()): string {
+  return monthKey(date)
+}
+
+export function planItemAppliesToDate(item: PlanItem, date = new Date()): boolean {
+  if ((item.recurrence ?? 'monthly') === 'monthly') return true
+  return item.applies_month === monthKey(date)
+}
+
 /**
  * A plan item counts as "already settled" this cycle when a transaction in
  * the cycle matches it. A user-confirmed link (`tx.plan_item_id`) settles
@@ -312,6 +325,7 @@ export function getSettledPlanItemIds(input: {
   const settled = new Set<string>()
   for (const item of input.planItems) {
     if (item.active !== 1 || item.deleted_at) continue
+    if (!planItemAppliesToDate(item, now)) continue
     if (planItemSettled(item, cycleTxs)) settled.add(item.id)
   }
   return settled
@@ -354,6 +368,7 @@ export function findMatchingPlanItem(input: {
   let best: { item: PlanItem; nameMatch: boolean; diff: number } | null = null
   for (const item of input.planItems) {
     if (item.active !== 1 || item.deleted_at) continue
+    if (!planItemAppliesToDate(item, now)) continue
     if (item.kind === 'expense' ? tx.amount_cents >= 0 : tx.amount_cents <= 0) continue
     if (tx.currency !== item.currency) continue
     if (planItemSettled(item, otherCycleTxs)) continue
@@ -517,6 +532,7 @@ export function calculateSafeToSpend(input: {
 
   for (const item of input.planItems ?? []) {
     if (item.active !== 1 || item.deleted_at) continue
+    if (!planItemAppliesToDate(item, now)) continue
     if (planItemSettled(item, cycleTxs)) continue
     const amount = inTarget(item.amount_cents, item.currency)
     if (amount === null) continue
@@ -946,6 +962,10 @@ export async function createPlanItem(input: CreatePlanItemInput): Promise<Result
       currency: data.currency,
       category_id: data.category_id ?? null,
       due_day: data.due_day,
+      recurrence: data.recurrence ?? 'monthly',
+      applies_month: (data.recurrence ?? 'monthly') === 'once'
+        ? data.applies_month ?? getCurrentPlanMonth()
+        : null,
       status: data.status,
       active: data.active ?? 1,
       created_at: now,
@@ -979,6 +999,14 @@ export async function updatePlanItem(input: UpdatePlanItemInput): Promise<Result
     if (data.currency !== undefined) patch.currency = data.currency
     if ('category_id' in data) patch.category_id = data.category_id ?? null
     if (data.due_day !== undefined) patch.due_day = data.due_day
+    if (data.recurrence !== undefined) {
+      patch.recurrence = data.recurrence
+      patch.applies_month = data.recurrence === 'once'
+        ? data.applies_month ?? existing.applies_month ?? getCurrentPlanMonth()
+        : null
+    } else if (data.applies_month !== undefined) {
+      patch.applies_month = data.applies_month ?? null
+    }
     if (data.status !== undefined) patch.status = data.status
     if (data.active !== undefined) patch.active = data.active
     await q.updatePlanItem(data.id, patch)

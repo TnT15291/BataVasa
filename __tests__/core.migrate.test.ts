@@ -11,6 +11,7 @@ const mockInitSettingsSchema = jest.fn()
 const mockCreateReminderSchema = jest.fn()
 const mockCreateJournalSchema = jest.fn()
 const mockCreateHabitSchema = jest.fn()
+const mockCreateGoalSchema = jest.fn()
 const mockCreateSyncQueueSchema = jest.fn()
 const mockLogger = {
   info: jest.fn(),
@@ -31,6 +32,7 @@ function loadMigrations() {
   jest.doMock('../database/reminders/schema', () => ({ createReminderSchema: mockCreateReminderSchema }))
   jest.doMock('../database/journals/schema', () => ({ createJournalSchema: mockCreateJournalSchema }))
   jest.doMock('../database/habits/schema', () => ({ createHabitSchema: mockCreateHabitSchema }))
+  jest.doMock('../database/goals/schema', () => ({ createGoalSchema: mockCreateGoalSchema }))
   jest.doMock('../database/sync/schema', () => ({ createSyncQueueSchema: mockCreateSyncQueueSchema }))
   jest.doMock('@services/logger', () => ({ logger: mockLogger }))
   jest.doMock('../services/logger', () => ({ logger: mockLogger }))
@@ -57,8 +59,9 @@ describe('core migrations', () => {
     expect(mockCreateJournalSchema).toHaveBeenCalledWith(mockDb)
     expect(mockCreateHabitSchema).toHaveBeenCalledWith(mockDb)
     expect(mockCreateSyncQueueSchema).toHaveBeenCalledWith(mockDb)
-    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 17')
-    expect(mockLogger.info).toHaveBeenCalledWith('migrate', 'applied v17')
+    expect(mockCreateGoalSchema).toHaveBeenCalledWith(mockDb)
+    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 22')
+    expect(mockLogger.info).toHaveBeenCalledWith('migrate', 'applied v22')
   })
 
   it('resumes from the stored user_version instead of replaying earlier migrations', async () => {
@@ -74,7 +77,7 @@ describe('core migrations', () => {
     )
     expect(mockDb.execAsync).toHaveBeenCalledWith('ALTER TABLE habit ADD COLUMN schedule_days TEXT')
     expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 11')
-    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 17')
+    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 22')
   })
 
   it('ignores duplicate column errors so additive migrations stay idempotent', async () => {
@@ -87,7 +90,7 @@ describe('core migrations', () => {
     await runMigrations()
 
     expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 11')
-    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 17')
+    expect(mockDb.execAsync).toHaveBeenCalledWith('PRAGMA user_version = 22')
   })
 
   it('reuses the in-flight migration promise', async () => {

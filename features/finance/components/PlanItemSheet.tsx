@@ -3,15 +3,17 @@ import {
   Modal, View, Text, TextInput, Pressable, StyleSheet,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native'
+import { Feather } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
+import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { notifySaved, toast } from '@store/toastStore'
 import { hapticSaveSuccess } from '@services/haptics'
 import { centsToDisplay, displayToCents } from '@services/ai/aiLanguage'
 import { usePlanItemActions } from '../hooks/useFinance'
-import { parseAmountInput } from '../services'
+import { getCurrentPlanMonth, parseAmountInput } from '../services'
 import type { PlanItem, PlanItemKind } from '../types'
 
 type Props = {
@@ -35,6 +37,7 @@ export function PlanItemSheet({ visible, item, onClose }: Props) {
   const [kind, setKind] = useState<PlanItemKind>('expense')
   const [amountText, setAmountText] = useState('')
   const [dueDay, setDueDay] = useState(1)
+  const [monthly, setMonthly] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const itemCurrency = item?.currency ?? currency
@@ -45,6 +48,7 @@ export function PlanItemSheet({ visible, item, onClose }: Props) {
     setKind(item?.kind ?? 'expense')
     setAmountText(item ? String(centsToDisplay(item.amount_cents, item.currency)) : '')
     setDueDay(item?.due_day ?? new Date().getDate())
+    setMonthly((item?.recurrence ?? 'monthly') === 'monthly')
     setSaving(false)
   }, [visible, item])
 
@@ -61,9 +65,10 @@ export function PlanItemSheet({ visible, item, onClose }: Props) {
     }
     setSaving(true)
     const amount_cents = Math.round(displayToCents(amount, itemCurrency))
+    const recurrence = monthly ? 'monthly' as const : 'once' as const
     const res = item
-      ? await updatePlanItem({ id: item.id, name: trimmed, kind, amount_cents, due_day: dueDay })
-      : await createPlanItem({ name: trimmed, kind, amount_cents, currency: itemCurrency, due_day: dueDay, status: 'confirmed' })
+      ? await updatePlanItem({ id: item.id, name: trimmed, kind, amount_cents, due_day: dueDay, recurrence, applies_month: monthly ? null : item.applies_month ?? getCurrentPlanMonth() })
+      : await createPlanItem({ name: trimmed, kind, amount_cents, currency: itemCurrency, due_day: dueDay, recurrence, applies_month: monthly ? null : getCurrentPlanMonth(), status: 'confirmed' })
     setSaving(false)
     if (!res.ok) {
       Alert.alert(t.could_not_save, res.error ?? '')
@@ -175,6 +180,27 @@ export function PlanItemSheet({ visible, item, onClose }: Props) {
             </Pressable>
           </View>
 
+          <Pressable
+            onPress={() => setMonthly((v) => !v)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: monthly }}
+            style={({ pressed }) => [
+              styles.checkRow,
+              {
+                backgroundColor: pressed ? theme.bg.primary : theme.bg.secondary,
+                borderColor: monthly ? MODULE_COLORS.finance : theme.border.subtle,
+              },
+            ]}
+          >
+            <View style={[styles.checkBox, { backgroundColor: monthly ? MODULE_COLORS.finance : 'transparent', borderColor: monthly ? MODULE_COLORS.finance : theme.border.strong }]}>
+              {monthly ? <Feather name="check" size={15} color="#fff" /> : null}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.checkTitle, { color: theme.text.primary }]}>{t.plan_monthly_toggle}</Text>
+              <Text style={[styles.checkHint, { color: theme.text.muted }]}>{monthly ? t.plan_monthly_hint : t.plan_once_hint}</Text>
+            </View>
+          </Pressable>
+
           <View style={styles.buttonRow}>
             {item ? (
               <Pressable
@@ -197,7 +223,7 @@ export function PlanItemSheet({ visible, item, onClose }: Props) {
             <Pressable
               onPress={onSave}
               disabled={saving}
-              style={[styles.btn, { backgroundColor: saving ? theme.text.muted : theme.brand.primary }]}
+              style={[styles.btn, { backgroundColor: saving ? theme.text.muted : MODULE_COLORS.finance }]}
             >
               {saving
                 ? <ActivityIndicator color="#fff" size="small" />
@@ -255,6 +281,26 @@ const styles = StyleSheet.create({
   },
   dayBtnText: { fontSize: 20, fontWeight: '400' },
   dayValue: { fontSize: 20, fontWeight: '700', minWidth: 36, textAlign: 'center' },
+  checkRow: {
+    minHeight: 58,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  checkBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkTitle: { fontSize: 14, fontWeight: '700' },
+  checkHint: { fontSize: 12, lineHeight: 17, marginTop: 2 },
   buttonRow: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[2] },
   iconBtn: {
     minHeight: 48,

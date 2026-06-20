@@ -33,7 +33,7 @@ import { MODULE_COLORS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getRates, convertMinorAmount } from '@services/fx'
-import { calculateSafeToSpend, getSettledPlanItemIds, summarizeDebts, formatAmount } from '@features/finance/services'
+import { calculateSafeToSpend, getSettledPlanItemIds, planItemAppliesToDate, summarizeDebts, formatAmount } from '@features/finance/services'
 import { translateCategoryName } from '../i18n'
 import { getDateFnsLocale } from '@services/locale'
 import type { Debt, PlanItem, Transaction } from '../types'
@@ -303,7 +303,7 @@ export function TransactionListScreen() {
   }, [txs, catById])
 
   const activePlanItems = useMemo(
-    () => planItems.filter((item) => item.active === 1 && !item.deleted_at),
+    () => planItems.filter((item) => item.active === 1 && !item.deleted_at && planItemAppliesToDate(item)),
     [planItems]
   )
 
@@ -563,11 +563,11 @@ export function TransactionListScreen() {
                         : t.no_transactions}
                   </Text>
                 </View>
-                <View style={[styles.netBadge, { backgroundColor: (overviewNet < 0 ? theme.finance.expense : theme.finance.income) + '1A' }]}>
+                <View style={[styles.netBadge, { backgroundColor: (overviewNet < 0 ? theme.finance.expense : MODULE_COLORS.finance) + '1A' }]}>
                   <Feather
                     name={overviewNet < 0 ? 'trending-down' : 'trending-up'}
                     size={20}
-                    color={overviewNet < 0 ? theme.finance.expense : theme.finance.income}
+                    color={overviewNet < 0 ? theme.finance.expense : MODULE_COLORS.finance}
                   />
                 </View>
               </View>
@@ -831,7 +831,11 @@ export function TransactionListScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.recurringName, { color: theme.text.primary }]} numberOfLines={1}>{item.name}</Text>
                       <Text style={[styles.recurringMeta, { color: settled ? theme.semantic.success : theme.text.muted }]} numberOfLines={1}>
-                        {settled ? t.plan_paid : t.plan_due_day.replace('{{day}}', String(item.due_day))}
+                        {settled
+                          ? t.plan_paid
+                          : (item.recurrence ?? 'monthly') === 'monthly'
+                            ? t.plan_due_day.replace('{{day}}', String(item.due_day))
+                            : `${t.plan_once_label} · ${item.applies_month ?? ''}`}
                       </Text>
                     </View>
                     <AmountText cents={item.amount_cents} currency={item.currency} showSign={false} color={settled ? theme.text.muted : item.kind === 'income' ? theme.finance.income : theme.finance.expense} style={styles.recurringAmount} />

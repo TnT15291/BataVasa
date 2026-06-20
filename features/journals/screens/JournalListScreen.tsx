@@ -215,6 +215,17 @@ export function JournalListScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tagScroll}
         >
+          <Pressable
+            onPress={() => setActiveTag(null)}
+            style={[styles.tagChip, {
+              backgroundColor: activeTag === null ? MODULE_COLORS.journal + '18' : theme.bg.elevated,
+              borderColor: activeTag === null ? MODULE_COLORS.journal + '66' : theme.border.subtle,
+            }]}
+          >
+            <Text style={[styles.tagChipText, { color: activeTag === null ? MODULE_COLORS.journal : theme.text.secondary }]}>
+              {t.tag_all}
+            </Text>
+          </Pressable>
           {ACTIVITY_TAGS.map((tag) => {
             const active = activeTag === tag
             return (

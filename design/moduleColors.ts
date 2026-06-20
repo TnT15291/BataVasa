@@ -10,5 +10,15 @@ export const MODULE_COLORS = {
   analysis: '#5F62D9',
 } as const
 
+export const MODULE_ICONS = {
+  finance: 'trending-up',
+  habits: 'check-circle',
+  journal: 'book-open',
+  tasks: 'bell',
+  goals: 'target',
+  analysis: 'bar-chart-2',
+  search: 'search',
+} as const
+
 // Soft tint background for a module-colored icon chip (matches UI1 list rows).
 export const moduleTint = (hex: string) => hex + '1A'

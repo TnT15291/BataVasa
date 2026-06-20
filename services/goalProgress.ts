@@ -1,6 +1,8 @@
 import { getDb } from '@db/core/db'
 import { getCurrentUserId } from '@services/identity'
 import { getIntlLocale } from '@services/locale'
+import { getTranslations } from '@services/i18n'
+import { translateCategoryName } from '@features/finance/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getCategory } from '@db/finance/queries'
 import { getHabit, listLogCountsByDate } from '@db/habits/queries'
@@ -12,10 +14,24 @@ export function parseGoalBinding(raw: string): GoalMetricBinding | null {
     const parsed = JSON.parse(raw) as GoalMetricBinding
     if (parsed.module === 'finance' && parsed.aggregation === 'sum_amount' && parsed.category_id) return parsed
     if (parsed.module === 'habits' && parsed.aggregation === 'completion_rate' && parsed.habit_id) return parsed
+    if (parsed.module === 'journals' && parsed.aggregation === 'entry_count' && parsed.tag) return parsed
+    if (parsed.module === 'reminders' && parsed.aggregation === 'completed_count') return parsed
     return null
   } catch {
     return null
   }
+}
+
+const ACTIVITY_TAG_KEYS = [
+  'work', 'family', 'health', 'money', 'sleep',
+  'exercise', 'stress', 'food', 'travel', 'social',
+] as const
+
+function translateActivityTag(tag: string, t: ReturnType<typeof getTranslations>): string {
+  if (tag === 'all') return t.tag_all
+  const key = `tag_${tag}` as keyof typeof t
+  const label = t[key]
+  return typeof label === 'string' ? label : tag
 }
 
 function clampPercent(current: number, target: number): number {
@@ -34,6 +50,7 @@ function formatNumber(value: number, unit: string): string {
     }
   }
   if (unit === '%') return `${Math.round(value)}%`
+  if (unit === 'count') return Math.round(value).toLocaleString(locale)
   return `${Math.round(value).toLocaleString(locale)} ${unit}`
 }
 
@@ -58,9 +75,10 @@ function isHabitDueOnDate(habit: Pick<Habit, 'cadence' | 'schedule_days'>, date:
 }
 
 export async function calculateGoalProgress(goal: Goal): Promise<GoalProgress> {
+  const t = getTranslations()
   const binding = parseGoalBinding(goal.metric_binding)
   if (!binding) {
-    return { current: 0, target: goal.target_value, percent: 0, label: `0 / ${formatNumber(goal.target_value, goal.unit)}`, sourceLabel: 'Unknown source' }
+    return { current: 0, target: goal.target_value, percent: 0, label: `0 / ${formatNumber(goal.target_value, goal.unit)}`, sourceLabel: '' }
   }
 
   if (binding.module === 'finance') {
@@ -84,7 +102,58 @@ export async function calculateGoalProgress(goal: Goal): Promise<GoalProgress> {
       target: goal.target_value,
       percent: clampPercent(current, goal.target_value),
       label: `${formatNumber(current, goal.unit)} / ${formatNumber(goal.target_value, goal.unit)}`,
-      sourceLabel: category?.name ?? 'Finance',
+      sourceLabel: category ? translateCategoryName(category, t) : t.nav_finance,
+    }
+  }
+
+  if (binding.module === 'journals') {
+    const db = await getDb()
+    const userId = getCurrentUserId()
+    const end = goal.due_date ?? new Date().toISOString()
+    const row = await db.getFirstAsync<{ total: number | null; avg_mood: number | null }>(
+      `SELECT COUNT(*) AS total, AVG(mood) AS avg_mood
+         FROM journal
+        WHERE deleted_at IS NULL
+          AND user_id = ?
+          AND occurred_at >= ?
+          AND occurred_at <= ?
+          AND (? = 'all' OR (',' || IFNULL(tags, '') || ',') LIKE '%,' || ? || ',%')`,
+      [userId, goal.start_date, end, binding.tag, binding.tag]
+    )
+    const current = row?.total ?? 0
+    const avgMood = row?.avg_mood
+    return {
+      current,
+      target: goal.target_value,
+      percent: clampPercent(current, goal.target_value),
+      label: `${formatNumber(current, goal.unit)} / ${formatNumber(goal.target_value, goal.unit)}`,
+      sourceLabel: `${t.nav_journal} · ${translateActivityTag(binding.tag, t)}`,
+      note: current > 0 && typeof avgMood === 'number' ? `${t.goal_avg_mood}: ${avgMood.toFixed(1)}/5` : undefined,
+    }
+  }
+
+  if (binding.module === 'reminders') {
+    const db = await getDb()
+    const userId = getCurrentUserId()
+    const end = goal.due_date ?? new Date().toISOString()
+    const row = await db.getFirstAsync<{ total: number | null }>(
+      `SELECT COUNT(*) AS total
+         FROM reminder
+        WHERE deleted_at IS NULL
+          AND user_id = ?
+          AND completed = 1
+          AND is_inbox != 1
+          AND remind_at >= ?
+          AND remind_at <= ?`,
+      [userId, goal.start_date, end]
+    )
+    const current = row?.total ?? 0
+    return {
+      current,
+      target: goal.target_value,
+      percent: clampPercent(current, goal.target_value),
+      label: `${formatNumber(current, goal.unit)} / ${formatNumber(goal.target_value, goal.unit)}`,
+      sourceLabel: t.nav_reminders,
     }
   }
 
@@ -93,7 +162,7 @@ export async function calculateGoalProgress(goal: Goal): Promise<GoalProgress> {
   const start = new Date(goal.start_date)
   const end = goal.due_date ? new Date(goal.due_date) : new Date()
   if (!habit || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-    return { current: 0, target: goal.target_value, percent: 0, label: `0% / ${Math.round(goal.target_value)}%`, sourceLabel: 'Habit' }
+    return { current: 0, target: goal.target_value, percent: 0, label: `0% / ${Math.round(goal.target_value)}%`, sourceLabel: t.habits }
   }
 
   const fromDate = getLocalDateString(start)

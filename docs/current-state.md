@@ -18,8 +18,8 @@
 
 - Supabase Auth: email/password, login wall, account UI, session-aware store reloads.
 - Google OAuth: implemented through Supabase OAuth and app callback handling; not yet manually tested.
-- Offline-first SQLite: WAL, FK on, `PRAGMA user_version`, migration v21.
-- Cloud sync engine: local `sync_queue`, queued writes for all 4 modules, AppState drain worker, per-module sync toggles, Supabase RLS SQL in `docs/supabase-setup.sql`.
+- Offline-first SQLite: WAL, FK on, `PRAGMA user_version`, migration v22.
+- Cloud sync engine: local `sync_queue`, queued writes for the core modules plus Goals, AppState drain worker, per-module sync toggles, Supabase RLS SQL in `docs/supabase-setup.sql`.
 - Biometric lock: `expo-local-authentication`, 30s AppState lock timer, Settings privacy toggle.
 - Error boundary, analytics wrapper, PII-scrubbed logger, Sentry forwarding.
 - i18n: 6 languages in `services/i18n/translations/`.
@@ -44,7 +44,7 @@
 - Finance reports avoid labeling income categories as normal expense categories in category breakdowns.
 - Merchant/category rules are stored in `finance_rule`, learned from manual/reviewed transactions, and applied to future smart/voice/OCR/import transactions.
 - Recurring bill/subscription candidates are detected from repeated merchant/category/amount patterns and can prefill a monthly reminder.
-- Monthly plan items settled this cycle show a green "paid" badge, sink below unpaid items, and drop out of the remaining planned totals (`getSettledPlanItemIds`).
+- Monthly plan items can be repeating monthly or one-time for the current month. Items settled this cycle show a green "paid" badge, sink below unpaid items, and drop out of the remaining planned totals (`getSettledPlanItemIds`).
 - Debt book (sổ nợ, 2026-06-12): `finance_debt` table (migration v19) tracks lent/borrowed money per counterparty. Creating a debt records the money movement (lent = expense via the `Lending` system category, borrowed = income via `Borrowing`), optional due date creates a high-priority reminder that notifies `remind_days_before` days ahead. Settling records the opposite transaction and completes the reminder; deleting removes debt + linked transactions + reminder. Screens: `DebtListScreen` (`/debts`, entry card on the finance list) + shared create/edit `DebtFormScreen` (`/debt?id=`). Synced, exported, and wiped with the finance module.
 
 ### Reminders
@@ -90,12 +90,13 @@
 - Smart Entry lives inside add/edit forms for modules, not in list/dashboard screens.
 - Voice input remains available in form/add flows and force-confirms before save where applicable.
 - Voice microphone privacy prompt is shown only from voice buttons and can be dismissed permanently with "Do not show again".
-- Assistant screen includes quick prompts for common personal-data questions.
+- Assistant screen includes quick prompts and a deterministic module-data context builder so it can answer questions from Finance, Tasks, Habits, Journals, and Goals using existing user data.
 - Journal list keeps only the primary create FAB floating; reflection and report actions live in the content action row.
 - Report and AI output uses `components/InsightText.tsx` to render concise markdown as section cards instead of raw markdown text.
 - Main-screen FABs and report footers use safe-area bottom spacing.
 - Global Search MVP (2026-06-19): `services/search.ts` searches Finance transactions, Tasks, Habits, Journals, and Goals with grouped results in `SearchScreen` (`/search`). Home search now opens Global Search; Modules includes Search.
 - Goals MVP (2026-06-19): `goal` table (migration v21), `database/goals/queries.ts`, `features/goals/services.ts`, `store/goalsStore.ts`, and screens `/goals`, `/goal`, `/goal-detail`. MVP supports manual goal creation with derived progress from Finance category totals and Habit completion rate. Goals are synced (`goal` table), exportable/wipeable, and included in Supabase RLS SQL.
+- Weekly Life Review MVP (2026-06-19): `/weekly-review` provides a connected weekly snapshot across Goals, Finance, Habits, Journals, and Tasks. `services/ai/weeklyLifeReview.ts` computes deterministic metrics first, then AI generates the narrative review from those metrics. Home Reports quick action opens Weekly Review.
 - Cross-module AI analysis (2026-06-12): `services/ai/crossModuleInsight.ts` now computes rule-based correlation blocks locally and asks the model only to explain them: per-habit kept-vs-missed comparison (mood, avg daily spend with "notable" flag at ≥15% delta, reminder completion rate, other-habit completion), spending by time-of-day and weekday, spending on journal-tagged activity days, and a reminders completion summary. AnalysisScreen feeds it habit logs (`listRecentLogs(30)` via new `listLogsSince` query) and reminders. Prompt requests 6 sections incl. habit impact, when/at-which-activities spending peaks, and recommendations for finance + mood; phrased as observations, not causation.
 
 ## Key Files
@@ -136,7 +137,7 @@ Code is implemented. Sync has been manually verified as working; Google Auth sti
 Current test infrastructure is ready, but global coverage is still below the public-launch target.
 
 - Latest automated run on 2026-06-19: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
-- Current status: 476 tests across 31 suites.
+- Current status: 491 tests across 35 suites.
 - Current coverage: 70.08% statements / 64.04% branches / 71.81% functions / 72.41% lines.
 - Current CI floor: 37% statements / 35% branches / 31% functions / 39% lines.
 - Target before public launch: keep statements/functions/lines above 70% and continue raising branch coverage toward 70%.
@@ -173,7 +174,7 @@ Work in this order:
 2. **Beta-close feature sequence**
    - **DONE MVP:** M38 Global search: one search across transactions, reminders, habits, journals, and goals.
    - **DONE MVP:** Goals MVP: manual goal creation + derived progress for finance category totals and habit completion rate.
-   - **Weekly Life Review**: flagship cross-module weekly report using deterministic metrics plus AI explanation.
+   - **DONE MVP:** Weekly Life Review: flagship cross-module weekly report using deterministic metrics plus AI explanation.
    - **Context memory layer**: user goals/preferences/facts available to AI prompts and review summaries.
    - **M37 Proactive weekly insights**: opt-in weekly notification/deep link after Weekly Life Review is stable.
    - **Habit selective enhancements**: ship 1-2 calm improvements, starting with never-miss-twice and/or identity field.
@@ -574,6 +575,17 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-06-20 Assistant module context:
+  - Added `services/ai/assistantContext.ts`, a deterministic context builder for Finance, Tasks, Habits, Journals, and Goals. `AssistantScreen` now sends this grounded snapshot to the AI with stricter prompt rules and lower temperature, so answers can reference existing user data instead of generic advice.
+  - Verification: `npx tsc --noEmit` clean; `npm test -- --runInBand` passed with 500 tests across 37 suites.
+- 2026-06-19 (cont.) Weekly Life Review MVP:
+  - Added `/weekly-review`, a connected weekly report across Goals, Finance, Habits, Journals, and Tasks. The review shows deterministic metrics first and uses AI only for the narrative explanation.
+  - Home `quick_reports` now opens Weekly Review. Added `__tests__/weeklyLifeReview.test.ts` for the deterministic snapshot builder.
+  - Verification: `npx tsc --noEmit` clean; 491 tests across 35 suites pass.
+- 2026-06-19 (cont.) finance plan polish:
+  - Finance bottom-nav active icon tint now uses the same finance module color intensity as the page UI.
+  - Finance plan items now support a monthly checkbox: checked = repeats monthly; unchecked = one-time item for the current month only. SQLite migration v22 and Supabase setup SQL add `recurrence` + `applies_month`.
+  - Verification: `npx tsc --noEmit` clean; 489 tests across 34 suites pass.
 - 2026-06-19 (cont.) managed-AI finalization + home dedup:
   - AI is now fully **backend-managed**: removed the in-app provider chooser. `AISettingsScreen` keeps only the parse-confirm toggle (`aiAutoConfirm`); the main Settings AI section is a single link (the duplicate inline toggle was removed). `ai_server_managed` copy updated in all 6 languages.
   - Removed the AI step from onboarding (now 2 steps: language → feature intro). Provider + key are set by the publisher via Supabase secrets, so there is nothing for the user to configure.

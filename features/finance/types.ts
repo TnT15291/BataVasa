@@ -12,6 +12,9 @@ export type TransactionSource = z.infer<typeof TransactionSourceSchema>
 export const PlanItemKindSchema = z.enum(['income', 'expense'])
 export type PlanItemKind = z.infer<typeof PlanItemKindSchema>
 
+export const PlanItemRecurrenceSchema = z.enum(['monthly', 'once'])
+export type PlanItemRecurrence = z.infer<typeof PlanItemRecurrenceSchema>
+
 export const PlanItemStatusSchema = z.enum(['confirmed', 'expected'])
 export type PlanItemStatus = z.infer<typeof PlanItemStatusSchema>
 
@@ -92,6 +95,8 @@ export type PlanItem = {
   currency: string
   category_id: string | null
   due_day: number
+  recurrence?: PlanItemRecurrence | null
+  applies_month?: string | null
   status: PlanItemStatus
   active: number
   created_at: string
@@ -107,10 +112,12 @@ export const CreatePlanItemInputSchema = z.object({
   currency: z.string().min(3).max(3).default('VND'),
   category_id: z.string().uuid().nullable().optional(),
   due_day: z.number().int().min(1).max(31),
+  recurrence: PlanItemRecurrenceSchema.default('monthly'),
+  applies_month: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
   status: PlanItemStatusSchema.default('confirmed'),
   active: z.number().int().min(0).max(1).optional(),
 })
-export type CreatePlanItemInput = z.infer<typeof CreatePlanItemInputSchema>
+export type CreatePlanItemInput = z.input<typeof CreatePlanItemInputSchema>
 
 export const UpdatePlanItemInputSchema = CreatePlanItemInputSchema.partial().extend({
   id: z.string().uuid(),

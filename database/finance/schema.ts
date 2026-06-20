@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS finance_plan_item (
   currency TEXT NOT NULL DEFAULT 'VND',
   category_id TEXT,
   due_day INTEGER NOT NULL CHECK (due_day BETWEEN 1 AND 31),
+  recurrence TEXT NOT NULL DEFAULT 'monthly' CHECK (recurrence IN ('monthly','once')),
+  applies_month TEXT,
   status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed','expected')),
   active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
   created_at TEXT NOT NULL,

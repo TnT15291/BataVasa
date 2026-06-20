@@ -155,7 +155,7 @@ async function searchGoals(term: string, limit: number): Promise<SearchResult[]>
     title: row.title ?? 'Goal',
     subtitle: row.subtitle ?? '',
     occurredAt: row.occurred_at,
-    route: '/goal',
+    route: '/goal-detail',
     routeParams: { id: row.id },
   }))
 }

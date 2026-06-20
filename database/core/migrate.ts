@@ -162,6 +162,11 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   async (db) => {
     await createGoalSchema(db)
   },
+  // v22 - finance plan items can be monthly or one-time for a specific month.
+  async (db) => {
+    await safeAddColumn(db, 'finance_plan_item', 'recurrence', "TEXT NOT NULL DEFAULT 'monthly'")
+    await safeAddColumn(db, 'finance_plan_item', 'applies_month', 'TEXT')
+  },
 ]
 
 async function safeAddColumn(

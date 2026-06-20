@@ -55,7 +55,9 @@ function ModuleTabIcon({
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: focused ? color + '18' : 'transparent',
+          backgroundColor: focused ? color + '1F' : 'transparent',
+          borderColor: focused ? color + '40' : 'transparent',
+          borderWidth: focused ? 1 : 0,
         },
       ]}
     >

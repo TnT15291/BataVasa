@@ -18,6 +18,16 @@ export const GoalMetricBindingSchema = z.discriminatedUnion('module', [
     aggregation: z.literal('completion_rate'),
     habit_id: z.string().min(1),
   }),
+  z.object({
+    module: z.literal('journals'),
+    aggregation: z.literal('entry_count'),
+    // An activity tag (work/health/money/...) or 'all' for every entry.
+    tag: z.string().min(1),
+  }),
+  z.object({
+    module: z.literal('reminders'),
+    aggregation: z.literal('completed_count'),
+  }),
 ])
 export type GoalMetricBinding = z.infer<typeof GoalMetricBindingSchema>
 
@@ -45,6 +55,8 @@ export type GoalProgress = {
   percent: number
   label: string
   sourceLabel: string
+  // Optional secondary detail (e.g. average mood for journal-area goals).
+  note?: string
 }
 
 export type GoalWithProgress = Goal & {

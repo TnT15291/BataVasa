@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
-import { MODULE_COLORS } from '@design/moduleColors'
+import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { searchAll, type SearchModule, type SearchResult } from '@services/search'
 import { ScreenTransition } from '@components/ScreenTransition'
@@ -14,11 +14,11 @@ import { EmptyState, ListRow, SectionHeader } from '@components/ui'
 type IconName = keyof typeof Feather.glyphMap
 
 const MODULE_META: Record<SearchModule, { icon: IconName; color: string }> = {
-  finance: { icon: 'trending-up', color: MODULE_COLORS.finance },
-  reminders: { icon: 'bell', color: MODULE_COLORS.tasks },
-  habits: { icon: 'check-circle', color: MODULE_COLORS.habits },
-  journals: { icon: 'book-open', color: MODULE_COLORS.journal },
-  goals: { icon: 'target', color: MODULE_COLORS.analysis },
+  finance: { icon: MODULE_ICONS.finance, color: MODULE_COLORS.finance },
+  reminders: { icon: MODULE_ICONS.tasks, color: MODULE_COLORS.tasks },
+  habits: { icon: MODULE_ICONS.habits, color: MODULE_COLORS.habits },
+  journals: { icon: MODULE_ICONS.journal, color: MODULE_COLORS.journal },
+  goals: { icon: MODULE_ICONS.goals, color: MODULE_COLORS.analysis },
 }
 
 export function SearchScreen() {
