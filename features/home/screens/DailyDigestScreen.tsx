@@ -138,7 +138,7 @@ export function DailyDigestScreen() {
 
         <CommandBar
           placeholder={t.command_placeholder}
-          onPress={() => router.push('/chat')}
+          onPress={() => router.push('/quick-batavasa')}
         />
 
         {/* ── Today Priority ── */}

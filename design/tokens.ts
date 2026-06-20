@@ -8,12 +8,12 @@ export const colors = {
     border: { subtle: '#D7DEE5', strong: '#AAB6C2', card: '#C7D0D9' },
   },
   dark: {
-    bg: { primary: '#073642', secondary: '#0B3A44', elevated: '#10424D' },
-    text: { primary: '#F2EEDB', secondary: '#D6D2BC', muted: '#9FB1AA', danger: '#FF9A9A' },
-    brand: { primary: '#2AA198', accent: '#B58900' },
-    semantic: { success: '#6BBF8F', warning: '#D9A441', danger: '#FF9A9A', info: '#78B7D8' },
-    finance: { expense: '#FF9A9A', income: '#6BBF8F' },
-    border: { subtle: '#164955', strong: '#2D6570', card: '#1E5560' },
+    bg: { primary: '#123942', secondary: '#1A444C', elevated: '#22505A' },
+    text: { primary: '#E7E2D0', secondary: '#C8C2AE', muted: '#92A39C', danger: '#E28B87' },
+    brand: { primary: '#88B8B1', accent: '#B5A36F' },
+    semantic: { success: '#78A98A', warning: '#B79A5A', danger: '#E28B87', info: '#77A5BA' },
+    finance: { expense: '#D98782', income: '#78A98A' },
+    border: { subtle: '#2B5055', strong: '#41656A', card: '#385D62' },
   },
 } as const
 

@@ -121,10 +121,10 @@ export function WeeklyLifeReviewScreen() {
           <>
             <SectionHeader label={t.weekly_review_snapshot} />
             <View style={styles.grid}>
-              <MetricCard icon="target" label={t.nav_goals} value={`${snapshot.goals.onTrack}/${snapshot.goals.active}`} hint={t.weekly_review_on_track} color={MODULE_COLORS.analysis} theme={theme} />
-              <MetricCard icon="trending-down" label={t.expense} value={formatAmount(snapshot.finance.expense, reportCurrency, language)} hint={snapshot.finance.expenseDeltaPercent === null ? t.weekly_review_no_previous : `${snapshot.finance.expenseDeltaPercent > 0 ? '+' : ''}${snapshot.finance.expenseDeltaPercent}%`} color={MODULE_COLORS.finance} theme={theme} />
-              <MetricCard icon="check-circle" label={t.nav_habits} value={String(snapshot.habits.completions)} hint={`${snapshot.habits.skips} ${t.report_skipped}`} color={MODULE_COLORS.habits} theme={theme} />
-              <MetricCard icon="book-open" label={t.nav_journal} value={String(snapshot.journals.entries)} hint={snapshot.journals.avgMood === null ? t.report_avg_mood : `${snapshot.journals.avgMood.toFixed(1)}/5`} color={MODULE_COLORS.journal} theme={theme} />
+              <MetricCard icon={MODULE_ICONS.goals} label={t.nav_goals} value={`${snapshot.goals.onTrack}/${snapshot.goals.active}`} hint={t.weekly_review_on_track} color={MODULE_COLORS.analysis} theme={theme} />
+              <MetricCard icon={MODULE_ICONS.finance} label={t.expense} value={formatAmount(snapshot.finance.expense, reportCurrency, language)} hint={snapshot.finance.expenseDeltaPercent === null ? t.weekly_review_no_previous : `${snapshot.finance.expenseDeltaPercent > 0 ? '+' : ''}${snapshot.finance.expenseDeltaPercent}%`} color={MODULE_COLORS.finance} theme={theme} />
+              <MetricCard icon={MODULE_ICONS.habits} label={t.nav_habits} value={String(snapshot.habits.completions)} hint={`${snapshot.habits.skips} ${t.report_skipped}`} color={MODULE_COLORS.habits} theme={theme} />
+              <MetricCard icon={MODULE_ICONS.journal} label={t.nav_journal} value={String(snapshot.journals.entries)} hint={snapshot.journals.avgMood === null ? t.report_avg_mood : `${snapshot.journals.avgMood.toFixed(1)}/5`} color={MODULE_COLORS.journal} theme={theme} />
             </View>
 
             <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
@@ -139,9 +139,9 @@ export function WeeklyLifeReviewScreen() {
             <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
               <SectionHeader label={t.weekly_review_signals} />
               <SignalLine icon={MODULE_ICONS.finance} text={snapshot.finance.topCategories.length > 0 ? snapshot.finance.topCategories.map((c) => c.name).join(', ') : t.report_no_data} color={MODULE_COLORS.finance} theme={theme} />
-              <SignalLine icon="activity" text={snapshot.habits.topHabits.length > 0 ? snapshot.habits.topHabits.map((h) => `${h.name} ${h.count}`).join(', ') : t.report_no_data} color={MODULE_COLORS.habits} theme={theme} />
-              <SignalLine icon="tag" text={snapshot.journals.tags.length > 0 ? snapshot.journals.tags.map((tag) => tag.tag).join(', ') : t.report_no_data} color={MODULE_COLORS.journal} theme={theme} />
-              <SignalLine icon="bell" text={`${snapshot.reminders.completed}/${snapshot.reminders.due} ${t.reminder_completed}`} color={MODULE_COLORS.tasks} theme={theme} />
+              <SignalLine icon={MODULE_ICONS.habits} text={snapshot.habits.topHabits.length > 0 ? snapshot.habits.topHabits.map((h) => `${h.name} ${h.count}`).join(', ') : t.report_no_data} color={MODULE_COLORS.habits} theme={theme} />
+              <SignalLine icon={MODULE_ICONS.journal} text={snapshot.journals.tags.length > 0 ? snapshot.journals.tags.map((tag) => tag.tag).join(', ') : t.report_no_data} color={MODULE_COLORS.journal} theme={theme} />
+              <SignalLine icon={MODULE_ICONS.tasks} text={`${snapshot.reminders.completed}/${snapshot.reminders.due} ${t.reminder_completed}`} color={MODULE_COLORS.tasks} theme={theme} />
             </View>
 
             {result ? (
