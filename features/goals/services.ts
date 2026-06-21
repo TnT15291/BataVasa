@@ -17,11 +17,28 @@ import {
 
 const MODULE = 'goals.service'
 
+function normalizeHabitRateTarget(
+  targetValue: number,
+  targetType: CreateGoalInput['target_type'],
+  unit: string,
+  binding: CreateGoalInput['metric_binding'] | null
+): number {
+  if (binding?.module === 'habits' && targetType === 'rate' && unit === '%' && targetValue < 20) return 100
+  return targetValue
+}
+
+function normalizeGoalForDisplay(goal: Goal): Goal {
+  const binding = parseGoalBinding(goal.metric_binding)
+  const targetValue = normalizeHabitRateTarget(goal.target_value, goal.target_type, goal.unit, binding)
+  return targetValue === goal.target_value ? goal : { ...goal, target_value: targetValue }
+}
+
 async function hydrateGoal(goal: Goal): Promise<GoalWithProgress> {
+  const normalized = normalizeGoalForDisplay(goal)
   return {
-    ...goal,
-    binding: parseGoalBinding(goal.metric_binding),
-    progress: await calculateGoalProgress(goal),
+    ...normalized,
+    binding: parseGoalBinding(normalized.metric_binding),
+    progress: await calculateGoalProgress(normalized),
   }
 }
 
@@ -60,7 +77,7 @@ export async function createGoal(input: CreateGoalInput): Promise<Result<GoalWit
       title: data.title,
       description: data.description ?? null,
       target_type: data.target_type,
-      target_value: data.target_value,
+      target_value: normalizeHabitRateTarget(data.target_value, data.target_type, data.unit, data.metric_binding),
       unit: data.unit,
       start_date: data.start_date,
       due_date: data.due_date ?? null,
@@ -100,6 +117,14 @@ export async function updateGoal(input: UpdateGoalInput): Promise<Result<GoalWit
     if (data.due_date !== undefined) patch.due_date = data.due_date ?? null
     if (data.metric_binding !== undefined) patch.metric_binding = JSON.stringify(data.metric_binding)
     if (data.status !== undefined) patch.status = data.status
+    const nextBinding = data.metric_binding ?? parseGoalBinding(existing.metric_binding)
+    const nextTargetValue = data.target_value ?? existing.target_value
+    const nextTargetType = data.target_type ?? existing.target_type
+    const nextUnit = data.unit ?? existing.unit
+    const normalizedTarget = normalizeHabitRateTarget(nextTargetValue, nextTargetType, nextUnit, nextBinding)
+    if (normalizedTarget !== nextTargetValue || data.target_value !== undefined || data.target_type !== undefined || data.unit !== undefined || data.metric_binding !== undefined) {
+      patch.target_value = normalizedTarget
+    }
     await q.updateGoal(data.id, patch)
     void enqueue('goal', data.id, 'upsert')
     const fresh = await q.getGoal(data.id, getCurrentUserId())

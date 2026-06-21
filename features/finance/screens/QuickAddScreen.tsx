@@ -106,6 +106,7 @@ export function QuickAddScreen() {
           name: string
           category: Category | null
           due_day: number
+          recurrence: 'once' | 'monthly'
           note: string
         }
       | {
@@ -206,6 +207,7 @@ export function QuickAddScreen() {
           name: parsed.name || text,
           category: safeMatched,
           due_day: parsed.due_day,
+          recurrence: parsed.recurrence,
           note: parsed.note ?? '',
         }
         const fields: ConfirmField[] = [
@@ -213,6 +215,7 @@ export function QuickAddScreen() {
           { label: t.plan_name_placeholder.replace(/^e\.g\.\s*/i, ''), value: payload.name },
           { label: t.amount, value: formatAmount(parsed.amount_cents, currency, language) },
           { label: t.plan_due_day_label, value: String(payload.due_day) },
+          { label: t.plan_monthly_toggle, value: payload.recurrence === 'monthly' ? t.plan_monthly_hint : t.plan_once_hint },
         ]
         if (safeMatched) fields.push({ label: t.category, value: translateCategoryName(safeMatched, t) })
         if (payload.note) fields.push({ label: t.note_optional.replace(/\s*\(.+\)/, ''), value: payload.note })
@@ -310,6 +313,7 @@ export function QuickAddScreen() {
         currency,
         category_id: p.category?.id ?? null,
         due_day: p.due_day,
+        recurrence: p.recurrence,
         status: 'confirmed',
       })
       setConfirmBusy(false)

@@ -6,6 +6,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Feather } from '@expo/vector-icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -35,6 +36,7 @@ const PRESET_COLORS = [
 export function HabitFormScreen() {
   useHabitsBootstrap()
   const theme = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { t } = useTranslation()
   const habits = useHabits()
@@ -43,7 +45,7 @@ export function HabitFormScreen() {
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
   const language = useSettingsStore((s) => s.language)
 
-  const params = useLocalSearchParams<{ id?: string }>()
+  const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
   const editingHabit = useMemo(
     () => (editingId ? habits.find((h) => h.id === editingId) ?? null : null),
@@ -85,6 +87,19 @@ export function HabitFormScreen() {
     setNotificationTimes(editingHabit.notification_times ? JSON.parse(editingHabit.notification_times) : [])
     setPrefilled(true)
   }, [editingHabit, prefilled])
+
+  useEffect(() => {
+    if (editingId || prefilled || !params.prefill) return
+    try {
+      const p = JSON.parse(params.prefill as string)
+      if (p.name) setName(String(p.name))
+      if (p.icon) setIcon(String(p.icon))
+      if (p.color) setColor(String(p.color))
+      if (p.cadence && CADENCES.includes(p.cadence)) setCadence(p.cadence)
+      if (Number.isFinite(Number(p.target_per_period))) setTarget(String(Math.max(1, Math.min(99, Math.round(Number(p.target_per_period))))))
+      setPrefilled(true)
+    } catch { /* ignore malformed prefill */ }
+  }, [editingId, prefilled, params.prefill])
 
   const WEEKDAYS = [
     { value: 1, label: t.day_mon },
@@ -237,7 +252,7 @@ export function HabitFormScreen() {
     >
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.bg.primary }}
-      contentContainerStyle={styles.body}
+      contentContainerStyle={[styles.body, { paddingBottom: 112 + insets.bottom }]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
     >
@@ -445,7 +460,7 @@ export function HabitFormScreen() {
 
     </ScrollView>
 
-    <View style={[styles.footer, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+    <View style={[styles.footer, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle, paddingBottom: spacing[4] + insets.bottom }]}>
       {isEditing && (
         <Pressable onPress={onDelete} style={styles.deleteBtn}>
           <Feather name="trash-2" size={16} color={theme.semantic.danger} />
@@ -479,7 +494,7 @@ export function HabitFormScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
+  body: { padding: spacing[4], gap: spacing[3] },
   footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth, gap: spacing[2] },
   card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },

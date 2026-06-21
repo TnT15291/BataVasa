@@ -32,7 +32,7 @@ export function CommandBar({ placeholder, onPress }: Props) {
 
 const styles = StyleSheet.create({
   bar: {
-    minHeight: 34,
+    minHeight: 44,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 9,

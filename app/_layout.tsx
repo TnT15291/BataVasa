@@ -176,7 +176,7 @@ export default function RootLayout() {
           />
           <Stack.Screen name="settings" options={{ title: t.nav_settings }} />
           <Stack.Screen name="search" options={{ title: t.nav_search }} />
-          <Stack.Screen name="goals" options={{ title: t.nav_goals }} />
+          <Stack.Screen name="goals" options={{ headerShown: false }} />
           <Stack.Screen name="goal-detail" options={{ title: t.nav_goals }} />
           <Stack.Screen
             name="goal"

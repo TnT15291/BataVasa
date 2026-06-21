@@ -1,7 +1,7 @@
 export const colors = {
   light: {
     bg: { primary: '#EEF3F6', secondary: '#DDE7EC', elevated: '#FAFCFD' },
-    text: { primary: '#101820', secondary: '#31414D', muted: '#657681', danger: '#B4232E' },
+    text: { primary: '#101820', secondary: '#31414D', muted: '#55636E', danger: '#B4232E' },
     brand: { primary: '#197C92', accent: '#7B5BB3' },
     semantic: { success: '#247A5A', warning: '#B76A24', danger: '#B4232E', info: '#326FB0' },
     finance: { expense: '#B4232E', income: '#247A4D' },
@@ -9,7 +9,7 @@ export const colors = {
   },
   dark: {
     bg: { primary: '#123942', secondary: '#1A444C', elevated: '#22505A' },
-    text: { primary: '#E7E2D0', secondary: '#C8C2AE', muted: '#92A39C', danger: '#E28B87' },
+    text: { primary: '#E7E2D0', secondary: '#C8C2AE', muted: '#AEBDB6', danger: '#E28B87' },
     brand: { primary: '#88B8B1', accent: '#B5A36F' },
     semantic: { success: '#78A98A', warning: '#B79A5A', danger: '#E28B87', info: '#77A5BA' },
     finance: { expense: '#D98782', income: '#78A98A' },

@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useRouter, useLocalSearchParams } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { addYears, format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -48,6 +49,7 @@ const JOURNAL_TEMPLATES = [
 export function JournalFormScreen() {
   useJournalsBootstrap()
   const theme = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
@@ -107,6 +109,14 @@ export function JournalFormScreen() {
       if (p.mood != null) setMood(Number(p.mood))
       if (p.is_important != null) setIsImportant(Number(p.is_important) === 1)
       if (p.is_important != null) setRemindAfterYear(Number(p.is_important) === 1)
+      if (p.tags) {
+        setSelectedTags(
+          String(p.tags)
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s): s is ActivityTag => (ACTIVITY_TAGS as readonly string[]).includes(s))
+        )
+      }
       if (p.occurred_at) setOccurredAt(new Date(p.occurred_at))
       setPrefilled(true)
     } catch { /* ignore malformed prefill */ }
@@ -307,7 +317,7 @@ export function JournalFormScreen() {
     >
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.bg.primary }}
-      contentContainerStyle={styles.body}
+      contentContainerStyle={[styles.body, { paddingBottom: 112 + insets.bottom }]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
     >
@@ -480,7 +490,7 @@ export function JournalFormScreen() {
 
     </ScrollView>
 
-    <View style={[styles.footer, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+    <View style={[styles.footer, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle, paddingBottom: spacing[4] + insets.bottom }]}>
       {isEditing && (
         <Pressable onPress={onDelete} style={styles.deleteBtn}>
           <Feather name="trash-2" size={16} color={theme.semantic.danger} />
@@ -514,7 +524,7 @@ export function JournalFormScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
+  body: { padding: spacing[4], gap: spacing[3] },
   footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth, gap: spacing[2] },
   card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },

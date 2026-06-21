@@ -104,13 +104,14 @@ export function GoalDetailScreen() {
         </View>
 
         <View style={styles.block}>
-          <SectionHeader label={t.goal_source} />
+          <SectionHeader label={t.goal_primary_metric} />
           <View style={[styles.sourceCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
             <View style={[styles.sourceIcon, { backgroundColor: accent + '1F' }]}>
               <Feather name={sourceIcon} size={16} color={accent} />
             </View>
             <View style={styles.sourceText}>
               <Text style={[styles.sourceTitle, { color: theme.text.primary }]}>{goal.progress.sourceLabel}</Text>
+              <Text style={[styles.sourceHint, { color: theme.text.muted }]}>{t.goal_primary_metric_hint}</Text>
               <Text style={[styles.desc, { color: theme.text.muted }]}>{sourceHelp}</Text>
             </View>
             <Pressable onPress={() => router.push(sourceRoute as any)} hitSlop={8} style={[styles.openSource, { borderColor: accent }]}>
@@ -149,19 +150,20 @@ const styles = StyleSheet.create({
   hero: { borderWidth: 1, borderRadius: radius.md, padding: spacing[4], flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   iconWrap: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   heroText: { flex: 1, gap: spacing[1] },
-  title: { fontSize: 20, lineHeight: 26, fontWeight: '800' },
+  title: { fontSize: 20, lineHeight: 26, fontWeight: '700' },
   desc: { fontSize: 13, lineHeight: 18 },
   block: { gap: spacing[2] },
   progressCard: { borderWidth: 1, borderRadius: radius.md, padding: spacing[4], gap: spacing[3] },
   progressTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing[3] },
-  progressValue: { flex: 1, fontSize: 18, fontWeight: '800' },
-  progressPercent: { fontSize: 22, fontWeight: '800' },
+  progressValue: { flex: 1, fontSize: 18, fontWeight: '700' },
+  progressPercent: { fontSize: 22, fontWeight: '700' },
   bar: { height: 10, borderRadius: radius.full, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: radius.full },
   sourceCard: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   sourceIcon: { width: 34, height: 34, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   sourceText: { flex: 1, gap: 2 },
-  sourceTitle: { fontSize: 14, fontWeight: '800' },
+  sourceTitle: { fontSize: 14, fontWeight: '700' },
+  sourceHint: { fontSize: 12, lineHeight: 17 },
   openSource: { width: 34, height: 34, borderRadius: radius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   actions: { gap: spacing[2] },
   action: { borderWidth: 1, borderRadius: radius.md, minHeight: 48, paddingHorizontal: spacing[4], flexDirection: 'row', alignItems: 'center', gap: spacing[3] },

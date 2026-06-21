@@ -1,3 +1,4 @@
+import { Platform } from 'react-native'
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
@@ -11,7 +12,7 @@ import { WEEKLY_REVIEW_NOTIFICATION_TYPE } from '@services/proactiveNotification
  */
 export function useNotificationRouting(): void {
   const router = useRouter()
-  const lastResponse = Notifications.useLastNotificationResponse()
+  const lastResponse = Platform.OS === 'web' ? null : Notifications.useLastNotificationResponse()
   const handledId = useRef<string | null>(null)
 
   useEffect(() => {

@@ -20,6 +20,14 @@ type Props = {
   visible: boolean
   /** null = create a new plan item; otherwise edit this one. */
   item: PlanItem | null
+  draft?: {
+    name?: string
+    kind?: PlanItemKind
+    amount_cents?: number
+    currency?: string
+    due_day?: number
+    recurrence?: 'once' | 'monthly'
+  } | null
   onClose: () => void
 }
 
@@ -27,7 +35,7 @@ type Props = {
  * Create / edit a Monthly Plan item (recurring bill or expected income).
  * Single sheet serves both modes (Cross-Module Rule 7).
  */
-export function PlanItemSheet({ visible, item, onClose }: Props) {
+export function PlanItemSheet({ visible, item, draft, onClose }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
   const currency = useSettingsStore((s) => s.currency)
@@ -37,20 +45,24 @@ export function PlanItemSheet({ visible, item, onClose }: Props) {
   const [kind, setKind] = useState<PlanItemKind>('expense')
   const [amountText, setAmountText] = useState('')
   const [dueDay, setDueDay] = useState(1)
-  const [monthly, setMonthly] = useState(true)
+  const [monthly, setMonthly] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const itemCurrency = item?.currency ?? currency
+  const itemCurrency = item?.currency ?? draft?.currency ?? currency
 
   useEffect(() => {
     if (!visible) return
-    setName(item?.name ?? '')
-    setKind(item?.kind ?? 'expense')
-    setAmountText(item ? String(centsToDisplay(item.amount_cents, item.currency)) : '')
-    setDueDay(item?.due_day ?? new Date().getDate())
-    setMonthly((item?.recurrence ?? 'monthly') === 'monthly')
+    setName(item?.name ?? draft?.name ?? '')
+    setKind(item?.kind ?? draft?.kind ?? 'expense')
+    setAmountText(item
+      ? String(centsToDisplay(item.amount_cents, item.currency))
+      : draft?.amount_cents
+      ? String(centsToDisplay(draft.amount_cents, itemCurrency))
+      : '')
+    setDueDay(item?.due_day ?? draft?.due_day ?? new Date().getDate())
+    setMonthly(item ? (item.recurrence ?? 'monthly') === 'monthly' : draft?.recurrence === 'monthly')
     setSaving(false)
-  }, [visible, item])
+  }, [visible, item, draft, itemCurrency])
 
   const onSave = async () => {
     const trimmed = name.trim()

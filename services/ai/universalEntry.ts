@@ -1,9 +1,9 @@
 import { chatCompletion } from './openai'
-import { getAILanguage, getAICurrency } from './aiLanguage'
+import { centsToDisplay, getAILanguage, getAICurrency } from './aiLanguage'
 import { extractAmount, hasMultipleAmounts } from './smartEntry'
-import type { DebtDirection } from '@features/finance/types'
+import type { DebtDirection, PlanItemRecurrence } from '@features/finance/types'
 
-export type UniversalModule = 'finance' | 'finance_debt' | 'reminder' | 'habits' | 'journal'
+export type UniversalModule = 'finance' | 'finance_plan' | 'finance_debt' | 'reminder' | 'habits' | 'journal' | 'goals'
 
 export type FinanceEntry = {
   module: 'finance'
@@ -21,6 +21,17 @@ export type DebtEntry = {
   debt_direction: DebtDirection
   counterparty: string
   due_at: string | null
+  note: string
+}
+
+export type FinancePlanEntry = {
+  module: 'finance_plan'
+  amount_cents: number
+  kind: 'expense' | 'income'
+  name: string
+  category_hint: string
+  due_day: number
+  recurrence: PlanItemRecurrence
   note: string
 }
 
@@ -44,7 +55,18 @@ export type JournalEntry = {
   content: string
 }
 
-export type UniversalEntry = FinanceEntry | DebtEntry | ReminderEntry | HabitsEntry | JournalEntry
+export type GoalEntry = {
+  module: 'goals'
+  title: string
+  description: string
+  source: 'finance' | 'habits' | 'journals' | 'reminders'
+  source_hint: string
+  target_value: number
+  start_date: string
+  due_date: string | null
+}
+
+export type UniversalEntry = FinanceEntry | FinancePlanEntry | DebtEntry | ReminderEntry | HabitsEntry | JournalEntry | GoalEntry
 
 // Fields the parse could not extract: the entry carries a sensible default
 // instead (or stays empty for counterparty), and the UI must tell the user
@@ -133,6 +155,22 @@ function foldText(text: string): string {
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
     .toLowerCase()
+}
+
+function hasMonthlyPlanIntent(text: string): boolean {
+  const t = foldText(text)
+  return /\b(thang nay|hang thang|moi thang|dinh ky|lap lai|monthly|recurring|budget|ngan sach)\b/.test(t)
+}
+
+function inferPlanRecurrence(text: string): PlanItemRecurrence {
+  const t = foldText(text)
+  if (/\b(thang nay|this month|current month)\b/.test(t)) return 'once'
+  return /\b(hang thang|moi thang|dinh ky|lap lai|recurring|repeats?|every month)\b/.test(t) ? 'monthly' : 'once'
+}
+
+function hasGoalIntent(text: string): boolean {
+  const t = foldText(text)
+  return /\b(goal|target|muc tieu|dat muc|phan dau|save|saving|tiet kiem|hoan thanh)\b/.test(t)
 }
 
 function hasDebtIntent(text: string): boolean {
@@ -244,6 +282,38 @@ function normalizeHabitTarget(value: unknown, fallback = 1): number {
   return Math.max(1, Math.min(99, Math.round(n)))
 }
 
+function normalizeHabitGoalTarget(value: unknown, originalText: string): number {
+  const n = Number(value)
+  const rounded = Math.round(n)
+  const folded = foldText(originalText)
+  const hasQuantityUnit = /\b\d+(?:[.,]\d+)?\s*(km|kilometer|kilometre|m|meter|metre|phut|minute|min|gio|hour|h|ngay|day|lan|rep|reps|page|trang)\b/.test(folded)
+  if (!isFinite(n) || n <= 0 || rounded < 20 || (hasQuantityUnit && rounded < 50)) return 100
+  return Math.min(100, rounded)
+}
+
+function clampDueDay(value: unknown): number {
+  const n = Number(value)
+  if (!isFinite(n)) return new Date().getDate()
+  return Math.max(1, Math.min(31, Math.round(n)))
+}
+
+function dateOnly(value: unknown, fallback: string): string {
+  if (!value) return fallback
+  const parsed = new Date(String(value))
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10)
+  const raw = String(value).trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : fallback
+}
+
+function extractPlanNameFromText(text: string): string {
+  return text
+    .replace(/\d+(?:[.,]\d+)?\s*(?:trieu|triá»‡u|tr|m|k|ngan|ngÃ n|nghin|nghÃ¬n)?/gi, '')
+    .replace(/\b(them|thÃªm|khoan|khoáº£n|hang thang|hÃ ng thÃ¡ng|moi thang|má»—i thÃ¡ng|dinh ky|Ä‘á»‹nh ká»³|monthly|recurring|budget|ngan sach|ngÃ¢n sÃ¡ch|expense|income)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+}
+
 function inferHabitTargetFromText(text: string): number {
   const folded = foldText(text)
   const match = folded.match(/\b(\d{1,2})\s*(?:lan|x|times?)\s*(?:\/|\s+)?(?:1\s*)?(?:ngay|day|daily)\b/)
@@ -275,7 +345,58 @@ function normalizeDebtEntry(entry: any, now: Date, localAmount: number | null, o
   }
 }
 
-function normalizeEntry(entry: any, now: Date, localAmount: number | null, originalText: string): NormalizedEntry | null {
+function normalizeFinancePlanEntry(entry: any, localAmount: number | null, originalText: string): NormalizedEntry | null {
+  const amount = localAmount ?? Math.round(Math.abs(Number(entry.amount_cents)))
+  if (!amount || amount <= 0) return null
+  const kind = entry.kind === 'income' || entry.direction === 'income' ? 'income' : 'expense'
+  return {
+    entry: {
+      module: 'finance_plan',
+      amount_cents: amount,
+      kind,
+      name: String(entry.name || '').trim() || extractPlanNameFromText(originalText) || (kind === 'income' ? 'Monthly income' : 'Monthly expense'),
+      category_hint: String(entry.category_hint || '').trim(),
+      due_day: clampDueDay(entry.due_day),
+      recurrence: entry.recurrence === 'monthly' ? 'monthly' : inferPlanRecurrence(originalText),
+      note: String(entry.note || '').trim(),
+    },
+    missing: [],
+  }
+}
+
+function normalizeGoalEntry(entry: any, now: Date, localAmount: number | null, originalText: string, currency: string): NormalizedEntry | null {
+  const missing: MissingField[] = []
+  const title = String(entry.title || '').trim() || originalText.trim().slice(0, 120)
+  if (!entry.title) missing.push('title')
+  if (!title) return null
+  const source = ['finance', 'habits', 'journals', 'reminders'].includes(entry.source)
+    ? entry.source as GoalEntry['source']
+    : localAmount !== null ? 'finance' : 'habits'
+  let target = Number(entry.target_value)
+  if ((!isFinite(target) || target <= 0) && localAmount !== null && source === 'finance') {
+    target = centsToDisplay(localAmount, currency)
+  }
+  if (!isFinite(target) || target <= 0) {
+    target = source === 'habits' ? 100 : 1
+    missing.push('target')
+  }
+  const today = now.toISOString().slice(0, 10)
+  return {
+    entry: {
+      module: 'goals',
+      title,
+      description: String(entry.description || '').trim(),
+      source,
+      source_hint: String(entry.source_hint || '').trim(),
+      target_value: source === 'habits' ? normalizeHabitGoalTarget(target, originalText) : target,
+      start_date: dateOnly(entry.start_date, today),
+      due_date: entry.due_date ? dateOnly(entry.due_date, today) : null,
+    },
+    missing,
+  }
+}
+
+function normalizeEntry(entry: any, now: Date, localAmount: number | null, originalText: string, currency: string): NormalizedEntry | null {
   if (!entry?.module) return null
 
   if (entry.module === 'finance') {
@@ -283,6 +404,7 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
     // Without an amount there is no transaction to record — not a finance candidate at all.
     if (!amount || amount <= 0) return null
     if (hasDebtIntent(originalText)) return normalizeDebtEntry(entry, now, localAmount, originalText)
+    if (hasMonthlyPlanIntent(originalText)) return normalizeFinancePlanEntry(entry, localAmount, originalText)
     const missing: MissingField[] = []
     if (!String(entry.category_hint || '').trim()) missing.push('category')
     if (!entry.occurred_at) missing.push('date')
@@ -305,6 +427,10 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
       if (ratio >= 10 || ratio <= 0.1) normalized.amount_cents = localAmount
     }
     return { entry: normalized, missing }
+  }
+
+  if (entry.module === 'finance_plan' || entry.intent === 'plan_item') {
+    return normalizeFinancePlanEntry(entry, localAmount, originalText)
   }
 
   if (entry.module === 'finance_debt' || entry.intent === 'debt') {
@@ -360,14 +486,20 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
     return { entry: { module: 'journal', content }, missing: [] }
   }
 
+  if (entry.module === 'goals') {
+    return normalizeGoalEntry(entry, now, localAmount, originalText, currency)
+  }
+
   return null
 }
 
 function candidateId(entry: UniversalEntry): string {
   if (entry.module === 'finance') return `finance:${entry.direction}:${entry.amount_cents}:${entry.merchant}`
+  if (entry.module === 'finance_plan') return `finance_plan:${entry.kind}:${entry.amount_cents}:${entry.name}`
   if (entry.module === 'finance_debt') return `finance_debt:${entry.debt_direction}:${entry.amount_cents}:${entry.counterparty}`
   if (entry.module === 'reminder') return `reminder:${entry.title}:${entry.remind_at}`
   if (entry.module === 'habits') return `habits:${entry.title}`
+  if (entry.module === 'goals') return `goals:${entry.title}:${entry.source}:${entry.target_value}`
   return `journal:${entry.content.slice(0, 48)}`
 }
 
@@ -376,7 +508,7 @@ function dedupeCandidates(candidates: UniversalCandidate[]): UniversalCandidate[
   const seenIds = new Set<string>()
   const result: UniversalCandidate[] = []
   for (const c of candidates) {
-    if (c.entry.module === 'finance' || c.entry.module === 'finance_debt') {
+    if (c.entry.module === 'finance' || c.entry.module === 'finance_plan' || c.entry.module === 'finance_debt') {
       // Finance allows multiple entries (different transactions); dedupe by id only
       if (seenIds.has(c.id)) continue
       seenIds.add(c.id)
@@ -413,10 +545,13 @@ IMPORTANT: All datetime values MUST use the user's timezone offset (UTC${tzOffse
 
 Classification rules:
 - finance: mentions one-time money/amount/spent/bought/received/sold/chi/mua/tieu/thu
+- finance_plan: this-cycle budgets, planned income/expense, recurring bills, safe-to-spend planning (thang nay, hang thang, moi thang, dinh ky, monthly, recurring, budget)
 - finance_debt: mentions borrowing or lending money (Vietnamese: vay cua, vay anh Hung, cho ... vay, di vay, muon cua)
 - reminder: mentions future time/date + task/meeting/appointment/hop/nhac/lich/remind
 - habits: recurring behavior goal without specific time (exercise/eat/sleep/read/thoi quen/tap/uong)
 - journal: reflection/diary/memory/feeling without action items (nho/cam xuc/ghi lai/ky niem)
+- goals: explicit personal target/goal with a desired outcome over time (muc tieu, dat muc, phan dau, goal, target, save X by date)
+- For goals.source="habits", target_value is completion-rate percent, usually 100 for a completed goal. Never use distance/time/quantity literals like 5km, 30 min, or 10 pages as target_value.
 - MULTIPLE TRANSACTIONS: If the input contains multiple separate finance events (e.g. "ăn cơm 15k và uống nước 20k", "coffee 30k and taxi 50k"), return ONE finance candidate PER transaction, each with its own amount_cents, category_hint, and merchant. Do NOT merge them or pick only the first.
 - If the input clearly contains both a financial event and a personal feeling/reflection, also add a journal candidate.
 - For finance expense entries, never use Salary, Freelance, Borrowing, or Other Income. If unsure, use Shopping.
@@ -429,10 +564,12 @@ Return this JSON shape:
 {"candidates":[{"confidence":0.0-1.0,"reason":"short reason","selectedByDefault":true|false,"entry":<one entry>}]}
 
 Finance entry: {"module":"finance","amount_cents":<positive int>,"direction":"expense|income","category_hint":"<english category name>","merchant":"<verbatim from input, or ''>","note":"<verbatim from input, or ''>","occurred_at":"<ISO datetime with UTC${tzOffset} offset>"}
+Finance plan entry: {"module":"finance_plan","amount_cents":<positive int>,"kind":"expense|income","name":"<short planned item name>","category_hint":"<english category name or ''>","due_day":<1-31>,"recurrence":"once|monthly","note":"<verbatim from input, or ''>"}
 Debt entry: {"module":"finance_debt","amount_cents":<positive int>,"debt_direction":"lent|borrowed","counterparty":"<person name>","due_at":"<ISO datetime with UTC${tzOffset} offset or null>","note":"<verbatim from input, or ''>"}
 Reminder entry: {"module":"reminder","title":"<verbatim from input, or short extracted task>","remind_at":"<ISO datetime with UTC${tzOffset} offset>","recurrence":"none|daily|weekly|monthly","note":"<verbatim from input, or ''>"}
 Habits entry: {"module":"habits","title":"<habit name>","frequency":"daily|weekly|custom","target_per_period":<integer 1-99, e.g. 5 for "5 times per day">}
 Journal entry: {"module":"journal","content":"<full text>"}
+Goal entry: {"module":"goals","title":"<short goal title>","description":"<optional detail or ''>","source":"finance|habits|journals|reminders","source_hint":"<category, habit, journal tag, or ''>","target_value":<number; finance uses display amount, habits uses percent, journals/reminders uses count>,"start_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD or null"}
 
 Common finance categories: Food & Groceries, Transport, Housing, Utilities, Healthcare, Dining Out, Entertainment, Shopping, Subscriptions, Salary, Freelance, Other Income, Emergency Fund, Investments`
 
@@ -445,7 +582,7 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
         },
         { role: 'user', content: prompt },
       ],
-      { temperature: 0.1, max_tokens: 700 }
+      { temperature: 0.1, max_tokens: 900 }
     )
 
     const parsed = extractJson(raw) as any
@@ -459,7 +596,7 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
 
     const candidates: UniversalCandidate[] = []
     for (const rawCandidate of rawCandidates) {
-      const normalized = normalizeEntry(rawCandidate.entry ?? rawCandidate, now, localAmount, text)
+      const normalized = normalizeEntry(rawCandidate.entry ?? rawCandidate, now, localAmount, text, currency)
       if (!normalized) continue
       const { entry, missing } = normalized
       // Journal content must always equal the user's exact original text — AI output
@@ -486,6 +623,22 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
     const hasFinance = candidates.some((c) => c.entry.module === 'finance')
     const hasJournal = candidates.some((c) => c.entry.module === 'journal')
     const hasDebt = candidates.some((c) => c.entry.module === 'finance_debt')
+    const hasPlan = candidates.some((c) => c.entry.module === 'finance_plan')
+    const hasGoal = candidates.some((c) => c.entry.module === 'goals')
+
+    if (localAmount !== null && hasMonthlyPlanIntent(text) && !hasPlan) {
+      const normalized = normalizeFinancePlanEntry({ kind: textHasIncomeIntent(text) ? 'income' : 'expense' }, localAmount, text)
+      if (normalized) {
+        candidates.push({
+          id: candidateId(normalized.entry),
+          entry: normalized.entry,
+          confidence: 0.84,
+          reason: 'Detected monthly finance plan',
+          selectedByDefault: true,
+          missing: normalized.missing,
+        })
+      }
+    }
 
     if (localAmount !== null && hasDebtIntent(text) && !hasDebt) {
       const entry: DebtEntry = {
@@ -519,6 +672,28 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
     if (localAmount !== null && textHasEmotion(text) && hasFinanceAfterGuard && !hasJournal) {
       const entry: JournalEntry = { module: 'journal', content: text }
       candidates.push({ id: candidateId(entry), entry, confidence: 0.72, reason: 'Detected personal feeling with financial event', selectedByDefault: true, missing: [] })
+    }
+
+    if (hasGoalIntent(text) && !hasGoal) {
+      const source: GoalEntry['source'] = localAmount !== null ? 'finance' : 'habits'
+      const entry: GoalEntry = {
+        module: 'goals',
+        title: text.trim().slice(0, 120),
+        description: '',
+        source,
+        source_hint: source === 'finance' ? 'Emergency Fund' : '',
+        target_value: localAmount !== null && source === 'finance' ? centsToDisplay(localAmount, currency) : 100,
+        start_date: now.toISOString().slice(0, 10),
+        due_date: null,
+      }
+      candidates.push({
+        id: candidateId(entry),
+        entry,
+        confidence: 0.78,
+        reason: 'Detected personal goal',
+        selectedByDefault: candidates.length === 0,
+        missing: localAmount === null ? ['target'] : [],
+      })
     }
 
     return dedupeCandidates(candidates)

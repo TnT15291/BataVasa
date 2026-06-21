@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -9,6 +9,7 @@ import { spacing, radius } from '@design/tokens'
 import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
+import { useGoalsStore } from '@store/goalsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { useDailyDigest } from '../hooks/useDailyDigest'
 import type { ReviewInboxItem } from '../hooks/useDailyDigest'
@@ -63,6 +64,8 @@ export function DailyDigestScreen() {
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding)
+  const goals = useGoalsStore((s) => s.goals)
+  const loadGoals = useGoalsStore((s) => s.loadGoals)
   const [showAdd, setShowAdd] = useState(false)
 
   const {
@@ -81,6 +84,8 @@ export function DailyDigestScreen() {
 
   const locale = getDateFnsLocale(language)
   const now = new Date()
+
+  useEffect(() => { void loadGoals() }, [loadGoals])
 
   if (isLoading) {
     return (
@@ -121,6 +126,21 @@ export function DailyDigestScreen() {
     : habitsTotal > 0
       ? t.home_ai_tip_habits.replace('{{done}}', String(habitsDoneCount)).replace('{{total}}', String(habitsTotal))
       : t.home_ai_tip_empty
+  const focusGoal = goals.find((g) => g.status === 'active') ?? null
+  const focusColor = focusGoal?.binding?.module === 'finance'
+    ? MODULE_COLORS.finance
+    : focusGoal?.binding?.module === 'journals'
+    ? MODULE_COLORS.journal
+    : focusGoal?.binding?.module === 'reminders'
+    ? MODULE_COLORS.tasks
+    : MODULE_COLORS.habits
+  const focusIcon = focusGoal?.binding?.module === 'finance'
+    ? MODULE_ICONS.finance
+    : focusGoal?.binding?.module === 'journals'
+    ? MODULE_ICONS.journal
+    : focusGoal?.binding?.module === 'reminders'
+    ? MODULE_ICONS.tasks
+    : MODULE_ICONS.habits
 
   return (
     <ScreenTransition style={{ backgroundColor: theme.bg.primary }}>
@@ -178,6 +198,62 @@ export function DailyDigestScreen() {
           </View>
         ) : null}
 
+        <View style={styles.block}>
+          <SectionHeader
+            label={t.weekly_review_focus}
+            actionLabel={focusGoal ? t.view_all : t.new_goal}
+            onAction={() => router.push(focusGoal ? '/goals' : '/goal')}
+          />
+          {focusGoal ? (
+            <Pressable
+              onPress={() => router.push({ pathname: '/goal-detail', params: { id: focusGoal.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={`${focusGoal.title}: ${focusGoal.progress.label}`}
+              style={({ pressed }) => [
+                styles.focusCard,
+                {
+                  backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated,
+                  borderColor: theme.border.subtle,
+                },
+              ]}
+            >
+              <View style={[styles.focusIcon, { backgroundColor: focusColor }]}>
+                <Feather name={focusIcon} size={15} color="#fff" />
+              </View>
+              <View style={styles.focusBody}>
+                <Text style={[styles.focusTitle, { color: theme.text.primary }]} numberOfLines={1}>{focusGoal.title}</Text>
+                <Text style={[styles.focusSub, { color: theme.text.muted }]} numberOfLines={1}>{focusGoal.progress.label}</Text>
+                <View style={[styles.focusTrack, { backgroundColor: theme.bg.secondary }]}>
+                  <View style={[styles.focusFill, { width: `${focusGoal.progress.percent}%`, backgroundColor: focusColor }]} />
+                </View>
+              </View>
+              <Text style={[styles.focusPct, { color: focusColor }]}>{focusGoal.progress.percent}%</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => router.push('/goal')}
+              accessibilityRole="button"
+              accessibilityLabel={t.new_goal}
+              style={({ pressed }) => [
+                styles.focusCard,
+                {
+                  backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated,
+                  borderColor: theme.border.subtle,
+                },
+              ]}
+            >
+              <View style={[styles.focusIcon, { backgroundColor: MODULE_COLORS.analysis }]}>
+                <Feather name={MODULE_ICONS.goals} size={15} color="#fff" />
+              </View>
+              <View style={styles.focusBody}>
+                <Text style={[styles.focusTitle, { color: theme.text.primary }]} numberOfLines={1}>{t.nav_goals}</Text>
+                <Text style={[styles.focusSub, { color: theme.text.muted }]} numberOfLines={2}>{t.goal_module_hint}</Text>
+              </View>
+              <Feather name="plus" size={16} color={MODULE_COLORS.analysis} />
+            </Pressable>
+          )}
+        </View>
+
         {/* ── Review Queue ── */}
         {reviewCount > 0 ? (
           <View style={styles.block}>
@@ -233,8 +309,7 @@ export function DailyDigestScreen() {
         <QuickActionRow
           actions={[
             { key: 'assistant', icon: 'message-circle', label: t.quick_assistant, color: theme.brand.primary, onPress: () => router.push('/chat') },
-            { key: 'goals',     icon: MODULE_ICONS.goals, label: t.nav_goals, color: theme.brand.primary, onPress: () => router.push('/goals') },
-            { key: 'reports',   icon: 'bar-chart-2',    label: t.quick_reports, color: theme.brand.primary, onPress: () => router.push('/weekly-review') },
+            { key: 'reports',   icon: MODULE_ICONS.analysis, label: t.quick_reports, color: MODULE_COLORS.analysis, onPress: () => router.push('/weekly-review') },
           ]}
         />
       </ScrollView>
@@ -296,6 +371,22 @@ const styles = StyleSheet.create({
   priorityTitle: { fontSize: 14, fontWeight: '700' },
   priorityMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   prioritySub: { fontSize: 12, fontWeight: '500', flexShrink: 1 },
+  focusCard: {
+    minHeight: 58,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  focusIcon: { width: 30, height: 30, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  focusBody: { flex: 1, gap: 4 },
+  focusTitle: { fontSize: 14, fontWeight: '700' },
+  focusSub: { fontSize: 12, fontWeight: '500', lineHeight: 16 },
+  focusTrack: { height: 5, borderRadius: radius.full, overflow: 'hidden' },
+  focusFill: { height: '100%', borderRadius: radius.full },
+  focusPct: { fontSize: 15, fontWeight: '800' },
 
   // Signals
   signalsCard: {

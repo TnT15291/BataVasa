@@ -1,6 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, getAmountRule } from './aiLanguage'
-import type { Category, DebtDirection, PlanItemKind } from '@features/finance/types'
+import type { Category, DebtDirection, PlanItemKind, PlanItemRecurrence } from '@features/finance/types'
 
 export type ParsedTransactionEntry = {
   intent: 'transaction'
@@ -18,6 +18,7 @@ export type ParsedPlanItemEntry = {
   name: string
   category_hint: string
   due_day: number
+  recurrence: PlanItemRecurrence
   note: string
 }
 
@@ -48,7 +49,13 @@ const normalizedText = (s: string): string => stripDiacritics(s).toLowerCase()
 
 function hasMonthlyPlanIntent(text: string): boolean {
   const t = normalizedText(text)
-  return /\b(hang thang|moi thang|dinh ky|lap lai|monthly|recurring)\b/.test(t)
+  return /\b(thang nay|hang thang|moi thang|dinh ky|lap lai|monthly|recurring|budget|ngan sach)\b/.test(t)
+}
+
+function inferPlanRecurrence(text: string): PlanItemRecurrence {
+  const t = normalizedText(text)
+  if (/\b(thang nay|this month|current month)\b/.test(t)) return 'once'
+  return /\b(hang thang|moi thang|dinh ky|lap lai|recurring|repeats?|every month)\b/.test(t) ? 'monthly' : 'once'
 }
 
 function hasDebtIntent(text: string): boolean {
@@ -198,14 +205,15 @@ Available categories (copy EXACTLY, do not translate): ${catList}
 Return ONLY valid JSON, no other text. Choose exactly one intent:
 1) Normal one-time transaction:
 {"intent":"transaction","amount_cents":<positive integer>,"direction":"<expense|income>","category_hint":"<must be one of the listed category names>","merchant":"<store name or empty>","note":"<note or empty>"}
-2) Monthly recurring plan item, not a transaction:
-{"intent":"plan_item","amount_cents":<positive integer>,"kind":"<expense|income>","name":"<short recurring item name>","category_hint":"<must be one of the listed category names or empty>","due_day":<1-31>,"note":"<note or empty>"}
+2) Planned income/expense item, not a transaction:
+{"intent":"plan_item","amount_cents":<positive integer>,"kind":"<expense|income>","name":"<short planned item name>","category_hint":"<must be one of the listed category names or empty>","due_day":<1-31>,"recurrence":"<once|monthly>","note":"<note or empty>"}
 3) Debt book item:
 {"intent":"debt","amount_cents":<positive integer>,"debt_direction":"<lent|borrowed>","counterparty":"<person name>","due_at":"<ISO datetime or null>","note":"<note or empty>"}
 
 Rules:
 - Default direction is expense unless income is clearly stated.
-- If the input says monthly / recurring / hang thang / moi thang / dinh ky, return intent "plan_item". Do NOT return a transaction for it.
+- If the input says monthly / recurring / hang thang / moi thang / dinh ky / budget / ngan sach / thang nay, return intent "plan_item". Do NOT return a transaction for it.
+- For plan_item, use recurrence "monthly" only when the user explicitly says it repeats every month. Use "once" for "this month/thang nay" budgets or one-cycle planned income/expense.
 - If the input says the user borrowed money from someone (Vietnamese: "vay cua", "vay anh Hung", "di vay", "muon cua"), return intent "debt" with debt_direction "borrowed". This is money coming in, not an expense.
 - If the input says the user lent money to someone (Vietnamese: "cho ... vay"), return intent "debt" with debt_direction "lent". This is money going out.
 - For debt due dates like "ngay 10 thang sau" or "ngay 19 tra", set due_at to the repayment date at 09:00 local time in ISO format. Do not use repayment dates as transaction occurred_at.
@@ -237,6 +245,7 @@ Rules:
       kind?: PlanItemKind
       name?: string
       due_day?: number
+      recurrence?: PlanItemRecurrence
       debt_direction?: DebtDirection
       counterparty?: string
       due_at?: string | null
@@ -270,6 +279,7 @@ Rules:
         name: parsed.name?.trim() || extractPlanNameFromText(text),
         category_hint: sanitizeCategoryHintForDirection(kind, parsed.category_hint ?? '', categories),
         due_day: clampDueDay(parsed.due_day),
+        recurrence: parsed.recurrence === 'monthly' ? 'monthly' : inferPlanRecurrence(text),
         note: parsed.note ?? '',
       }
     }

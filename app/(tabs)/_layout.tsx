@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { useTranslation } from '@services/i18n'
-import { MODULE_COLORS } from '@design/moduleColors'
+import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
 import { BrandMark } from '@components/ui'
 
 type IconName = keyof typeof Feather.glyphMap
@@ -99,7 +99,7 @@ export default function TabsLayout() {
           title: t.habits,
           tabBarLabel: t.habits,
           tabBarActiveTintColor: MODULE_COLORS.habits,
-          tabBarIcon: ({ focused }) => <ModuleTabIcon name="check-circle" color={MODULE_COLORS.habits} focused={focused} />,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name={MODULE_ICONS.habits} color={MODULE_COLORS.habits} focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -108,7 +108,7 @@ export default function TabsLayout() {
           title: t.nav_journal,
           tabBarLabel: t.nav_journal,
           tabBarActiveTintColor: MODULE_COLORS.journal,
-          tabBarIcon: ({ focused }) => <ModuleTabIcon name="book-open" color={MODULE_COLORS.journal} focused={focused} />,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name={MODULE_ICONS.journal} color={MODULE_COLORS.journal} focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -125,7 +125,7 @@ export default function TabsLayout() {
           title: t.nav_reminders,
           tabBarLabel: t.nav_reminders,
           tabBarActiveTintColor: MODULE_COLORS.tasks,
-          tabBarIcon: ({ focused }) => <ModuleTabIcon name="bell" color={MODULE_COLORS.tasks} focused={focused} />,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name={MODULE_ICONS.tasks} color={MODULE_COLORS.tasks} focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -134,7 +134,7 @@ export default function TabsLayout() {
           title: t.nav_finance,
           tabBarLabel: t.nav_finance,
           tabBarActiveTintColor: MODULE_COLORS.finance,
-          tabBarIcon: ({ focused }) => <ModuleTabIcon name="trending-up" color={MODULE_COLORS.finance} focused={focused} />,
+          tabBarIcon: ({ focused }) => <ModuleTabIcon name={MODULE_ICONS.finance} color={MODULE_COLORS.finance} focused={focused} />,
         }}
       />
 

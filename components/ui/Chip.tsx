@@ -18,7 +18,7 @@ export function Chip({ label, icon, color }: Props) {
   const tint = color ?? theme.text.muted
   return (
     <View style={[styles.chip, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
-      {icon ? <Feather name={icon} size={9} color={tint} /> : null}
+      {icon ? <Feather name={icon} size={11} color={tint} /> : null}
       <Text style={[styles.text, { color: theme.text.secondary }]}>{label}</Text>
     </View>
   )
@@ -35,5 +35,5 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignSelf: 'flex-start',
   },
-  text: { fontSize: 10, fontWeight: '600' },
+  text: { fontSize: 12, fontWeight: '600' },
 })

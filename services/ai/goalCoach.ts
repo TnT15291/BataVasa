@@ -1,5 +1,5 @@
 import { chatCompletion } from './openai'
-import { getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
+import { displayToCents, getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
 import { withUserContext } from './userContextPrompt'
 import { getDb } from '@db/core/db'
 import { getCurrentUserId } from '@services/identity'
@@ -25,6 +25,18 @@ export type CoachTask = {
   why: string
 }
 
+export type CoachSpendingPlanItem = {
+  name: string
+  kind: 'expense' | 'income'
+  amount_cents: number
+  currency: string
+  category_hint: string
+  category_kind: 'essential' | 'discretionary' | 'income' | 'savings'
+  due_day: number
+  recurrence: 'once' | 'monthly'
+  why: string
+}
+
 export type CoachJournalDraft = {
   content: string
   mood: number
@@ -35,6 +47,7 @@ export type GoalCoachPlan = {
   summary: string
   habits: CoachHabit[]
   tasks: CoachTask[]
+  spendingPlan: CoachSpendingPlanItem[]
   spendingAdvice: string[]
   journalDraft: CoachJournalDraft | null
 }
@@ -87,6 +100,14 @@ function extractJson(raw: string): any | null {
 
 // ── Context: compact cross-module summary for the prompt ────────────────────
 
+function coachModuleInstruction(module: string | undefined): string {
+  if (module === 'finance') return 'This goal is tracked from Finance. Return spendingPlan and spendingAdvice only; habits must be [], tasks must be [], journalDraft must be null.'
+  if (module === 'habits') return 'This goal is tracked from Habits. Return habits only; tasks must be [], spendingPlan must be [], spendingAdvice must be [], journalDraft must be null.'
+  if (module === 'journals') return 'This goal is tracked from Journals. Return journalDraft only; habits must be [], tasks must be [], spendingPlan must be [], spendingAdvice must be [].'
+  if (module === 'reminders') return 'This goal is tracked from Tasks/Reminders. Return tasks only; habits must be [], spendingPlan must be [], spendingAdvice must be [], journalDraft must be null.'
+  return 'If the primary source is unclear, return a brief summary and leave all suggestion arrays empty.'
+}
+
 const HORIZON_DAYS = 90
 
 export async function buildGoalCoachContext(goal: GoalWithProgress): Promise<string> {
@@ -113,6 +134,7 @@ export async function buildGoalCoachContext(goal: GoalWithProgress): Promise<str
     [userId, since]
   )
   const catName = new Map(categories.map((c) => [c.id, c.name]))
+  const categoryList = categories.map((c) => `  ${c.name} (${c.kind})`).join('\n') || '  (none)'
   const topSpend = spendRows
     .map((r) => `  ${catName.get(r.category_id) ?? 'Other'}: ${fmtAI(r.total ?? 0, currency)}`)
     .join('\n') || '  (no spending recorded)'
@@ -147,6 +169,9 @@ export async function buildGoalCoachContext(goal: GoalWithProgress): Promise<str
 FINANCE (last ${HORIZON_DAYS}d, top spend categories):
 ${topSpend}
 
+AVAILABLE FINANCE CATEGORIES:
+${categoryList}
+
 EXISTING HABITS (do NOT suggest duplicates of these):
 ${habitList}
 
@@ -160,6 +185,7 @@ TASKS: ${openTasks} open`
 export async function generateGoalCoachPlan(goal: GoalWithProgress): Promise<GoalCoachPlan | null> {
   const language = getAILanguage()
   const now = new Date()
+  const trackedModule = goal.binding?.module
 
   let context: string
   try {
@@ -174,7 +200,7 @@ export async function generateGoalCoachPlan(goal: GoalWithProgress): Promise<Goa
     ? goal.binding.tag
     : null
 
-  const prompt = `You are BataVasa's goal coach. Based on the user's goal and their real past data across four modules (Finance, Habits, Journals, Reminders), propose a concrete, achievable action plan to reach the goal while covering basic needs and saving.
+  const prompt = `You are BataVasa's goal coach. The goal already has ONE primary progress source shown as "Tracked from". Your job is to suggest optional supporting actions around that source, not to redefine how progress is measured. Based on the user's goal and their real past data across four modules (Finance, Habits, Journals, Reminders), propose a concrete, achievable support plan while covering basic needs and saving.
 
 ${context}
 
@@ -183,14 +209,18 @@ Return ONLY valid JSON in this exact shape (no markdown, no commentary):
   "summary": "<one short sentence framing the plan>",
   "habits": [{"title":"<habit name>","cadence":"daily|weekdays|custom","target_per_period":<int 1-10>,"why":"<short reason tied to the goal>"}],
   "tasks": [{"title":"<actionable task, e.g. open a piggy bank / practice coding 30 min>","when":"<ISO datetime in the future or null>","recurrence":"none|daily|weekly|monthly","why":"<short reason>"}],
+  "spendingPlan": [{"name":"<short planned income/expense name>","kind":"expense|income","amount":"<number in ${getAICurrency()} display units>","category_hint":"<copy one AVAILABLE FINANCE CATEGORIES name, or propose a new fund/category name>","category_kind":"essential|discretionary|income|savings","due_day":<1-31>,"recurrence":"once|monthly","why":"<short reason tied to the goal>"}],
   "spendingAdvice": ["<short actionable money tip balancing needs and saving toward the goal>"],
   "journalDraft": {"content":"<a short first-person journal entry reflecting on recent activity and what was done toward this goal>","mood":<int 1-5>,"tags":"<comma-separated from: work,family,health,money,sleep,exercise,stress,food,travel,social>"}
 }
 
 Rules:
 - Reply entirely in ${language}. Every title, why, advice line, and the journal content MUST be in ${language}.
-- Suggest 1-3 habits, 1-3 tasks, 2-4 spending tips. Never duplicate an existing habit listed above.
+- ${coachModuleInstruction(trackedModule)}
+- Suggest 1-3 items only for the tracked module above. Never suggest actions from other modules. Never duplicate an existing habit listed above.
+- These suggestions support the primary source. Do not imply multiple modules update this goal; progress comes from the "Tracked from" source only.
 - Habits must be realistic and directly serve the goal.
+- spendingPlan items should be concrete planned income/expense items that support the goal. For saving goals, suggest a savings category/fund when useful, e.g. "GPU Fund"; if the goal is already tracked from a finance category, prefer that category instead of inventing another one. Use recurrence "monthly" only for true recurring items; otherwise "once".
 - For journalDraft: pick the SINGLE life area most relevant to this goal as "tags", and make the content reflect on that area in relation to the goal, so journaling about it directly supports progress.${journalFocus ? `\n- This goal counts journal entries tagged "${journalFocus}", so journalDraft.tags MUST be "${journalFocus}".` : ''}
 - Keep each text short and specific; reference the user's real situation.
 - Current datetime is ${now.toISOString()}.`
@@ -244,6 +274,31 @@ Rules:
     ? parsed.spendingAdvice.map((s: any) => String(s ?? '').trim()).filter((s: string) => s.length > 0).slice(0, 5)
     : []
 
+  const currency = getAICurrency()
+  const spendingPlan: CoachSpendingPlanItem[] = Array.isArray(parsed.spendingPlan)
+    ? parsed.spendingPlan
+        .map((p: any): CoachSpendingPlanItem | null => {
+          const name = String(p?.name ?? '').trim()
+          const amount = Number(p?.amount)
+          if (!name || !isFinite(amount) || amount <= 0) return null
+          return {
+            name,
+            kind: p?.kind === 'income' ? 'income' : 'expense',
+            amount_cents: Math.round(displayToCents(amount, currency)),
+            currency,
+            category_hint: String(p?.category_hint ?? '').trim(),
+            category_kind: ['essential', 'discretionary', 'income', 'savings'].includes(p?.category_kind)
+              ? p.category_kind
+              : p?.kind === 'income' ? 'income' : 'savings',
+            due_day: clampInt(p?.due_day, 1, 31, new Date().getDate()),
+            recurrence: p?.recurrence === 'monthly' ? 'monthly' : 'once',
+            why: String(p?.why ?? '').trim(),
+          }
+        })
+        .filter((p: CoachSpendingPlanItem | null): p is CoachSpendingPlanItem => p !== null)
+        .slice(0, 4)
+    : []
+
   let journalDraft: CoachJournalDraft | null = null
   if (parsed.journalDraft && String(parsed.journalDraft.content ?? '').trim()) {
     journalDraft = {
@@ -255,9 +310,10 @@ Rules:
 
   return {
     summary: String(parsed.summary ?? '').trim(),
-    habits,
-    tasks,
-    spendingAdvice,
-    journalDraft,
+    habits: trackedModule === 'habits' ? habits : [],
+    tasks: trackedModule === 'reminders' ? tasks : [],
+    spendingPlan: trackedModule === 'finance' ? spendingPlan : [],
+    spendingAdvice: trackedModule === 'finance' ? spendingAdvice : [],
+    journalDraft: trackedModule === 'journals' ? journalDraft : null,
   }
 }

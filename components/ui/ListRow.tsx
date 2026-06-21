@@ -59,7 +59,7 @@ export function ListRow({
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[styles.subtitle, { color: theme.text.muted }]} numberOfLines={1}>
+          <Text style={[styles.subtitle, { color: theme.text.secondary }]} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
@@ -69,7 +69,7 @@ export function ListRow({
       ) : (
         <View style={styles.trailing}>
           {meta ? (
-            <Text style={[styles.meta, { color: metaColor ?? theme.text.muted }]} numberOfLines={1}>
+            <Text style={[styles.meta, { color: metaColor ?? theme.text.secondary }]} numberOfLines={1}>
               {meta}
             </Text>
           ) : null}
@@ -82,10 +82,10 @@ export function ListRow({
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 34,
+    minHeight: 44,
     borderRadius: radius.sm,
     paddingHorizontal: spacing[2],
-    paddingVertical: 3,
+    paddingVertical: spacing[1],
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
@@ -99,8 +99,8 @@ const styles = StyleSheet.create({
   },
   emoji: { fontSize: 13 },
   body: { flex: 1, gap: 2 },
-  title: { fontSize: 12, fontWeight: '600' },
-  subtitle: { fontSize: 10, fontWeight: '500' },
+  title: { fontSize: 13, fontWeight: '600' },
+  subtitle: { fontSize: 12, fontWeight: '500' },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
-  meta: { fontSize: 10, fontWeight: '500' },
+  meta: { fontSize: 12, fontWeight: '500' },
 })

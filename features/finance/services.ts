@@ -273,8 +273,14 @@ export function getCurrentPlanMonth(date = new Date()): string {
   return monthKey(date)
 }
 
-export function planItemAppliesToDate(item: PlanItem, date = new Date()): boolean {
+export function planItemAppliesToDate(item: PlanItem, date = new Date(), cycleStartDay?: number): boolean {
   if ((item.recurrence ?? 'monthly') === 'monthly') return true
+  if (cycleStartDay !== undefined) {
+    const { from, to } = getCycleRange(date, cycleStartDay)
+    const created = new Date(item.created_at)
+    if (!Number.isNaN(created.getTime()) && created >= from && created < to) return true
+    return false
+  }
   return item.applies_month === monthKey(date)
 }
 
@@ -325,7 +331,7 @@ export function getSettledPlanItemIds(input: {
   const settled = new Set<string>()
   for (const item of input.planItems) {
     if (item.active !== 1 || item.deleted_at) continue
-    if (!planItemAppliesToDate(item, now)) continue
+    if (!planItemAppliesToDate(item, now, input.cycleStartDay)) continue
     if (planItemSettled(item, cycleTxs)) settled.add(item.id)
   }
   return settled
@@ -368,7 +374,7 @@ export function findMatchingPlanItem(input: {
   let best: { item: PlanItem; nameMatch: boolean; diff: number } | null = null
   for (const item of input.planItems) {
     if (item.active !== 1 || item.deleted_at) continue
-    if (!planItemAppliesToDate(item, now)) continue
+    if (!planItemAppliesToDate(item, now, input.cycleStartDay)) continue
     if (item.kind === 'expense' ? tx.amount_cents >= 0 : tx.amount_cents <= 0) continue
     if (tx.currency !== item.currency) continue
     if (planItemSettled(item, otherCycleTxs)) continue
@@ -532,7 +538,7 @@ export function calculateSafeToSpend(input: {
 
   for (const item of input.planItems ?? []) {
     if (item.active !== 1 || item.deleted_at) continue
-    if (!planItemAppliesToDate(item, now)) continue
+    if (!planItemAppliesToDate(item, now, input.cycleStartDay)) continue
     if (planItemSettled(item, cycleTxs)) continue
     const amount = inTarget(item.amount_cents, item.currency)
     if (amount === null) continue

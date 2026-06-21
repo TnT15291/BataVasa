@@ -118,7 +118,16 @@
       "Bash(sed -i 's/  nav_finance: '\\\\''財務'\\\\'',/  nav_home: '\\\\''ホーム'\\\\'',\\\\n  nav_finance: '\\\\''財務'\\\\'',/' services/i18n/translations/ja.ts)",
       "Bash(sed -i 's/  nav_finance: '\\\\''재정'\\\\'',/  nav_home: '\\\\''홈'\\\\'',\\\\n  nav_finance: '\\\\''재정'\\\\'',/' services/i18n/translations/ko.ts)",
       "Bash(sed -i 's/  nav_finance: '\\\\''财务'\\\\'',/  nav_home: '\\\\''首页'\\\\'',\\\\n  nav_finance: '\\\\''财务'\\\\'',/' services/i18n/translations/zh.ts)",
-      "PowerShell(npx jest goals --silent 2>&1)"
+      "PowerShell(npx jest goals --silent 2>&1)",
+      "Bash(ls app *)",
+      "Bash(ls features *)",
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"personal finance habits journal mobile app calm productivity\" --design-system -p \"BataVasa\")",
+      "Bash(ls design *)",
+      "Bash(head -60 DESIGN.md)",
+      "Bash(ls components *)",
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)",
+      "Bash(git commit -m '@ *)"
     ],
     "additionalDirectories": [
       "\\tmp",

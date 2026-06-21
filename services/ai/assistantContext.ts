@@ -44,6 +44,16 @@ function eventTime(reminder: Reminder): Date {
   return new Date(new Date(reminder.remind_at).getTime() + (reminder.advance_minutes ?? 0) * 60000)
 }
 
+function financeGoalSource(goal: GoalWithProgress, catMap: Map<string, Category>): string {
+  const source = goal.progress.sourceLabel || 'source'
+  if (goal.binding?.module !== 'finance') return `${source} (${goal.binding?.module ?? 'unknown'} source)`
+
+  const category = catMap.get(goal.binding.category_id)
+  if (category?.kind === 'savings') return `${source} (savings fund; set-aside expenses count as progress)`
+  if (category?.kind) return `${source} (${category.kind} finance category)`
+  return `${source} (finance category)`
+}
+
 export function buildAssistantContext(input: BuildAssistantContextInput): string {
   const now = input.now ?? new Date()
   const currency = getAICurrency()
@@ -54,7 +64,12 @@ export function buildAssistantContext(input: BuildAssistantContextInput): string
   let income30 = 0
   let expense30 = 0
   let expense7 = 0
-  const catTotals = new Map<string, number>()
+  let regularExpense30 = 0
+  let regularExpense7 = 0
+  let setAside30 = 0
+  let setAside7 = 0
+  const regularCatTotals = new Map<string, number>()
+  const savingsCatTotals = new Map<string, number>()
   const reviewTxs: string[] = []
   for (const tx of recentTxs) {
     const amount = tx.amount_cents
@@ -62,17 +77,29 @@ export function buildAssistantContext(input: BuildAssistantContextInput): string
     if (amount > 0) income30 += amount
     if (amount < 0) {
       const abs = Math.abs(amount)
+      const inLast7 = inLastDays(tx.occurred_at, now, 7)
       expense30 += abs
-      if (inLastDays(tx.occurred_at, now, 7)) expense7 += abs
-      if (cat?.kind !== 'income') catTotals.set(cat?.name ?? 'Other', (catTotals.get(cat?.name ?? 'Other') ?? 0) + abs)
+      if (inLast7) expense7 += abs
+      if (cat?.kind === 'savings') {
+        setAside30 += abs
+        if (inLast7) setAside7 += abs
+        savingsCatTotals.set(cat.name, (savingsCatTotals.get(cat.name) ?? 0) + abs)
+      } else if (cat?.kind !== 'income') {
+        regularExpense30 += abs
+        if (inLast7) regularExpense7 += abs
+        regularCatTotals.set(cat?.name ?? 'Other', (regularCatTotals.get(cat?.name ?? 'Other') ?? 0) + abs)
+      }
     }
     if (tx.needs_review === 1) {
       const title = clean(tx.merchant || tx.note || cat?.name || 'Transaction')
       reviewTxs.push(`${title} (${fmtAI(Math.abs(amount), tx.currency || currency)})`)
     }
   }
-  const topFinance = topEntries(catTotals, 6)
+  const topFinance = topEntries(regularCatTotals, 6)
     .map(([name, amount]) => `${name}: ${fmtAI(amount, currency)}`)
+    .join('; ')
+  const topSavingsFunds = topEntries(savingsCatTotals, 6)
+    .map(([name, amount]) => `${name}: ${fmtAI(amount, currency)} set aside`)
     .join('; ')
   const largestTxs = recentTxs
     .filter((tx) => tx.amount_cents < 0)
@@ -80,7 +107,8 @@ export function buildAssistantContext(input: BuildAssistantContextInput): string
     .slice(0, 5)
     .map((tx) => {
       const cat = catMap.get(tx.category_id)
-      return `${format(new Date(tx.occurred_at), 'yyyy-MM-dd')} ${clean(tx.merchant || tx.note || cat?.name || 'Expense')}: ${fmtAI(Math.abs(tx.amount_cents), tx.currency || currency)}`
+      const moveType = cat?.kind === 'savings' ? 'set aside' : 'expense'
+      return `${format(new Date(tx.occurred_at), 'yyyy-MM-dd')} ${clean(tx.merchant || tx.note || cat?.name || 'Expense')}: ${fmtAI(Math.abs(tx.amount_cents), tx.currency || currency)} ${moveType}`
     })
     .join('; ')
 
@@ -137,12 +165,12 @@ export function buildAssistantContext(input: BuildAssistantContextInput): string
   const goalLines = activeGoals
     .sort((a, b) => a.progress.percent - b.progress.percent)
     .slice(0, 6)
-    .map((g) => `${g.title}: ${g.progress.percent}% (${g.progress.label}) via ${g.progress.sourceLabel || 'source'}`)
+    .map((g) => `${g.title}: ${g.progress.percent}% (${g.progress.label}) via ${financeGoalSource(g, catMap)}`)
     .join('; ')
 
   return [
     `CONTEXT DATE: ${format(now, 'yyyy-MM-dd HH:mm')}`,
-    `FINANCE: 30d income ${fmtAI(income30, currency)}, 30d expense ${fmtAI(expense30, currency)}, 7d expense ${fmtAI(expense7, currency)}, review transactions ${reviewTxs.length}. Top categories: ${topFinance || 'none'}. Largest recent expenses: ${largestTxs || 'none'}. Needs review: ${reviewTxs.slice(0, 5).join('; ') || 'none'}.`,
+    `FINANCE: 30d income ${fmtAI(income30, currency)}, 30d total outflow ${fmtAI(expense30, currency)}, 30d regular expense ${fmtAI(regularExpense30, currency)}, 30d savings set-aside ${fmtAI(setAside30, currency)}, 7d total outflow ${fmtAI(expense7, currency)}, 7d regular expense ${fmtAI(regularExpense7, currency)}, 7d savings set-aside ${fmtAI(setAside7, currency)}, review transactions ${reviewTxs.length}. Top regular expense categories: ${topFinance || 'none'}. Top savings funds: ${topSavingsFunds || 'none'}. Largest recent money moves: ${largestTxs || 'none'}. Needs review: ${reviewTxs.slice(0, 5).join('; ') || 'none'}.`,
     `TASKS: open ${openReminders.length}, today ${today.length}, overdue ${overdue.length}, inbox ${inbox.length}, high priority open ${openReminders.filter((r) => r.priority === 'high').length}. Upcoming: ${upcoming || 'none'}. Overdue list: ${overdueList || 'none'}.`,
     `HABITS: active ${activeHabits.length}, due today ${dueHabits.length}, done today ${doneHabits.length}. Still open today: ${missedHabits || 'none'}. Best streaks: ${habitLeaders || 'none'}.`,
     `JOURNALS: 7d entries ${journal7.length}, 30d entries ${journal30.length}, 30d avg mood ${moods.length > 0 ? (moods.reduce((s, m) => s + m, 0) / moods.length).toFixed(1) : 'n/a'}, important 30d ${journal30.filter((j) => j.is_important === 1).length}. Top tags: ${topEntries(tagCounts, 6).map(([tag, count]) => `${tag}:${count}`).join('; ') || 'none'}. Recent snippets: ${journalSnippets || 'none'}.`,
@@ -159,6 +187,12 @@ CRITICAL: Reply in ${language} ONLY. Never switch to another language.
 Today is ${today}.
 
 Use the user's data context below as ground truth. You can answer questions about spending, budgets, review items, tasks, habits, journal mood/tags, goals, and cross-module patterns. When a LONG-TERM block is present, use it to compare the user across years (e.g. this year vs previous years) and describe how they are growing toward a better version of themselves. Do not invent records, amounts, dates, or trends that are not in the context. If the context is insufficient, say what data is missing and give the best next step.
+
+BataVasa domain rules:
+- Finance category kind "savings" means a fund/envelope. A negative transaction in a savings category is money set aside into that fund, not ordinary consumption.
+- Because the app does not maintain positive fund balances yet, "chi cho quy" / "chi cho quỹ" is modeled as an expense-like outflow. For a savings goal measured by that finance category, those set-aside outflows increase goal progress.
+- Separate regular expenses from savings set-aside when advising about spending. Do not scold set-aside fund contributions as wasteful spending.
+- Each goal has one primary measured source. Suggestions from AI are optional next steps; they are not extra progress sources unless the user explicitly creates or changes the measured source.
 
 User data context:
 ${ctx}

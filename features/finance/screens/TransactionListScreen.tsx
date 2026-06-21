@@ -2,7 +2,7 @@ import { View, Text, Pressable, StyleSheet, RefreshControl, ActivityIndicator, A
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { FlashList } from '@shopify/flash-list'
 import { Feather } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import {
   startOfDay,
@@ -87,6 +87,7 @@ export function TransactionListScreen() {
   const isLoading = useFinanceBootstrap()
   const theme = useTheme()
   const router = useRouter()
+  const params = useLocalSearchParams<{ planPrefill?: string }>()
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const txs = useTransactions()
@@ -102,7 +103,17 @@ export function TransactionListScreen() {
   const [showFinanceDetails, setShowFinanceDetails] = useState(false)
   const [showSafeDetails, setShowSafeDetails] = useState(false)
   const [showAllMonthlyPlanRows, setShowAllMonthlyPlanRows] = useState(false)
-  const [planSheet, setPlanSheet] = useState<{ item: PlanItem | null } | null>(null)
+  const [planSheet, setPlanSheet] = useState<{
+    item: PlanItem | null
+    draft?: {
+      name?: string
+      kind?: 'expense' | 'income'
+      amount_cents?: number
+      currency?: string
+      due_day?: number
+      recurrence?: 'once' | 'monthly'
+    } | null
+  } | null>(null)
   const [search, setSearch] = useState('')
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
   const currency = useSettingsStore((s) => s.currency)
@@ -115,6 +126,28 @@ export function TransactionListScreen() {
   useEffect(() => {
     getRates(displayCurrency).then(setFxRates)
   }, [displayCurrency])
+
+  useEffect(() => {
+    if (!params.planPrefill) return
+    try {
+      const p = JSON.parse(params.planPrefill as string)
+      setShowFinanceDetails(true)
+      setPlanSheet({
+        item: null,
+        draft: {
+          name: typeof p.name === 'string' ? p.name : '',
+          kind: p.kind === 'income' ? 'income' : 'expense',
+          amount_cents: Number.isFinite(Number(p.amount_cents)) ? Number(p.amount_cents) : undefined,
+          currency: typeof p.currency === 'string' ? p.currency : currency,
+          due_day: Number.isFinite(Number(p.due_day)) ? Math.max(1, Math.min(31, Math.round(Number(p.due_day)))) : undefined,
+          recurrence: p.recurrence === 'monthly' ? 'monthly' : 'once',
+        },
+      })
+      router.setParams({ planPrefill: undefined })
+    } catch {
+      router.setParams({ planPrefill: undefined })
+    }
+  }, [params.planPrefill, currency, router])
 
   const catById = useMemo(() => new Map(cats.map((c) => [c.id, c])), [cats])
 
@@ -303,8 +336,8 @@ export function TransactionListScreen() {
   }, [txs, catById])
 
   const activePlanItems = useMemo(
-    () => planItems.filter((item) => item.active === 1 && !item.deleted_at && planItemAppliesToDate(item)),
-    [planItems]
+    () => planItems.filter((item) => item.active === 1 && !item.deleted_at && planItemAppliesToDate(item, new Date(), cycleStartDay)),
+    [planItems, cycleStartDay]
   )
 
   // Paid/received this cycle: badge instead of listing as still-to-pay.
@@ -1060,6 +1093,7 @@ export function TransactionListScreen() {
       <PlanItemSheet
         visible={planSheet !== null}
         item={planSheet?.item ?? null}
+        draft={planSheet?.draft ?? null}
         onClose={() => setPlanSheet(null)}
       />
     </ScreenTransition>

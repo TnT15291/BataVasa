@@ -20,7 +20,7 @@ import { convertMinorAmount, getRates } from '@services/fx'
 import { InsightText } from '@/components/InsightText'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppHeader, ModuleOverview, EmptyState, Sparkle } from '@components/ui'
-import { MODULE_COLORS } from '@design/moduleColors'
+import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
 
 export function AnalysisScreen() {
   useFinanceBootstrap()
@@ -220,13 +220,6 @@ export function AnalysisScreen() {
             { key: 'journal', label: t.nav_journal, value: journals.length > 0 ? String(journals.length) : '-', color: theme.brand.primary },
           ]}
         />
-        {/* Module status chips */}
-        <View style={{ display: 'none' }}>
-          <Chip label={`💰 ${t.nav_finance}`} active={transactions.length > 0} theme={theme} />
-          <Chip label={`✅ ${t.nav_habits}`} active={habits.length > 0} theme={theme} />
-          <Chip label={`📔 ${t.nav_journal}`} active={journals.length > 0} theme={theme} />
-        </View>
-
         {/* Highlights — last 30 days summary */}
         {hasData && (
           <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
@@ -235,13 +228,15 @@ export function AnalysisScreen() {
               {transactions.length > 0 && (
                 <>
                   <HighlightItem
-                    icon="💰"
+                    icon={MODULE_ICONS.finance}
+                    color={MODULE_COLORS.finance}
                     label={t.expense}
                     value={formatAmount(highlights.totalExpense, reportCurrency, language)}
                     theme={theme}
                   />
                   <HighlightItem
-                    icon="📁"
+                    icon="folder"
+                    color={MODULE_COLORS.finance}
                     label={t.analysis_top_spending}
                     value={highlights.topCat ? translateCategoryName(highlights.topCat, t) : '—'}
                     theme={theme}
@@ -251,6 +246,7 @@ export function AnalysisScreen() {
               {transactions.length > 0 && (
                 <HighlightItem
                   icon="shield"
+                  color={MODULE_COLORS.finance}
                   label={t.safe_to_spend}
                   value={`${highlights.safeToSpend < 0 ? '-' : ''}${formatAmount(highlights.safeToSpend, reportCurrency, language)}`}
                   theme={theme}
@@ -258,7 +254,8 @@ export function AnalysisScreen() {
               )}
               {habits.length > 0 && (
                 <HighlightItem
-                  icon="🔥"
+                  icon={MODULE_ICONS.habits}
+                  color={MODULE_COLORS.habits}
                   label={t.report_current_streak}
                   value={`${highlights.bestStreak} ${t.report_days}`}
                   theme={theme}
@@ -266,7 +263,8 @@ export function AnalysisScreen() {
               )}
               {journals.length > 0 && (
                 <HighlightItem
-                  icon="📔"
+                  icon={MODULE_ICONS.journal}
+                  color={MODULE_COLORS.journal}
                   label={t.nav_journal}
                   value={
                     highlights.journalCount > 0
@@ -358,29 +356,12 @@ export function AnalysisScreen() {
   )
 }
 
-function Chip({ label, active, theme }: { label: string; active: boolean; theme: Theme }) {
-  return (
-    <View style={[
-      styles.chip,
-      {
-        backgroundColor: active ? theme.brand.primary + '22' : theme.bg.elevated,
-        borderColor: active ? theme.brand.primary : theme.border.subtle,
-      },
-    ]}>
-      <Text style={[styles.chipText, { color: active ? theme.brand.primary : theme.text.muted }]}>{label}</Text>
-    </View>
-  )
-}
-
-function HighlightItem({ icon, label, value, theme }: { icon: string; label: string; value: string; theme: Theme }) {
-  const featherIcon = icon === 'shield'
+function HighlightItem({ icon, color, label, value, theme }: { icon: keyof typeof Feather.glyphMap; color: string; label: string; value: string; theme: Theme }) {
   return (
     <View style={styles.highlightItem}>
-      {featherIcon ? (
-        <Feather name={icon as any} size={18} color={theme.brand.primary} />
-      ) : (
-        <Text style={styles.highlightIcon}>{icon}</Text>
-      )}
+      <View style={[styles.highlightIconWrap, { backgroundColor: color + '1F' }]}>
+        <Feather name={icon} size={15} color={color} />
+      </View>
       <Text style={[styles.highlightLabel, { color: theme.text.muted }]} numberOfLines={1}>{label}</Text>
       <Text style={[styles.highlightValue, { color: theme.text.primary }]} numberOfLines={1}>{value}</Text>
     </View>
@@ -416,14 +397,6 @@ const styles = StyleSheet.create({
   content: { padding: spacing[4], gap: spacing[3], flexGrow: 1 },
   radarStats: { gap: spacing[2] },
   radarMetricRow: { flexDirection: 'row', gap: spacing[2] },
-  chips: { flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' },
-  chip: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: radius.full,
-    borderWidth: 1,
-  },
-  chipText: { fontSize: 12, fontWeight: '500' },
   card: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -433,7 +406,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 12, fontWeight: '600' },
   highlightGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
   highlightItem: { flex: 1, minWidth: '40%', gap: 2 },
-  highlightIcon: { fontSize: 18 },
+  highlightIconWrap: { width: 28, height: 28, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   highlightLabel: { fontSize: 12, marginTop: 2 },
   highlightValue: { fontSize: 14, fontWeight: '600' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },

@@ -10,6 +10,7 @@ import Animated, {
   withTiming,
   withDelay,
   runOnJS,
+  Easing,
   FadeInDown,
   ZoomIn,
 } from 'react-native-reanimated'
@@ -35,20 +36,26 @@ import { useFinanceStore } from '@store/financeStore'
 import { useRemindersStore } from '@store/remindersStore'
 import { useHabitsStore } from '@store/habitsStore'
 import { useJournalsStore } from '@store/journalsStore'
+import { useGoalsStore } from '@store/goalsStore'
 import { formatAmount } from '@features/finance/services'
-import { MODULE_COLORS } from '@design/moduleColors'
+import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
+import type { GoalMetricBinding } from '@features/goals/types'
 
 type IconName = keyof typeof Feather.glyphMap
 
 function getModuleMeta(): Record<string, { icon: IconName; color: string }> {
   return {
     finance:  { icon: 'trending-up', color: MODULE_COLORS.finance },
+    finance_plan: { icon: 'calendar', color: MODULE_COLORS.finance },
     finance_debt: { icon: 'users', color: MODULE_COLORS.finance },
     reminder: { icon: 'bell', color: MODULE_COLORS.tasks },
     habits:   { icon: 'check-circle', color: MODULE_COLORS.habits },
     journal:  { icon: 'book-open', color: MODULE_COLORS.journal },
+    goals: { icon: MODULE_ICONS.goals as IconName, color: MODULE_COLORS.analysis },
   }
 }
+
+const JOURNAL_TAGS = ['all', 'work', 'family', 'health', 'money', 'sleep', 'exercise', 'stress', 'food', 'travel', 'social'] as const
 
 function habitFrequencyLine(frequency: string, target: number, language: string, t: ReturnType<typeof useTranslation>['t']): string {
   const cadence = frequency === 'weekdays'
@@ -134,6 +141,15 @@ function CandidateCard({ candidate, selected, onToggle, index, language, currenc
       result.counterparty,
       result.due_at ? format(new Date(result.due_at), 'dd/MM/yyyy', { locale }) : '',
     ].filter(Boolean)
+  } else if (result.module === 'finance_plan') {
+    const sign = result.kind === 'expense' ? '- ' : '+ '
+    lines = [
+      `${sign}${formatAmount(result.amount_cents, currency, language)}`,
+      result.name,
+      result.category_hint,
+      t.plan_due_day.replace('{{day}}', String(result.due_day)),
+      result.recurrence === 'monthly' ? t.plan_monthly_hint : t.plan_once_hint,
+    ].filter(Boolean)
   } else if (result.module === 'reminder') {
     lines = [
       result.title,
@@ -143,16 +159,26 @@ function CandidateCard({ candidate, selected, onToggle, index, language, currenc
     ].filter(Boolean)
   } else if (result.module === 'habits') {
     lines = [result.title, habitFrequencyLine(result.frequency, result.target_per_period, language, t)]
-  } else {
+  } else if (result.module === 'journal') {
     lines = [result.content?.slice(0, 120) ?? '']
+  } else {
+    const unit = result.source === 'finance' ? currency : result.source === 'habits' ? '%' : 'count'
+    lines = [
+      result.title,
+      `${result.target_value} ${unit}`,
+      result.source_hint || result.source,
+      result.due_date ? format(new Date(result.due_date), 'dd/MM/yyyy', { locale }) : '',
+    ].filter(Boolean)
   }
 
   const moduleLabel: Record<string, string> = {
     finance: t.classified_finance,
+    finance_plan: t.monthly_plan,
     finance_debt: t.debt_book,
     reminder: t.classified_reminder,
     habits: t.classified_habits,
     journal: t.classified_journal,
+    goals: t.nav_goals,
   }
 
   return (
@@ -211,10 +237,13 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
   const currency = useSettingsStore((s) => s.currency)
   const cats = useCategories()
   const createTransaction = useFinanceStore((s) => s.createTransaction)
+  const createPlanItem = useFinanceStore((s) => s.createPlanItem)
   const createDebt = useFinanceStore((s) => s.createDebt)
   const createReminder = useRemindersStore((s) => s.createReminder)
   const createHabit = useHabitsStore((s) => s.createHabit)
+  const habits = useHabitsStore((s) => s.habits)
   const createJournal = useJournalsStore((s) => s.createJournal)
+  const createGoal = useGoalsStore((s) => s.createGoal)
 
   const catState = useFinanceStore((s) => s.catState)
   const loadCategories = useFinanceStore((s) => s.loadCategories)
@@ -240,7 +269,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
       setShow(true)
       translateY.value = 600
       backdropOpacity.value = 0
-      translateY.value = withDelay(30, withSpring(0, { damping: 20, stiffness: 200 }))
+      translateY.value = withDelay(30, withTiming(0, { duration: 240, easing: Easing.out(Easing.cubic) }))
       backdropOpacity.value = withDelay(30, withTiming(1, { duration: 250 }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -282,7 +311,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
       if (e.translationY > 120 || e.velocityY > 700) {
         runOnJS(handleClose)()
       } else {
-        translateY.value = withSpring(0, { damping: 18, stiffness: 200 })
+        translateY.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) })
         backdropOpacity.value = withTiming(1, { duration: 200 })
       }
     })
@@ -314,6 +343,34 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
     const matched = matchCategory(cats, entry.category_hint, t)
     if (matched && categoryMatchesDirection(matched, entry.direction)) return matched
     return fallbackCategoryForDirection(entry.direction)
+  }
+
+  const matchFinancePlanCategory = (entry: Extract<UniversalEntry, { module: 'finance_plan' }>): Category | null => {
+    const matched = matchCategory(cats, entry.category_hint, t)
+    if (matched && categoryMatchesDirection(matched, entry.kind)) return matched
+    return null
+  }
+
+  const buildGoalBinding = (entry: Extract<UniversalEntry, { module: 'goals' }>): GoalMetricBinding | null => {
+    if (entry.source === 'finance') {
+      const matched = matchCategory(cats, entry.source_hint, t) ?? cats.find((c) => c.kind === 'savings') ?? cats[0]
+      return matched ? { module: 'finance', aggregation: 'sum_amount', category_id: matched.id } : null
+    }
+    if (entry.source === 'habits') {
+      const hint = entry.source_hint.toLowerCase()
+      const matched = habits.find((h) => {
+        const name = h.name.toLowerCase()
+        return name === hint || name.includes(hint) || hint.includes(name)
+      })
+      return matched ? { module: 'habits', aggregation: 'completion_rate', habit_id: matched.id } : null
+    }
+    if (entry.source === 'journals') {
+      const tag = JOURNAL_TAGS.includes(entry.source_hint as typeof JOURNAL_TAGS[number])
+        ? entry.source_hint
+        : 'all'
+      return { module: 'journals', aggregation: 'entry_count', tag }
+    }
+    return { module: 'reminders', aggregation: 'completed_count' }
   }
 
   const onAnalyze = async (override?: string) => {
@@ -414,6 +471,19 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
         })
         if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
         if (res.tx) createdFinanceTxs.push(res.tx)
+      } else if (entry.module === 'finance_plan') {
+        const cat = matchFinancePlanCategory(entry)
+        const res = await createPlanItem({
+          name: entry.name,
+          kind: entry.kind,
+          amount_cents: entry.amount_cents,
+          currency,
+          category_id: cat?.id ?? null,
+          due_day: entry.due_day,
+          recurrence: entry.recurrence,
+          status: 'confirmed',
+        })
+        if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
       } else if (entry.module === 'finance_debt') {
         // Missing counterparty saves as "unknown" instead of failing validation.
         const counterparty = entry.counterparty.trim() || t.unknown_person
@@ -464,6 +534,21 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
           occurred_at: new Date().toISOString(),
         })
         if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
+      } else if (entry.module === 'goals') {
+        const binding = buildGoalBinding(entry)
+        if (!binding) { setSaving(false); Alert.alert(t.could_not_save, t.goal_source_required); return }
+        const targetValue = entry.source === 'habits' && entry.target_value < 20 ? 100 : entry.target_value
+        const res = await createGoal({
+          title: entry.title,
+          description: entry.description || undefined,
+          target_type: entry.source === 'finance' ? 'amount' : entry.source === 'habits' ? 'rate' : 'count',
+          target_value: targetValue,
+          unit: entry.source === 'finance' ? currency : entry.source === 'habits' ? '%' : 'count',
+          start_date: `${entry.start_date}T00:00:00.000Z`,
+          due_date: entry.due_date ? `${entry.due_date}T23:59:59.999Z` : null,
+          metric_binding: binding,
+        })
+        if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
       }
     }
 
@@ -472,10 +557,12 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
     const s = useSettingsStore.getState()
     const anySynced = selected.some((e) =>
       (e.module === 'finance' && s.syncFinance) ||
+      (e.module === 'finance_plan' && s.syncFinance) ||
       (e.module === 'finance_debt' && s.syncFinance) ||
       (e.module === 'reminder' && s.syncReminders) ||
       (e.module === 'habits' && s.syncHabits) ||
-      (e.module === 'journal' && s.syncJournals)
+      (e.module === 'journal' && s.syncJournals) ||
+      (e.module === 'goals' && s.syncGoals)
     )
     notifySaved(t, anySynced)
     handleClose()
