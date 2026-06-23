@@ -5,6 +5,7 @@
 // the platform rejects anonymous calls before this code runs). The active
 // provider is decided server-side from Supabase Auth app_metadata.plan. The
 // AI_PROVIDER secret remains an emergency/global override.
+// Providers: openai | gemini | groq | deepseek | openrouter | nvidia (see _shared/providers.ts).
 //
 // Request body: { provider?, messages, model?, temperature?, max_tokens? }
 // Response:     { content } | { error }
@@ -77,7 +78,7 @@ Deno.serve(async (req) => {
     if (!upstream.ok) {
       const detail = await upstream.text().catch(() => '')
       console.error(`provider ${provider} error ${upstream.status}: ${detail.slice(0, 500)}`)
-      return json({ error: `Provider error ${upstream.status}` }, 502)
+      return json({ error: `Provider error ${upstream.status} [${provider}/${model}]: ${detail.slice(0, 200)}` }, 502)
     }
 
     const data = await upstream.json()

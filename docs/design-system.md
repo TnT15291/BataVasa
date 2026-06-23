@@ -17,7 +17,7 @@ Journal, Reminders, Insights, Settings). Codified in `design/tokens.ts`,
 - **Command bar (`CommandBar`) — identity element:** dark inverted "console"
   surface (`theme.command`), monospace `>_` prompt, `⌘K` hint, mic. It launches the
   assistant; the mic opens voice capture.
-- **Section header (`SectionHeader`):** small UPPERCASE tracked label + optional
+- **Section header (`SectionHeader`):** small UPPERCASE label + optional
   count + optional right action ("View all"). A consistent *functional* list-section
   system — not a marketing eyebrow.
 - **List row (`ListRow`):** tinted module-color icon chip · title · context subtitle
@@ -31,11 +31,11 @@ Journal, Reminders, Insights, Settings). Codified in `design/tokens.ts`,
   quiet rationale tags. Inline, never a modal.
 - **Quick actions (`QuickActionRow`):** evenly distributed ghost actions (Capture ·
   Plan · Review · Sync) under a hairline rule.
-- **Module colors (`MODULE_COLORS`):** Finance = blue `#3B6FE0`, Habits = green
-  `#1F9D74`, Journal = amber `#E0892C`, Reminders = soft teal `#0EA5A8`, Analysis =
-  indigo `#5654D4`. Accent = action/selection/state only, never decoration.
+- **Module colors (`MODULE_COLORS`):** Finance = blue `#4B7CF3`, Habits = green
+  `#28B985`, Journal = amber `#F09A2F`, Reminders = soft teal `#0EA5A8`, Analysis =
+  indigo `#5F62D9`. Accent = action/selection/state only, never decoration.
 - **Type:** one sans for all UI + mono only for `>_` / `⌘K` / command hints. Fixed
-  scale, floor 12px, max weight 700. Section labels uppercase tracked 700.
+  scale, floor 12px, max weight 700. Letter spacing stays at 0 for readability.
 - **Shape (`radius`):** rows/cards 12–16 (`md`/`lg`), command bar `lg`, pills `full`.
 - **Motion:** 150–250ms ease-out, conveys state only (tab underline, now marker,
   press feedback). Always honor reduced motion.
@@ -92,10 +92,11 @@ Location: `components/` (shared) and `features/<module>/components/` (module-spe
 **Shared primitives** (`components/`):
 - `<Screen>` — page wrapper with safe area + scroll/keyboard handling
 - `<Text variant="title|body|caption|mono">` — typography wrapper, theme-aware
-- `<Button variant="primary|secondary|ghost|danger" size="sm|md|lg">`
-- `<Input>` — text input with label, error, helper
-- `<Card>` — elevated container
-- `<Icon name="...">` — sprite from icon set (Lucide/Feather)
+- `<Button variant="primary|secondary|ghost|danger">` — 44pt+ tap target, optional icon/loading/disabled state, optional module `color`
+- `<TextField>` — themed text input with 48pt minimum height, border, placeholder color
+- `<Card variant="default|outlined|elevated">` — 16px padded module surface
+- `<IconBadge size="sm|md|lg">` — standardized circular icon/emoji chip (24/32/40)
+- `<SegmentedControl>` — tab/toggle control for compact mutually exclusive choices, with optional Feather icons
 - `<Pressable>` — Native Pressable + haptic feedback wrapper
 - `<Sheet>` — bottom sheet
 - `<Toast>` — non-blocking notifications with optional Undo action (used by AI auto-confirm-off path)

@@ -3,19 +3,12 @@ import type { Mood } from '../types'
 import { useTheme } from '@design/useTheme'
 import { useTranslation } from '@services/i18n'
 import { spacing, radius } from '@design/tokens'
+import { FINANCE_MOOD_OPTIONS } from '@design/moods'
 
 type Props = {
   value: Mood | null
   onChange: (m: Mood | null) => void
 }
-
-const MOODS: { value: Mood; emoji: string }[] = [
-  { value: 'great', emoji: '😄' },
-  { value: 'good', emoji: '🙂' },
-  { value: 'neutral', emoji: '😐' },
-  { value: 'low', emoji: '😕' },
-  { value: 'bad', emoji: '😞' },
-]
 
 export function MoodSelector({ value, onChange }: Props) {
   const theme = useTheme()
@@ -29,13 +22,14 @@ export function MoodSelector({ value, onChange }: Props) {
   }
   return (
     <View style={styles.row} accessibilityRole="radiogroup">
-      {MOODS.map((m) => {
-        const active = value === m.value
-        const label = moodLabels[m.value]
+      {FINANCE_MOOD_OPTIONS.map((m) => {
+        const moodValue = m.value as Mood
+        const active = value === moodValue
+        const label = moodLabels[moodValue]
         return (
           <Pressable
             key={m.value}
-            onPress={() => onChange(active ? null : m.value)}
+            onPress={() => onChange(active ? null : moodValue)}
             accessibilityRole="radio"
             accessibilityLabel={label}
             accessibilityState={{ checked: active }}

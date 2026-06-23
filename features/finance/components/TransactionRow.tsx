@@ -7,6 +7,7 @@ import { useTranslation } from '@services/i18n'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { MODULE_COLORS } from '@design/moduleColors'
+import { IconBadge } from '@components/ui'
 
 type Props = {
   tx: Transaction
@@ -25,6 +26,11 @@ export function TransactionRow({ tx, category, onPress }: Props) {
   const displayName = categoryMismatch
       ? tx.amount_cents < 0 ? t.expense : t.income
       : rawCategoryName
+  const isExpense = tx.amount_cents < 0
+  const iconName = category && category.icon in Feather.glyphMap
+    ? category.icon as keyof typeof Feather.glyphMap
+    : isExpense ? 'arrow-up-right' : 'arrow-down-left'
+  const directionColor = isExpense ? theme.finance.expense : theme.finance.income
   const sign = tx.amount_cents < 0 ? '-' : '+'
   const absAmount = Math.abs(tx.amount_cents)
   const a11yLabel = [
@@ -43,11 +49,12 @@ export function TransactionRow({ tx, category, onPress }: Props) {
         { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: category?.color ?? MODULE_COLORS.finance }]}>
-        <Text style={styles.icon}>
-          {displayName.slice(0, 1).toUpperCase()}
-        </Text>
-      </View>
+      <IconBadge color={category?.color ?? MODULE_COLORS.finance} size="lg" style={styles.iconWrap}>
+        <Feather name={iconName} size={17} color="#fff" />
+        <View style={[styles.directionBadge, { backgroundColor: directionColor, borderColor: theme.bg.elevated }]}>
+          <Feather name={isExpense ? 'arrow-up-right' : 'arrow-down-left'} size={8} color="#fff" />
+        </View>
+      </IconBadge>
       <View style={styles.middle}>
         <Text style={[styles.title, { color: theme.text.primary }]} numberOfLines={1}>
           {displayName}
@@ -86,13 +93,19 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   iconWrap: {
-    width: 40,
-    height: 40,
+    position: 'relative',
+  },
+  directionBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 16,
+    height: 16,
     borderRadius: radius.full,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  icon: { color: '#fff', fontWeight: '800', fontSize: 16 },
   middle: { flex: 1 },
   title: { fontSize: 15, fontWeight: '600' },
   sub: { fontSize: 12, marginTop: 2 },

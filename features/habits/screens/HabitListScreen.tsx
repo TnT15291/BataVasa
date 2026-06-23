@@ -270,7 +270,7 @@ export function HabitListScreen() {
         <ScrollView contentContainerStyle={[styles.list, { paddingTop: insets.top + spacing[2] }]}>
           <AppHeader subtitle={t.habits} onSettings={() => router.push('/settings')} />
           <ModuleOverview
-            eyebrow={t.habits}
+            eyebrow={t.today}
             value={`${doneCount}/${totalCount}`}
             subtitle={pendingHabits[0]?.name ?? t.habit_done_today}
             icon="check-circle"

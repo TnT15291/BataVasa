@@ -655,12 +655,12 @@ export function ReportsScreen() {
                 <View key={bucket.key} style={styles.columnItem}>
                   <View style={styles.columnBars}>
                     {kindFilter !== 'expense' ? (
-                      <View style={[styles.columnTrack, { backgroundColor: theme.bg.secondary }]}>
+                      <View style={[styles.columnTrack, { borderBottomColor: theme.border.subtle }]}>
                         <View style={[styles.columnBar, { height: `${incomeHeight}%`, backgroundColor: theme.finance.income }]} />
                       </View>
                     ) : null}
                     {kindFilter !== 'income' ? (
-                      <View style={[styles.columnTrack, { backgroundColor: theme.bg.secondary }]}>
+                      <View style={[styles.columnTrack, { borderBottomColor: theme.border.subtle }]}>
                         <View style={[styles.columnBar, { height: `${expenseHeight}%`, backgroundColor: theme.finance.expense }]} />
                       </View>
                     ) : null}
@@ -854,6 +854,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     overflow: 'hidden',
     justifyContent: 'flex-end',
+    // Faint baseline tick instead of a full-height gray fill, so empty days
+    // (no bar) recede instead of reading as a row of blank placeholder bars.
+    borderBottomWidth: 2,
   },
   columnBar: { width: '100%', borderRadius: radius.sm },
   columnLabel: { fontSize: 12, maxWidth: 34, textAlign: 'center' },

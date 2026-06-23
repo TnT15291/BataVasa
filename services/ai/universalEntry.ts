@@ -1,7 +1,20 @@
 import { chatCompletion } from './openai'
 import { centsToDisplay, getAILanguage, getAICurrency } from './aiLanguage'
 import { extractAmount, hasMultipleAmounts } from './smartEntry'
+import { extractDateFromText } from '@services/dateParser'
+import { logger } from '@services/logger'
 import type { DebtDirection, PlanItemRecurrence } from '@features/finance/types'
+
+const MODULE = 'universalEntry'
+
+// The real reason the last parse failed (provider 429/401, "AI not configured",
+// network, malformed AI output), so the UI can show it instead of the generic
+// "couldn't understand" message. null means the AI responded fine but the input
+// simply produced no candidates — that IS the "try rephrasing" case.
+let lastParseError: string | null = null
+export function getLastUniversalParseError(): string | null {
+  return lastParseError
+}
 
 export type UniversalModule = 'finance' | 'finance_plan' | 'finance_debt' | 'reminder' | 'habits' | 'journal' | 'goals'
 
@@ -21,6 +34,7 @@ export type DebtEntry = {
   debt_direction: DebtDirection
   counterparty: string
   due_at: string | null
+  occurred_at: string
   note: string
 }
 
@@ -53,6 +67,8 @@ export type HabitsEntry = {
 export type JournalEntry = {
   module: 'journal'
   content: string
+  occurred_at: string
+  mood?: number | null
 }
 
 export type GoalEntry = {
@@ -155,6 +171,35 @@ function foldText(text: string): string {
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
     .toLowerCase()
+}
+
+function textHasJournalEmotion(text: string): boolean {
+  const t = foldText(text)
+  return /\b(vui|buon|hanh phuc|tu hao|cam thay|toi thay|cam xuc|cang thang|lo lang|biet on|met moi|that vong|phan khoi|happy|sad|proud|grateful|stressed|anxious|excited|tired)\b/.test(t)
+}
+
+function inferJournalMood(text: string): number | null {
+  const t = foldText(text)
+  if (/\b(tuyet voi|hanh phuc|phan khoi|rat vui|very happy|excited|amazing)\b/.test(t)) return 5
+  if (/\b(vui|tu hao|biet on|happy|proud|grateful|glad)\b/.test(t)) return 4
+  if (/\b(rat buon|tuyet vong|khung khiep|very sad|devastated)\b/.test(t)) return 1
+  if (/\b(buon|met moi|cang thang|lo lang|that vong|sad|tired|stressed|anxious|disappointed)\b/.test(t)) return 2
+  return null
+}
+
+function textHasAmountToken(text: string): boolean {
+  const t = foldText(text)
+  return /\b\d+(?:[.,]\d+)?\s*(?:d|dong|vnd|k|ngan|nghin|trieu|tr|m|usd|\$)\b/.test(t)
+}
+
+function textHasIncomeSignal(text: string): boolean {
+  const t = foldText(text)
+  return /\b(thu|nhan|luong|lam ra|kiem|doanh thu|income|earned|received|salary|revenue)\b/.test(t)
+}
+
+function textHasFinanceSignal(text: string): boolean {
+  const t = foldText(text)
+  return textHasIncomeSignal(text) || /\b(chi|mua|tieu|tra|thanh toan|ban hang|ban duoc|spent|bought|paid|sold|sell)\b/.test(t)
 }
 
 function hasMonthlyPlanIntent(text: string): boolean {
@@ -339,6 +384,7 @@ function normalizeDebtEntry(entry: any, now: Date, localAmount: number | null, o
         : entry.debt_direction === 'lent' ? 'lent' : 'borrowed',
       counterparty,
       due_at: dueAt,
+      occurred_at: extractDateFromText(originalText).toISOString(),
       note: restoreVerbatim(originalText, String(entry.note || ''), String(entry.note || '')),
     },
     missing,
@@ -403,6 +449,7 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
     const amount = Math.abs(Number(entry.amount_cents))
     // Without an amount there is no transaction to record — not a finance candidate at all.
     if (!amount || amount <= 0) return null
+    if (localAmount === null && !textHasAmountToken(originalText) && !textHasFinanceSignal(originalText)) return null
     if (hasDebtIntent(originalText)) return normalizeDebtEntry(entry, now, localAmount, originalText)
     if (hasMonthlyPlanIntent(originalText)) return normalizeFinancePlanEntry(entry, localAmount, originalText)
     const missing: MissingField[] = []
@@ -483,7 +530,7 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
   if (entry.module === 'journal') {
     const content = String(entry.content || '').trim() || originalText.trim()
     if (!content) return null
-    return { entry: { module: 'journal', content }, missing: [] }
+    return { entry: { module: 'journal', content, occurred_at: extractDateFromText(originalText).toISOString(), mood: inferJournalMood(originalText) }, missing: [] }
   }
 
   if (entry.module === 'goals') {
@@ -521,7 +568,8 @@ function dedupeCandidates(candidates: UniversalCandidate[]): UniversalCandidate[
   return result.sort((a, b) => b.confidence - a.confidence)
 }
 
-export async function parseUniversalCandidates(text: string): Promise<UniversalCandidate[]> {
+export async function parseUniversalCandidates(text: string, priorContext?: string): Promise<UniversalCandidate[]> {
+  lastParseError = null
   const language = getAILanguage()
   const currency = getAICurrency()
   const now = new Date()
@@ -532,10 +580,14 @@ export async function parseUniversalCandidates(text: string): Promise<UniversalC
   // override to avoid applying the first extracted amount to all entries.
   const localAmount = multiAmounts ? null : extractAmount(text, currency)
 
+  const contextBlock = priorContext?.trim()
+    ? `\nAlready captured in this session — the user is ADDING to these, not replacing them. Treat the new input as a follow-up: link it to the most relevant existing item (an advance-notice time, a note, or a related task) and compute any relative times against them (e.g. "remind me 30 min before" a 09:00 task -> 08:30). Only return candidates for the NEW input.\n${priorContext.trim()}\n`
+    : ''
+
   const prompt = `Classify the user input and extract candidate entries. Return ONLY valid JSON.
 
 User input: "${text}"
-Current local time: ${localNow}
+${contextBlock}Current local time: ${localNow}
 User timezone: UTC${tzOffset}
 Language: ${language}
 Currency: ${currency}
@@ -544,12 +596,12 @@ ${localAmount !== null ? `Pre-computed amount: ${localAmount} ${currency} - use 
 IMPORTANT: All datetime values MUST use the user's timezone offset (UTC${tzOffset}), NOT UTC. Example: "18:00" in the user's time -> "2026-05-18T18:00:00${tzOffset}"
 
 Classification rules:
-- finance: mentions one-time money/amount/spent/bought/received/sold/chi/mua/tieu/thu
+- finance: mentions one-time money/amount/spent/bought/received/sold/chi/mua/tieu/thu. Do not invent an amount; if the user did not write a money amount or clear finance intent, do not return finance.
 - finance_plan: this-cycle budgets, planned income/expense, recurring bills, safe-to-spend planning (thang nay, hang thang, moi thang, dinh ky, monthly, recurring, budget)
 - finance_debt: mentions borrowing or lending money (Vietnamese: vay cua, vay anh Hung, cho ... vay, di vay, muon cua)
 - reminder: mentions future time/date + task/meeting/appointment/hop/nhac/lich/remind
 - habits: recurring behavior goal without specific time (exercise/eat/sleep/read/thoi quen/tap/uong)
-- journal: reflection/diary/memory/feeling without action items (nho/cam xuc/ghi lai/ky niem)
+- journal: reflection/diary/memory/feeling without action items (vui/buon/cam thay/toi thay/nho/cam xuc/ghi lai/ky niem). Feeling text without money is journal, not finance.
 - goals: explicit personal target/goal with a desired outcome over time (muc tieu, dat muc, phan dau, goal, target, save X by date)
 - For goals.source="habits", target_value is completion-rate percent, usually 100 for a completed goal. Never use distance/time/quantity literals like 5km, 30 min, or 10 pages as target_value.
 - MULTIPLE TRANSACTIONS: If the input contains multiple separate finance events (e.g. "ăn cơm 15k và uống nước 20k", "coffee 30k and taxi 50k"), return ONE finance candidate PER transaction, each with its own amount_cents, category_hint, and merchant. Do NOT merge them or pick only the first.
@@ -568,7 +620,7 @@ Finance plan entry: {"module":"finance_plan","amount_cents":<positive int>,"kind
 Debt entry: {"module":"finance_debt","amount_cents":<positive int>,"debt_direction":"lent|borrowed","counterparty":"<person name>","due_at":"<ISO datetime with UTC${tzOffset} offset or null>","note":"<verbatim from input, or ''>"}
 Reminder entry: {"module":"reminder","title":"<verbatim from input, or short extracted task>","remind_at":"<ISO datetime with UTC${tzOffset} offset>","recurrence":"none|daily|weekly|monthly","note":"<verbatim from input, or ''>"}
 Habits entry: {"module":"habits","title":"<habit name>","frequency":"daily|weekly|custom","target_per_period":<integer 1-99, e.g. 5 for "5 times per day">}
-Journal entry: {"module":"journal","content":"<full text>"}
+Journal entry: {"module":"journal","content":"<full text>","mood":<integer 1-5 inferred from emotion, or null>}
 Goal entry: {"module":"goals","title":"<short goal title>","description":"<optional detail or ''>","source":"finance|habits|journals|reminders","source_hint":"<category, habit, journal tag, or ''>","target_value":<number; finance uses display amount, habits uses percent, journals/reminders uses count>,"start_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD or null"}
 
 Common finance categories: Food & Groceries, Transport, Housing, Utilities, Healthcare, Dining Out, Entertainment, Shopping, Subscriptions, Salary, Freelance, Other Income, Emergency Fund, Investments`
@@ -627,7 +679,7 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
     const hasGoal = candidates.some((c) => c.entry.module === 'goals')
 
     if (localAmount !== null && hasMonthlyPlanIntent(text) && !hasPlan) {
-      const normalized = normalizeFinancePlanEntry({ kind: textHasIncomeIntent(text) ? 'income' : 'expense' }, localAmount, text)
+      const normalized = normalizeFinancePlanEntry({ kind: textHasIncomeSignal(text) ? 'income' : 'expense' }, localAmount, text)
       if (normalized) {
         candidates.push({
           id: candidateId(normalized.entry),
@@ -647,6 +699,7 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
         debt_direction: debtDirectionFromText(text),
         counterparty: extractCounterpartyFromDebtText(text),
         due_at: extractDebtDueAt(text, now),
+        occurred_at: extractDateFromText(text).toISOString(),
         note: '',
       }
       const missing: MissingField[] = []
@@ -655,7 +708,7 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
       candidates.push({ id: candidateId(entry), entry, confidence: 0.86, reason: 'Detected debt book entry', selectedByDefault: true, missing })
     }
 
-    if (localAmount !== null && textHasFinanceIntent(text) && !hasFinance && textHasIncomeIntent(text)) {
+    if (localAmount !== null && textHasFinanceSignal(text) && !hasFinance && textHasIncomeSignal(text)) {
       const entry: FinanceEntry = {
         module: 'finance',
         amount_cents: localAmount,
@@ -669,9 +722,21 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
     }
 
     const hasFinanceAfterGuard = candidates.some((c) => c.entry.module === 'finance')
-    if (localAmount !== null && textHasEmotion(text) && hasFinanceAfterGuard && !hasJournal) {
-      const entry: JournalEntry = { module: 'journal', content: text }
-      candidates.push({ id: candidateId(entry), entry, confidence: 0.72, reason: 'Detected personal feeling with financial event', selectedByDefault: true, missing: [] })
+    if (textHasJournalEmotion(text) && !hasJournal) {
+      const entry: JournalEntry = {
+        module: 'journal',
+        content: text,
+        occurred_at: extractDateFromText(text).toISOString(),
+        mood: inferJournalMood(text),
+      }
+      candidates.push({
+        id: candidateId(entry),
+        entry,
+        confidence: hasFinanceAfterGuard ? 0.72 : 0.86,
+        reason: hasFinanceAfterGuard ? 'Detected personal feeling with financial event' : 'Detected personal feeling',
+        selectedByDefault: true,
+        missing: [],
+      })
     }
 
     if (hasGoalIntent(text) && !hasGoal) {
@@ -697,7 +762,9 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
     }
 
     return dedupeCandidates(candidates)
-  } catch {
+  } catch (e) {
+    lastParseError = (e as Error)?.message?.trim() || 'AI request failed'
+    logger.error(MODULE, 'parseUniversalCandidates failed', { error: lastParseError })
     return []
   }
 }

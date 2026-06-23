@@ -8,6 +8,24 @@ export type ParsedJournal = {
   occurred_at: string
 }
 
+function foldText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+}
+
+function inferMoodFromText(text: string): number | null {
+  const t = foldText(text)
+  if (/\b(tuyet voi|hanh phuc|phan khoi|rat vui|very happy|excited|amazing)\b/.test(t)) return 5
+  if (/\b(vui|tu hao|biet on|happy|proud|grateful|glad)\b/.test(t)) return 4
+  if (/\b(rat buon|tuyet vong|khung khiep|very sad|devastated)\b/.test(t)) return 1
+  if (/\b(buon|met moi|cang thang|lo lang|that vong|sad|tired|stressed|anxious|disappointed)\b/.test(t)) return 2
+  return null
+}
+
 export async function parseJournalEntry(text: string): Promise<ParsedJournal | null> {
   const language = getAILanguage()
   const today = new Date().toISOString()
@@ -39,9 +57,10 @@ Return JSON:
     const parsed = JSON.parse(json)
     if (!parsed.content || !parsed.occurred_at) return null
     const mood = parsed.mood != null ? Number(parsed.mood) : null
+    const normalizedMood = mood != null && mood >= 1 && mood <= 5 ? Math.round(mood) : null
     return {
       content: String(parsed.content),
-      mood: mood != null && mood >= 1 && mood <= 5 ? Math.round(mood) : null,
+      mood: normalizedMood ?? inferMoodFromText(text),
       is_important: Number(parsed.is_important) === 1 ? 1 : 0,
       occurred_at: String(parsed.occurred_at),
     }

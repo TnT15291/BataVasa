@@ -17,7 +17,7 @@ type HabitsState = {
   lastError: string | null
 
   loadHabits: () => Promise<void>
-  createHabit: (input: CreateHabitInput) => Promise<{ ok: boolean; error?: string }>
+  createHabit: (input: CreateHabitInput) => Promise<{ ok: boolean; id?: string; error?: string }>
   updateHabit: (input: UpdateHabitInput) => Promise<{ ok: boolean; error?: string }>
   deleteHabit: (id: string) => Promise<{ ok: boolean; error?: string }>
   restoreHabit: (id: string) => Promise<{ ok: boolean; error?: string }>
@@ -57,7 +57,7 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
     if (!r.ok) return { ok: false, error: r.error.message }
     const withStats = await hydrateStats(r.value)
     set((s) => ({ habits: [...s.habits, withStats] }))
-    return { ok: true }
+    return { ok: true, id: withStats.id }
   },
 
   async updateHabit(input) {

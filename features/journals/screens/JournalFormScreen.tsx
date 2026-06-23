@@ -16,8 +16,10 @@ import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved, toast } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseJournalEntry } from '../aiParser'
-import { VoiceButton } from '@components/VoiceButton'
+import { SmartEntryCard } from '@components/ui/SmartEntryCard'
+import { SelectableChip } from '@components/ui/ChipGroup'
 import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
+import { JOURNAL_MOOD_OPTIONS, MOOD_EMOJI_BY_SCORE } from '@design/moods'
 import { Feather } from '@expo/vector-icons'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
 import { useReminderActions } from '@features/reminders/hooks/useReminders'
@@ -204,7 +206,7 @@ export function JournalFormScreen() {
         const fields: ConfirmField[] = [
           { label: t.new_journal, value: parsed.content.length > 80 ? `${parsed.content.slice(0, 80)}…` : parsed.content },
         ]
-        if (parsed.mood != null) fields.push({ label: t.journal_mood_label, value: MOOD_EMOJIS[parsed.mood] ?? String(parsed.mood) })
+        if (parsed.mood != null) fields.push({ label: t.journal_mood_label, value: MOOD_EMOJI_BY_SCORE[parsed.mood] ?? String(parsed.mood) })
         fields.push({ label: t.date, value: format(new Date(parsed.occurred_at), 'EEE, dd MMM yyyy', { locale }) })
         if (parsed.is_important === 1) fields.push({ label: t.journal_important_event, value: '⭐' })
         setConfirmSheet({ rawInput: input, fields, payload: { content: parsed.content, mood: parsed.mood, is_important: parsed.is_important, occurred_at: parsed.occurred_at } })
@@ -321,36 +323,80 @@ export function JournalFormScreen() {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
     >
-      <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
-            <Feather name="zap" size={16} color={theme.brand.primary} />
-          </View>
-          <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.smart_entry}</Text>
-        </View>
-        <View style={[styles.smartInputWrap, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}>
-          <TextInput
-            value={smartText}
-            onChangeText={setSmartText}
-            placeholder={t.nl_placeholder_journal}
-            placeholderTextColor={theme.text.muted}
-            style={[styles.smartInput, { color: theme.text.primary }]}
-            returnKeyType="done"
-            editable={!parsing}
-            multiline
-            onSubmitEditing={() => handleSmartParse()}
+      <SmartEntryCard
+        value={smartText}
+        onChangeText={setSmartText}
+        onSubmit={() => handleSmartParse()}
+        onVoiceResult={(text) => handleSmartParse(text)}
+        parsing={parsing}
+        placeholder={t.nl_placeholder_journal}
+        module="journals"
+      />
+
+      {/* Content is the primary field — write first, classify after. Templates
+          seed the box, so they sit directly above it. */}
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_templates_label}</Text>
+      <View style={styles.templateGrid}>
+        {JOURNAL_TEMPLATES.map((template) => (
+          <SelectableChip
+            key={template.key}
+            label={templateLabels[template.key]!}
+            onPress={() => applyTemplate(template)}
           />
-          <View style={styles.smartActions}>
-            <VoiceButton onResult={(text) => handleSmartParse(text)} disabled={parsing} size={38} module="journals" />
+        ))}
+      </View>
+
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_journal}</Text>
+      <TextInput
+        value={content}
+        onChangeText={setContent}
+        placeholder={t.journal_content_placeholder}
+        placeholderTextColor={theme.text.muted}
+        multiline
+        style={[styles.contentInput, {
+          color: theme.text.primary,
+          borderColor: theme.border.strong,
+          backgroundColor: theme.bg.elevated,
+        }]}
+        autoFocus={!isEditing}
+        textAlignVertical="top"
+      />
+
+      {/* Mood */}
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_mood_label}</Text>
+      <View style={styles.moodRow}>
+        {JOURNAL_MOOD_OPTIONS.map(({ value, emoji }) => {
+          const active = mood === value
+          return (
             <Pressable
-              onPress={() => handleSmartParse()}
-              disabled={parsing || !smartText.trim()}
-              style={[styles.smartSend, { backgroundColor: parsing || !smartText.trim() ? theme.border.strong : theme.brand.primary }]}
+              key={value}
+              onPress={() => setMood(active ? null : value)}
+              style={[
+                styles.moodBtn,
+                {
+                  backgroundColor: active ? theme.brand.primary + '22' : theme.bg.elevated,
+                  borderColor: active ? theme.brand.primary : theme.border.subtle,
+                },
+              ]}
             >
-              {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
+              <Text style={styles.moodEmoji}>{emoji}</Text>
             </Pressable>
-          </View>
-        </View>
+          )
+        })}
+      </View>
+
+      {/* Tags */}
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_tags_label}</Text>
+      <View style={styles.templateGrid}>
+        {ACTIVITY_TAGS.map((tag) => (
+          <SelectableChip
+            key={tag}
+            label={tagLabels[tag]}
+            active={selectedTags.includes(tag)}
+            onPress={() => toggleTag(tag)}
+            accessibilityRole="checkbox"
+          />
+        ))}
       </View>
 
       {/* Date */}
@@ -375,65 +421,7 @@ export function JournalFormScreen() {
         />
       )}
 
-      {/* Mood */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_mood_label}</Text>
-      <View style={styles.moodRow}>
-        {MOODS.map(({ value, emoji }) => {
-          const active = mood === value
-          return (
-            <Pressable
-              key={value}
-              onPress={() => setMood(active ? null : value)}
-              style={[
-                styles.moodBtn,
-                {
-                  backgroundColor: active ? theme.brand.primary + '22' : theme.bg.elevated,
-                  borderColor: active ? theme.brand.primary : theme.border.subtle,
-                },
-              ]}
-            >
-              <Text style={styles.moodEmoji}>{emoji}</Text>
-            </Pressable>
-          )
-        })}
-      </View>
-
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_tags_label}</Text>
-      <View style={styles.templateGrid}>
-        {ACTIVITY_TAGS.map((tag) => {
-          const active = selectedTags.includes(tag)
-          return (
-            <Pressable
-              key={tag}
-              onPress={() => toggleTag(tag)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: active }}
-              style={[styles.templateChip, {
-                backgroundColor: active ? theme.brand.primary + '22' : theme.bg.elevated,
-                borderColor: active ? theme.brand.primary : theme.border.subtle,
-              }]}
-            >
-              <Text style={[styles.templateText, { color: active ? theme.brand.primary : theme.text.secondary }]}>
-                {tagLabels[tag]}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
-
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.journal_templates_label}</Text>
-      <View style={styles.templateGrid}>
-        {JOURNAL_TEMPLATES.map((template) => (
-          <Pressable
-            key={template.key}
-            onPress={() => applyTemplate(template)}
-            style={[styles.templateChip, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}
-          >
-            <Text style={[styles.templateText, { color: theme.text.secondary }]}>{templateLabels[template.key]}</Text>
-          </Pressable>
-        ))}
-      </View>
-
+      {/* Important event + anniversary reminder */}
       <Pressable
         onPress={() => setIsImportant((v) => !v)}
         accessibilityRole="checkbox"
@@ -470,23 +458,6 @@ export function JournalFormScreen() {
           </View>
         </Pressable>
       ) : null}
-
-      {/* Content */}
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_journal}</Text>
-      <TextInput
-        value={content}
-        onChangeText={setContent}
-        placeholder={t.journal_content_placeholder}
-        placeholderTextColor={theme.text.muted}
-        multiline
-        style={[styles.contentInput, {
-          color: theme.text.primary,
-          borderColor: theme.border.strong,
-          backgroundColor: theme.bg.elevated,
-        }]}
-        autoFocus={!isEditing}
-        textAlignVertical="top"
-      />
 
     </ScrollView>
 
@@ -526,39 +497,6 @@ export function JournalFormScreen() {
 const styles = StyleSheet.create({
   body: { padding: spacing[4], gap: spacing[3] },
   footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth, gap: spacing[2] },
-  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  cardIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: { fontSize: 15, fontWeight: '700' },
-  smartInputWrap: {
-    minHeight: 88,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing[3],
-    paddingBottom: 46,
-  },
-  smartInput: { minHeight: 42, fontSize: 14, lineHeight: 19 },
-  smartActions: {
-    position: 'absolute',
-    right: spacing[2],
-    bottom: spacing[2],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  smartSend: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   label: { fontSize: 12, fontWeight: '600' },
   datePill: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   moodRow: { flexDirection: 'row', gap: spacing[3] },
@@ -568,13 +506,6 @@ const styles = StyleSheet.create({
   },
   moodEmoji: { fontSize: 24 },
   templateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  templateChip: {
-    borderWidth: 1,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  templateText: { fontSize: 12, fontWeight: '700' },
   importantToggle: {
     minHeight: 48,
     borderRadius: radius.md,

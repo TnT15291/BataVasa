@@ -23,7 +23,7 @@ export function StatusPill({ label, tone = 'neutral', icon }: Props) {
 
   return (
     <View style={[styles.pill, { backgroundColor: color + '1A' }]}>
-      {icon ? <Feather name={icon} size={9} color={color} /> : null}
+      {icon ? <Feather name={icon} size={11} color={color} /> : null}
       <Text style={[styles.text, { color }]}>{label}</Text>
     </View>
   )
@@ -34,10 +34,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: radius.full,
     alignSelf: 'flex-start',
   },
-  text: { fontSize: 10, fontWeight: '700' },
+  text: { fontSize: 12, fontWeight: '700' },
 })

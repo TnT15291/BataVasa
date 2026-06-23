@@ -88,7 +88,7 @@ export function GoalsListScreen() {
         <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing[2] }]}>
           <AppHeader title={t.nav_goals} subtitle={t.goal_auto_progress} onBack={() => router.back()} onSearch={() => router.push('/search')} onSettings={() => router.push('/settings')} />
           <ModuleOverview
-            eyebrow={t.goals}
+            eyebrow={t.goal_progress}
             value={`${avg}%`}
             subtitle={active[0]?.title ?? t.goal_module_hint}
             icon={MODULE_ICONS.goals}

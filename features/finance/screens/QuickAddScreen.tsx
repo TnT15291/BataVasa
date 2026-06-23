@@ -34,7 +34,8 @@ import { useSettingsStore } from '@store/settingsStore'
 import { DateRow } from '@components/DateRow'
 import { LocationRow, EMPTY_LOCATION, type LocationValue } from '@components/LocationRow'
 import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
-import { VoiceButton } from '@components/VoiceButton'
+import { SmartEntryCard } from '@components/ui/SmartEntryCard'
+import { Button, Card, SegmentedControl, TextField } from '@components/ui'
 import { translateCategoryName, matchCategory } from '../i18n'
 import { extractDateFromText } from '@services/dateParser'
 import { formatAmount, parseAmountInput } from '../services'
@@ -455,81 +456,37 @@ export function QuickAddScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <View style={[styles.smartBox, { backgroundColor: theme.bg.elevated, borderColor: hasApiKey ? theme.border.subtle : theme.border.strong }]}>
-          <View style={styles.smartHeader}>
-            <View style={[styles.smartIconWrap, { backgroundColor: theme.brand.primary + '1F' }]}>
-              <Feather name="zap" size={16} color={hasApiKey ? theme.brand.primary : theme.text.muted} />
-            </View>
-            <Text style={[styles.smartTitle, { color: hasApiKey ? theme.brand.primary : theme.text.muted }]}>
-              {t.smart_entry}
-            </Text>
-            {!hasApiKey ? (
-              <Pressable onPress={() => router.push('/ai-settings')} style={styles.setupRow}>
-                <Text style={{ color: theme.text.muted, fontSize: 12 }}>{t.setup_ai_first}</Text>
-                <Feather name="arrow-right" size={14} color={theme.text.muted} />
-              </Pressable>
-            ) : null}
-          </View>
-          <View style={styles.smartInputRow}>
-            <TextInput
-              value={smartText}
-              onChangeText={setSmartText}
-              placeholder={t.smart_entry_placeholder}
-              placeholderTextColor={theme.text.muted}
-              multiline
-              editable={hasApiKey && !parsing}
-              onFocus={() => {
-                if (!hasApiKey) router.push('/ai-settings')
-              }}
-              style={[styles.smartInput, { color: theme.text.primary, borderColor: theme.border.subtle, backgroundColor: theme.bg.secondary }]}
-            />
-            <View style={styles.smartInputActions}>
-              <VoiceButton onResult={(text) => onParseSmartEntry(text, 'voice')} disabled={parsing || !hasApiKey} size={40} module="finance" />
-              <Pressable
-                onPress={() => {
-                  if (!hasApiKey) {
-                    router.push('/ai-settings')
-                    return
-                  }
-                  void onParseSmartEntry()
-                }}
-                disabled={parsing || !smartText.trim()}
-                style={[styles.smartSendBtn, { backgroundColor: parsing || !smartText.trim() ? theme.border.strong : theme.brand.primary }]}
-              >
-                {parsing ? <ActivityIndicator color="#fff" size="small" /> : <Feather name="send" size={16} color="#fff" />}
-              </Pressable>
-            </View>
-          </View>
-          <Text style={[styles.smartHint, { color: theme.text.muted }]}>{t.smart_entry_hint}</Text>
-        </View>
+        <SmartEntryCard
+          value={smartText}
+          onChangeText={setSmartText}
+          onSubmit={() => { if (!hasApiKey) { router.push('/ai-settings'); return } void onParseSmartEntry() }}
+          onVoiceResult={(text) => onParseSmartEntry(text, 'voice')}
+          parsing={parsing}
+          placeholder={t.smart_entry_placeholder}
+          module="finance"
+          hint={t.smart_entry_hint}
+          disabled={!hasApiKey}
+          onInputFocus={() => { if (!hasApiKey) router.push('/ai-settings') }}
+          headerRight={!hasApiKey ? (
+            <Pressable onPress={() => router.push('/ai-settings')} style={styles.setupRow}>
+              <Text style={{ color: theme.text.muted, fontSize: 12 }}>{t.setup_ai_first}</Text>
+              <Feather name="arrow-right" size={14} color={theme.text.muted} />
+            </Pressable>
+          ) : undefined}
+        />
 
-        <View style={[styles.primaryCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          <View style={styles.directionRow}>
-            {(['expense', 'income'] as Direction[]).map((d) => {
-              const active = direction === d
-              const color = d === 'expense' ? theme.finance.expense : theme.finance.income
-              return (
-                <Pressable
-                  key={d}
-                  onPress={() => {
-                    setDirection(d)
-                    setCategory(null)
-                  }}
-                  style={[
-                    styles.directionBtn,
-                    {
-                      backgroundColor: active ? color : theme.bg.secondary,
-                      borderColor: active ? color : theme.border.subtle,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: active ? '#fff' : theme.text.primary, fontWeight: '600' }}>
-                    {d === 'expense' ? t.expense : t.income}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
+        <Card>
+          <SegmentedControl<Direction>
+            value={direction}
+            onChange={(next) => {
+              setDirection(next)
+              setCategory(null)
+            }}
+            options={[
+              { key: 'expense', label: t.expense, color: theme.finance.expense },
+              { key: 'income', label: t.income, color: theme.finance.income },
+            ]}
+          />
 
           <TextInput
             value={amountText}
@@ -552,9 +509,9 @@ export function QuickAddScreen() {
             scrollEnabled={false}
           />
           </View>
-        </View>
+        </Card>
 
-        <View style={[styles.detailsCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <Card>
           <Text style={[styles.sectionTitle, { color: theme.text.muted }]}>{t.mood_label}</Text>
           <MoodSelector value={mood} onChange={setMood} />
 
@@ -567,47 +524,37 @@ export function QuickAddScreen() {
             label={t.location}
           />
 
-          <TextInput
+          <TextField
             value={merchant}
             onChangeText={setMerchant}
             placeholder={t.merchant_optional}
-            placeholderTextColor={theme.text.muted}
-            style={[styles.input, { color: theme.text.primary, borderColor: theme.border.subtle, backgroundColor: theme.bg.primary }]}
           />
-          <TextInput
+          <TextField
             value={note}
             onChangeText={setNote}
             placeholder={t.note_optional}
-            placeholderTextColor={theme.text.muted}
-            style={[styles.input, { color: theme.text.primary, borderColor: theme.border.subtle, backgroundColor: theme.bg.primary }]}
           />
-        </View>
+        </Card>
       </ScrollView>
 
       <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated }]}>
         <View style={styles.footerRow}>
           {isEditing && (
-            <Pressable
+            <Button
+              label={t.delete}
               onPress={onDelete}
               disabled={submitting}
-              style={[styles.deleteBtn, { borderColor: theme.text.danger }]}
-            >
-              <Text style={[styles.deleteText, { color: theme.text.danger }]}>{t.delete}</Text>
-            </Pressable>
+              variant="danger"
+              style={styles.deleteButton}
+            />
           )}
-          <Pressable
+          <Button
+            label={submitting ? t.saving : isEditing ? t.update : t.save}
             onPress={onSave}
             disabled={submitting}
-            style={[
-              styles.saveBtn,
-              { backgroundColor: submitting ? theme.text.muted : theme.brand.primary },
-              isEditing && { flex: 1 },
-            ]}
-          >
-            <Text style={styles.saveText}>
-              {submitting ? t.saving : isEditing ? t.update : t.save}
-            </Text>
-          </Pressable>
+            loading={submitting}
+            style={isEditing ? styles.primaryButtonEditing : styles.primaryButton}
+          />
         </View>
       </View>
 
@@ -628,66 +575,7 @@ export function QuickAddScreen() {
 
 const styles = StyleSheet.create({
   body: { padding: spacing[4], gap: spacing[3], paddingBottom: spacing[8] },
-  smartIconWrap: { width: 32, height: 32, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  smartTitle: { flex: 1, fontSize: 15, fontWeight: '700' },
   setupRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  smartBox: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing[3],
-    gap: spacing[2],
-  },
-  smartHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  smartInputRow: { gap: spacing[2] },
-  smartInput: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing[3],
-    fontSize: 14,
-    minHeight: 56,
-    paddingRight: 96,
-    textAlignVertical: 'top',
-  },
-  smartInputActions: {
-    position: 'absolute',
-    right: spacing[2],
-    bottom: spacing[2],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  smartSendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  smartHint: { fontSize: 12 },
-  primaryCard: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing[4],
-    gap: spacing[3],
-  },
-  detailsCard: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing[4],
-    gap: spacing[3],
-  },
-  directionRow: { flexDirection: 'row', gap: spacing[2] },
-  directionBtn: {
-    flex: 1,
-    paddingVertical: spacing[3],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
   amountInput: {
     fontSize: 44,
     fontWeight: '700',
@@ -703,26 +591,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: spacing[3],
   },
-  input: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing[3],
-    fontSize: 15,
-  },
   footer: {
     padding: spacing[4],
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   footerRow: { flexDirection: 'row', gap: spacing[2] },
-  saveBtn: { flex: 1, paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
-  saveText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteBtn: {
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[5],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteText: { fontSize: 15, fontWeight: '600' },
+  primaryButton: { flex: 1, minHeight: 52 },
+  primaryButtonEditing: { flex: 1, minHeight: 52 },
+  deleteButton: { minHeight: 52 },
 })

@@ -39,10 +39,7 @@ export function QuickBataVasaScreen() {
     {
       id: 'intro',
       role: 'assistant',
-      content:
-        language === 'vi'
-          ? 'Mình là hướng dẫn nhanh của BataVasa. Bạn có thể hỏi về setup, app làm được gì, bắt đầu thế nào, AI backend, đồng bộ, thông báo hoặc các module.'
-          : 'I am BataVasa quick help. Ask about setup, what the app can do, getting started, AI backend, sync, notifications, or modules.',
+      content: t.quick_guide_intro,
     },
   ])
 
@@ -71,16 +68,14 @@ export function QuickBataVasaScreen() {
     } catch (e: any) {
       const msg =
         e?.message === 'NO_BACKEND'
-          ? language === 'vi'
-            ? 'AI backend chưa sẵn sàng. Bạn vẫn có thể dùng các câu hỏi mẫu bên trên để xem hướng dẫn nhanh.'
-            : 'AI backend is not ready. You can still use the sample questions above for quick guidance.'
+          ? t.quick_guide_no_backend
           : e?.message ?? t.ai_error
       Alert.alert(t.command_placeholder, msg)
       setMessages((prev) => [{ id: uuid(), role: 'assistant', content: msg }, ...prev])
     } finally {
       setLoading(false)
     }
-  }, [input, language, loading, t.ai_error, t.command_placeholder])
+  }, [input, language, loading, t.ai_error, t.command_placeholder, t.quick_guide_no_backend])
 
   return (
     <KeyboardAvoidingView
@@ -102,9 +97,7 @@ export function QuickBataVasaScreen() {
             </View>
             <Text style={[styles.title, { color: theme.text.primary }]}>{t.command_placeholder}</Text>
             <Text style={[styles.subtitle, { color: theme.text.muted }]}>
-              {language === 'vi'
-                ? 'Câu thường gặp trả lời ngay. Câu khác sẽ được AI trả lời trong phạm vi hướng dẫn BataVasa.'
-                : 'Common questions answer instantly. Other questions use AI, limited to BataVasa guidance.'}
+              {t.quick_guide_subtitle}
             </Text>
             <View style={styles.samples}>
               {samples.map((sample) => (

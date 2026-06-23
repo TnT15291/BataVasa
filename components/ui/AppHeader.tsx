@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   titleBlock: { flex: 1, gap: 1 },
-  title: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  title: { fontSize: 18, fontWeight: '700', letterSpacing: 0 },
   subtitle: { fontSize: 12, fontWeight: '500' },
   iconBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   backBtn: { width: 30, height: 30, marginLeft: -4, alignItems: 'center', justifyContent: 'center' },

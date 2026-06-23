@@ -5,7 +5,7 @@ jest.mock('../services/ai/openai', () => ({
 }))
 
 import { chatCompletion } from '../services/ai/openai'
-import { parseUniversalCandidates, parseUniversalEntry } from '../services/ai/universalEntry'
+import { parseUniversalCandidates, parseUniversalEntry, getLastUniversalParseError } from '../services/ai/universalEntry'
 
 const mockedChatCompletion = chatCompletion as jest.MockedFunction<typeof chatCompletion>
 
@@ -86,6 +86,50 @@ describe('parseUniversalEntry', () => {
     expect(parsed.find((c) => c.entry.module === 'journal')?.selectedByDefault).toBe(true)
   })
 
+  it('rejects hallucinated finance for emotion-only journal text', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({
+      candidates: [
+        {
+          confidence: 0.88,
+          reason: 'hallucinated income',
+          selectedByDefault: true,
+          entry: {
+            module: 'finance',
+            amount_cents: 300000,
+            direction: 'income',
+            category_hint: 'Other Income',
+            merchant: '',
+            note: '',
+            occurred_at: '2026-05-19T22:00:00+07:00',
+          },
+        },
+        {
+          confidence: 0.72,
+          reason: 'hallucinated expense',
+          selectedByDefault: false,
+          entry: {
+            module: 'finance',
+            amount_cents: 300000,
+            direction: 'expense',
+            category_hint: 'Entertainment',
+            merchant: '',
+            note: '',
+            occurred_at: '2026-05-19T22:00:00+07:00',
+          },
+        },
+      ],
+    }))
+
+    const parsed = await parseUniversalCandidates('Tôi thấy vui vì Messi ghi bàn')
+
+    expect(parsed.map((c) => c.entry.module)).toEqual(['journal'])
+    expect(parsed[0]?.entry).toMatchObject({
+      module: 'journal',
+      content: 'Tôi thấy vui vì Messi ghi bàn',
+      mood: 4,
+    })
+  })
+
   it('returns [] when chatCompletion throws', async () => {
     mockedChatCompletion.mockRejectedValue(new Error('network error'))
     const result = await parseUniversalCandidates('50k cafe')
@@ -96,6 +140,18 @@ describe('parseUniversalEntry', () => {
     mockedChatCompletion.mockResolvedValue('Sorry, I cannot help with that.')
     const result = await parseUniversalCandidates('something')
     expect(result).toEqual([])
+  })
+
+  it('exposes the real backend error when chatCompletion throws (e.g. quota/key)', async () => {
+    mockedChatCompletion.mockRejectedValue(new Error('Provider error 429'))
+    await parseUniversalCandidates('50k cafe')
+    expect(getLastUniversalParseError()).toBe('Provider error 429')
+  })
+
+  it('clears the error and stays null when the AI responds but yields no candidates', async () => {
+    mockedChatCompletion.mockResolvedValue('Sorry, I cannot help with that.')
+    await parseUniversalCandidates('something ambiguous')
+    expect(getLastUniversalParseError()).toBeNull()
   })
 
   it('handles raw array response from AI', async () => {

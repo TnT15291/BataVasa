@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import * as Linking from 'expo-linking'
 import { useAuthStore } from '@store/authStore'
 import { logger } from '@services/logger'
+import { isGoogleAuthCallbackUrl } from '@services/authDeepLinks'
 
 const MODULE = 'auth.google-callback'
 const handledGoogleCallbackUrls = new Set<string>()
@@ -26,7 +27,7 @@ export function useGoogleAuthCallback() {
     const completeGoogleSignIn = useAuthStore.getState().completeGoogleSignIn
 
     async function handle(url: string | null) {
-      if (!active || !url || !url.includes('auth/callback')) return
+      if (!active || !url || !isGoogleAuthCallbackUrl(url)) return
       if (handledGoogleCallbackUrls.has(url)) return
       handledGoogleCallbackUrls.add(url)
       await completeGoogleSignIn(url)

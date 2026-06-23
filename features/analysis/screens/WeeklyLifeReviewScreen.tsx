@@ -101,9 +101,9 @@ export function WeeklyLifeReviewScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing[2], paddingBottom: spacing[10] + insets.bottom }]}>
-        <AppHeader subtitle={t.weekly_life_review} onSettings={() => router.push('/settings')} />
+        <AppHeader subtitle={t.weekly_life_review} onBack={router.canGoBack() ? () => router.back() : undefined} onSettings={() => router.push('/settings')} />
         <ModuleOverview
-          eyebrow={t.weekly_life_review}
+          eyebrow={t.this_week}
           value={snapshot.rangeLabel}
           subtitle={t.weekly_life_review_subtitle}
           icon="compass"
@@ -122,7 +122,15 @@ export function WeeklyLifeReviewScreen() {
             <SectionHeader label={t.weekly_review_snapshot} />
             <View style={styles.grid}>
               <MetricCard icon={MODULE_ICONS.goals} label={t.nav_goals} value={`${snapshot.goals.onTrack}/${snapshot.goals.active}`} hint={t.weekly_review_on_track} color={MODULE_COLORS.analysis} theme={theme} />
-              <MetricCard icon={MODULE_ICONS.finance} label={t.expense} value={formatAmount(snapshot.finance.expense, reportCurrency, language)} hint={snapshot.finance.expenseDeltaPercent === null ? t.weekly_review_no_previous : `${snapshot.finance.expenseDeltaPercent > 0 ? '+' : ''}${snapshot.finance.expenseDeltaPercent}%`} color={MODULE_COLORS.finance} theme={theme} />
+              <MetricCard icon={MODULE_ICONS.finance} label={t.expense} value={formatAmount(snapshot.finance.expense, reportCurrency, language)} hint={
+                // No spending logged this week → "—" rather than a misleading
+                // "-100%" (a 100% drop only because the period is still empty).
+                snapshot.finance.expense === 0
+                  ? '—'
+                  : snapshot.finance.expenseDeltaPercent === null
+                    ? t.weekly_review_no_previous
+                    : `${snapshot.finance.expenseDeltaPercent > 0 ? '+' : ''}${snapshot.finance.expenseDeltaPercent}%`
+              } color={MODULE_COLORS.finance} theme={theme} />
               <MetricCard icon={MODULE_ICONS.habits} label={t.nav_habits} value={String(snapshot.habits.completions)} hint={`${snapshot.habits.skips} ${t.report_skipped}`} color={MODULE_COLORS.habits} theme={theme} />
               <MetricCard icon={MODULE_ICONS.journal} label={t.nav_journal} value={String(snapshot.journals.entries)} hint={snapshot.journals.avgMood === null ? t.report_avg_mood : `${snapshot.journals.avgMood.toFixed(1)}/5`} color={MODULE_COLORS.journal} theme={theme} />
             </View>
@@ -138,10 +146,19 @@ export function WeeklyLifeReviewScreen() {
 
             <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
               <SectionHeader label={t.weekly_review_signals} />
-              <SignalLine icon={MODULE_ICONS.finance} text={snapshot.finance.topCategories.length > 0 ? snapshot.finance.topCategories.map((c) => c.name).join(', ') : t.report_no_data} color={MODULE_COLORS.finance} theme={theme} />
-              <SignalLine icon={MODULE_ICONS.habits} text={snapshot.habits.topHabits.length > 0 ? snapshot.habits.topHabits.map((h) => `${h.name} ${h.count}`).join(', ') : t.report_no_data} color={MODULE_COLORS.habits} theme={theme} />
-              <SignalLine icon={MODULE_ICONS.journal} text={snapshot.journals.tags.length > 0 ? snapshot.journals.tags.map((tag) => tag.tag).join(', ') : t.report_no_data} color={MODULE_COLORS.journal} theme={theme} />
-              <SignalLine icon={MODULE_ICONS.tasks} text={`${snapshot.reminders.completed}/${snapshot.reminders.due} ${t.reminder_completed}`} color={MODULE_COLORS.tasks} theme={theme} />
+              {(() => {
+                // Only render lanes that actually carry a signal; collapse the
+                // previous three identical "no data" rows into one empty line.
+                const lanes = [
+                  snapshot.finance.topCategories.length > 0 && { icon: MODULE_ICONS.finance, color: MODULE_COLORS.finance, text: snapshot.finance.topCategories.map((c) => c.name).join(', ') },
+                  snapshot.habits.topHabits.length > 0 && { icon: MODULE_ICONS.habits, color: MODULE_COLORS.habits, text: snapshot.habits.topHabits.map((h) => `${h.name} ${h.count}`).join(', ') },
+                  snapshot.journals.tags.length > 0 && { icon: MODULE_ICONS.journal, color: MODULE_COLORS.journal, text: snapshot.journals.tags.map((tag) => tag.tag).join(', ') },
+                  snapshot.reminders.due > 0 && { icon: MODULE_ICONS.tasks, color: MODULE_COLORS.tasks, text: `${snapshot.reminders.completed}/${snapshot.reminders.due} ${t.reminder_completed}` },
+                ].filter(Boolean) as { icon: keyof typeof Feather.glyphMap; color: string; text: string }[]
+                return lanes.length > 0
+                  ? lanes.map((l) => <SignalLine key={l.icon} icon={l.icon} text={l.text} color={l.color} theme={theme} />)
+                  : <SignalLine icon="inbox" text={t.report_no_data} color={theme.text.muted} theme={theme} />
+              })()}
             </View>
 
             {result ? (
@@ -156,6 +173,13 @@ export function WeeklyLifeReviewScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Opaque backdrop behind the translucent status bar (native header now
+          hidden) so scrolled content doesn't collide with the system clock. */}
+      <View
+        pointerEvents="none"
+        style={[styles.statusScrim, { height: insets.top, backgroundColor: theme.bg.primary }]}
+      />
 
       {hasData ? (
         <View style={[styles.footer, { borderTopColor: theme.border.subtle, backgroundColor: theme.bg.elevated, paddingBottom: spacing[4] + insets.bottom }]}>
@@ -208,6 +232,7 @@ function SignalLine({ icon, text, color, theme }: { icon: keyof typeof Feather.g
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing[4], gap: spacing[4] },
+  statusScrim: { position: 'absolute', top: 0, left: 0, right: 0 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   metricCard: {
     width: '48%',

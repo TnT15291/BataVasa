@@ -10,7 +10,7 @@ type RemindersState = {
   lastError: string | null
 
   loadReminders: () => Promise<void>
-  createReminder: (input: CreateReminderInput) => Promise<{ ok: boolean; error?: string }>
+  createReminder: (input: CreateReminderInput) => Promise<{ ok: boolean; id?: string; error?: string }>
   updateReminder: (input: UpdateReminderInput) => Promise<{ ok: boolean; error?: string }>
   skipReminder: (id: string) => Promise<{ ok: boolean; error?: string }>
   deleteReminder: (id: string) => Promise<{ ok: boolean; error?: string }>
@@ -38,7 +38,7 @@ export const useRemindersStore = create<RemindersState>((set, get) => ({
     const r = await svc.createReminder(input)
     if (r.ok) {
       set((s) => ({ reminders: [...s.reminders, r.value] }))
-      return { ok: true }
+      return { ok: true, id: r.value.id }
     }
     return { ok: false, error: r.error.message }
   },

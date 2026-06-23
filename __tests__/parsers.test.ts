@@ -158,6 +158,11 @@ describe('parseJournalEntry', () => {
     expect((await parseJournalEntry('x'))?.mood).toBeNull()
   })
 
+  it('infers mood from emotional journal text when AI omits it', async () => {
+    mockChat.mockResolvedValue(JSON.stringify({ content: 'ok', occurred_at: '2026-05-20T21:00:00Z' }))
+    expect((await parseJournalEntry('Tôi thấy vui vì Messi ghi bàn'))?.mood).toBe(4)
+  })
+
   it('returns null when content is missing', async () => {
     mockChat.mockResolvedValue(JSON.stringify({ occurred_at: '2026-05-20T21:00:00Z' }))
     expect(await parseJournalEntry('x')).toBeNull()

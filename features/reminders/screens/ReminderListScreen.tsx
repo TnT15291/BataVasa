@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { AppHeader, ModuleOverview } from '@components/ui'
+import { AppHeader, Button, ModuleOverview, SegmentedControl } from '@components/ui'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
@@ -135,7 +135,9 @@ function ReminderRow({ reminder, onPress, onToggle, onSkip, accent, compact }: {
             <Feather name={isInbox ? 'inbox' : 'clock'} size={11} color={statusColor} />
             <Text style={[styles.timePillText, { color: statusColor }]}>{dateStr}</Text>
           </View>
-          <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+          <View style={[styles.statusPill, { backgroundColor: statusColor + '18', borderColor: statusColor + '44' }]}>
+            <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+          </View>
         </View>
         {adv > 0 && !isInbox && (
           <Text style={[styles.rowAdvance, { color: accent }]}>
@@ -474,7 +476,7 @@ export function ReminderListScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing[2] }]}>
         <AppHeader subtitle={t.nav_reminders} onSettings={() => router.push('/settings')} />
         <ModuleOverview
-          eyebrow={t.nav_reminders}
+          eyebrow={t.reminder_upcoming}
           value={nextReminder ? nextReminder.title : t.reminder_today_none}
           subtitle={nextReminder
             ? format(new Date(new Date(nextReminder.remind_at).getTime() + (nextReminder.advance_minutes ?? 0) * 60000), 'dd/MM/yyyy HH:mm', { locale: getDateFnsLocale(language) })
@@ -494,60 +496,38 @@ export function ReminderListScreen() {
             { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/reminders-report', bg: MODULE_COLORS.tasks },
             { label: t.nav_insights, icon: 'cpu' as const, route: '/reminders-insights', bg: MODULE_COLORS.analysis },
           ].map((item) => (
-            <Pressable
+            <Button
               key={item.route}
+              label={item.label}
+              icon={item.icon}
               onPress={() => router.push(item.route as any)}
-              style={({ pressed }) => [
-                styles.analysisBtn,
-                {
-                  backgroundColor: pressed ? item.bg + '12' : theme.bg.elevated,
-                  borderColor: item.bg + '66',
-                },
-              ]}
-            >
-              <Feather name={item.icon} size={16} color={item.bg} />
-              <Text style={[styles.analysisBtnText, { color: item.bg }]} numberOfLines={1}>{item.label}</Text>
-            </Pressable>
+              variant="secondary"
+              color={item.bg}
+              style={styles.analysisButton}
+            />
           ))}
         </View>
 
-        <View style={[styles.viewToggle, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          {(['list', 'calendar'] as const).map((mode) => {
-            const isActive = viewMode === mode
-            const label = mode === 'list' ? t.view_list : t.view_calendar
-            return (
-              <Pressable
-                key={mode}
-                onPress={() => setViewMode(mode)}
-                style={[styles.viewToggleBtn, { backgroundColor: isActive ? MODULE_COLORS.tasks + '18' : 'transparent' }]}
-              >
-                <Feather name={mode === 'list' ? 'list' : 'calendar'} size={14} color={isActive ? MODULE_COLORS.tasks : theme.text.secondary} />
-                <Text style={[styles.viewToggleBtnText, { color: isActive ? MODULE_COLORS.tasks : theme.text.secondary }]}>{label}</Text>
-              </Pressable>
-            )
-          })}
-        </View>
+        <SegmentedControl
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { key: 'list', label: t.view_list, icon: 'list', color: MODULE_COLORS.tasks },
+            { key: 'calendar', label: t.view_calendar, icon: 'calendar', color: MODULE_COLORS.tasks },
+          ]}
+        />
 
         {viewMode === 'list' && (
-          <View style={[styles.filterRow, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-            {([
-              { key: 'all', label: t.all_period },
-              { key: 'today', label: t.today },
-              { key: 'important', label: t.reminder_important },
-              { key: 'inbox', label: t.reminder_inbox },
-            ] as { key: ReminderFilter; label: string }[]).map((item) => {
-              const active = activeFilter === item.key
-              return (
-                <Pressable
-                  key={item.key}
-                  onPress={() => setActiveFilter(item.key)}
-                  style={[styles.filterBtn, { backgroundColor: active ? MODULE_COLORS.tasks + '18' : 'transparent' }]}
-                >
-                  <Text style={[styles.filterText, { color: active ? MODULE_COLORS.tasks : theme.text.secondary }]} numberOfLines={1}>{item.label}</Text>
-                </Pressable>
-              )
-            })}
-          </View>
+          <SegmentedControl<ReminderFilter>
+            value={activeFilter}
+            onChange={setActiveFilter}
+            options={[
+              { key: 'all', label: t.all_period, color: MODULE_COLORS.tasks },
+              { key: 'today', label: t.today, color: MODULE_COLORS.tasks },
+              { key: 'important', label: t.reminder_important, color: MODULE_COLORS.tasks },
+              { key: 'inbox', label: t.reminder_inbox, color: MODULE_COLORS.tasks },
+            ]}
+          />
         )}
 
         {viewMode === 'list' && reminders.length > 0 ? (
@@ -569,12 +549,11 @@ export function ReminderListScreen() {
             </View>
             <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_reminders}</Text>
             <Text style={[styles.emptyMsg, { color: theme.text.muted }]}>{t.no_reminders_msg}</Text>
-            <Pressable
+            <Button
+              label={t.new_reminder}
               onPress={() => router.push('/reminder')}
-              style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
-            >
-              <Text style={styles.emptyBtnText}>{t.new_reminder}</Text>
-            </Pressable>
+              style={styles.emptyButton}
+            />
           </View>
         ) : (
           <>
@@ -646,15 +625,6 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 20, fontWeight: '700' },
   statLabel: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-  filterRow: {
-    flexDirection: 'row',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: 3,
-    gap: 3,
-  },
-  filterBtn: { flex: 1, alignItems: 'center', borderRadius: radius.sm, paddingVertical: spacing[2] },
-  filterText: { fontSize: 13, fontWeight: '600' },
   group: { gap: spacing[2] },
   groupTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   groupTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
@@ -681,7 +651,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowContent: { flex: 1, gap: spacing[1] },
+  rowContent: { flex: 1, gap: spacing[2] },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   rowTitle: { fontSize: 14, fontWeight: '600', flex: 1 },
   rowTitleCompact: { fontSize: 13, fontWeight: '500' },
@@ -695,7 +665,13 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: radius.full,
   },
-  timePillText: { fontSize: 11, fontWeight: '600' },
+  timePillText: { fontSize: 12, fontWeight: '600' },
+  statusPill: {
+    borderWidth: 1,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 3,
+  },
   statusText: { fontSize: 12, fontWeight: '700' },
   rowAdvance: { fontSize: 12, fontWeight: '500' },
   rowNote: { fontSize: 12 },
@@ -706,42 +682,17 @@ const styles = StyleSheet.create({
   emptyIconWrap: { width: 72, height: 72, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
   emptyMsg: { fontSize: 14, textAlign: 'center' },
-  emptyBtn: { paddingHorizontal: spacing[6], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
-  emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  emptyButton: { borderRadius: radius.full, marginTop: spacing[2] },
   analysisRow: { flexDirection: 'row', gap: spacing[2] },
-  analysisBtn: {
+  analysisButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[4],
-    borderRadius: radius.md,
-    borderWidth: 1,
+    minHeight: 48,
   },
-  analysisBtnText: { fontSize: 12, fontWeight: '600' },
   fab: {
     position: 'absolute', right: spacing[6],
     width: 56, height: 56, borderRadius: radius.lg, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center',
     elevation: 5, shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
-  viewToggle: {
-    flexDirection: 'row',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: 3,
-    gap: 3,
-  },
-  viewToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.sm,
-    paddingVertical: spacing[2],
-    gap: spacing[1],
-  },
-  viewToggleBtnText: { fontSize: 13, fontWeight: '600' },
   calCard: { borderRadius: radius.lg, borderWidth: 1, overflow: 'hidden' },
   calMonthHeader: {
     flexDirection: 'row',

@@ -32,14 +32,14 @@ export function CommandBar({ placeholder, onPress }: Props) {
 
 const styles = StyleSheet.create({
   bar: {
-    minHeight: 44,
+    minHeight: 38,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 9,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
   },
-  prompt: { fontSize: 13, fontWeight: '700' },
-  placeholder: { flex: 1, fontSize: 12, fontWeight: '500' },
+  prompt: { fontSize: 14, fontWeight: '700' },
+  placeholder: { flex: 1, fontSize: 14, fontWeight: '500' },
 })

@@ -18,6 +18,7 @@ import { getProviderKey } from '@services/ai/openai'
 import { parseHabitLog } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
+import { Button, Card, TextField } from '@components/ui'
 import { useSettingsStore } from '@store/settingsStore'
 import { requestNotificationPermission } from '@services/notifications'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
@@ -256,7 +257,7 @@ export function HabitFormScreen() {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
     >
-      <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+      <Card>
         <View style={styles.cardHeader}>
           <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
             <Feather name="zap" size={16} color={theme.brand.primary} />
@@ -286,34 +287,36 @@ export function HabitFormScreen() {
             </Pressable>
           </View>
         </View>
-      </View>
+      </Card>
 
       {/* Name */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.new_habit}</Text>
-      <TextInput
+      <TextField
         value={name}
         onChangeText={setName}
         placeholder={t.habit_name_placeholder}
-        placeholderTextColor={theme.text.muted}
-        style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
+        containerStyle={{ backgroundColor: theme.bg.elevated, borderColor: theme.border.strong }}
         autoFocus={!isEditing}
       />
 
       {/* Icon */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_icon}</Text>
       <View style={styles.grid}>
-        {PRESET_ICONS.map((ic) => (
-          <Pressable
-            key={ic}
-            onPress={() => setIcon(ic)}
-            style={[styles.iconBtn, {
-              backgroundColor: icon === ic ? theme.brand.primary + '22' : theme.bg.elevated,
-              borderColor: icon === ic ? theme.brand.primary : theme.border.subtle,
-            }]}
-          >
-            <Text style={{ fontSize: 20 }}>{ic}</Text>
-          </Pressable>
-        ))}
+        {PRESET_ICONS.map((ic) => {
+          const selected = icon === ic
+          return (
+            <Pressable
+              key={ic}
+              onPress={() => setIcon(ic)}
+              style={[styles.iconBtn, {
+                backgroundColor: selected ? theme.brand.primary + '14' : theme.bg.elevated,
+                borderColor: selected ? theme.brand.primary : theme.border.subtle,
+              }]}
+            >
+              <Text style={[styles.iconText, selected && styles.iconTextSelected]}>{ic}</Text>
+            </Pressable>
+          )
+        })}
       </View>
 
       {/* Color */}
@@ -462,20 +465,15 @@ export function HabitFormScreen() {
 
     <View style={[styles.footer, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle, paddingBottom: spacing[4] + insets.bottom }]}>
       {isEditing && (
-        <Pressable onPress={onDelete} style={styles.deleteBtn}>
-          <Feather name="trash-2" size={16} color={theme.semantic.danger} />
-          <Text style={[styles.deleteBtnText, { color: theme.semantic.danger }]}>{t.delete_habit}</Text>
-        </Pressable>
+        <Button label={t.delete_habit} onPress={onDelete} variant="danger" icon="trash-2" />
       )}
-      <Pressable
+      <Button
+        label={isEditing ? t.update : t.save}
         onPress={onSave}
         disabled={submitting}
-        style={[styles.saveBtn, { backgroundColor: submitting ? theme.text.muted : theme.brand.primary }]}
-      >
-        {submitting
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
-      </Pressable>
+        loading={submitting}
+        style={styles.primaryButton}
+      />
     </View>
 
     {confirmSheet && (
@@ -494,9 +492,8 @@ export function HabitFormScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { padding: spacing[4], gap: spacing[3] },
+  body: { padding: spacing[4], gap: spacing[4] },
   footer: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth, gap: spacing[2] },
-  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[4], gap: spacing[3] },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   cardIcon: {
     width: 30,
@@ -529,10 +526,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 12, fontWeight: '600' },
-  input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
+  label: { fontSize: 13, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   iconBtn: { width: 44, height: 44, borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  iconText: { fontSize: 20, opacity: 0.82 },
+  iconTextSelected: { opacity: 0.68 },
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   colorBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 3 },
   cadenceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
@@ -544,10 +542,7 @@ const styles = StyleSheet.create({
   targetBtn: { width: 44, height: 44, borderRadius: radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   targetBtnText: { fontSize: 22, fontWeight: '300' },
   targetValue: { fontSize: 24, fontWeight: '700', minWidth: 40, textAlign: 'center' },
-  saveBtn: { paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], paddingVertical: spacing[2] },
-  deleteBtnText: { fontSize: 15 },
+  primaryButton: { minHeight: 52 },
   emptyNote: { fontSize: 13, fontStyle: 'italic' },
   timeChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   timeChip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },

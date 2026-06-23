@@ -3,7 +3,7 @@
 // and which secret holds the key. Keys themselves are NEVER in source — they are
 // read from Supabase secrets (Deno.env) at request time.
 
-export type ProviderId = 'openai' | 'gemini' | 'groq' | 'deepseek'
+export type ProviderId = 'openai' | 'gemini' | 'groq' | 'deepseek' | 'openrouter' | 'nvidia'
 export type UserPlan = 'free' | 'pro'
 
 export type ServerProvider = {
@@ -25,13 +25,33 @@ export const PROVIDERS: Record<ProviderId, ServerProvider> = {
   },
   groq: {
     baseUrl: 'https://api.groq.com/openai/v1',
-    defaultModel: 'llama-3.3-70b-versatile',
+    // 8b-instant has a much larger free token/day budget than 70b-versatile and
+    // is fast + adequate for the app's structured/JSON tasks (deterministic
+    // guards backstop it). Override with GROQ_MODEL for higher quality.
+    defaultModel: 'llama-3.1-8b-instant',
     keyEnv: 'GROQ_API_KEY',
   },
   deepseek: {
     baseUrl: 'https://api.deepseek.com/v1',
     defaultModel: 'deepseek-chat',
     keyEnv: 'DEEPSEEK_API_KEY',
+  },
+  // OpenRouter is an OpenAI-compatible aggregator (single key, many models).
+  // Use it only via the AI_PROVIDER override (plan routing never auto-picks it).
+  // Pick the actual model with the OPENROUTER_MODEL secret — its ids are
+  // namespaced, e.g. "openai/gpt-4o-mini" or a "...:free" model for zero cost.
+  openrouter: {
+    baseUrl: 'https://openrouter.ai/api/v1',
+    defaultModel: 'openai/gpt-4o-mini',
+    keyEnv: 'OPENROUTER_API_KEY',
+  },
+  // NVIDIA NIM / API catalog (build.nvidia.com) — OpenAI-compatible, free test
+  // keys with rate limits. AI_PROVIDER override only. Override the model with the
+  // NVIDIA_MODEL secret; ids are namespaced, e.g. "meta/llama-3.3-70b-instruct".
+  nvidia: {
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    defaultModel: 'meta/llama-3.3-70b-instruct',
+    keyEnv: 'NVIDIA_API_KEY',
   },
 }
 

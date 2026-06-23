@@ -17,8 +17,8 @@
 ### Core Platform
 
 - Supabase Auth: email/password, login wall, account UI, session-aware store reloads.
-- Google OAuth: implemented through Supabase OAuth and app callback handling; not yet manually tested.
-- Offline-first SQLite: WAL, FK on, `PRAGMA user_version`, migration v22.
+- Google Auth: native Google Sign-In path for dev/native builds when Google client env is present, plus OAuth browser fallback. Callback/deep-link handling is hardened but still needs manual device verification.
+- Offline-first SQLite: WAL, FK on, `PRAGMA user_version`, migration v23.
 - Cloud sync engine: local `sync_queue`, queued writes for the core modules plus Goals, AppState drain worker, per-module sync toggles, Supabase RLS SQL in `docs/supabase-setup.sql`.
 - Biometric lock: `expo-local-authentication`, 30s AppState lock timer, Settings privacy toggle.
 - Error boundary, analytics wrapper, PII-scrubbed logger, Sentry forwarding.
@@ -108,7 +108,7 @@
 | DB queries | `database/<module>/queries.ts` |
 | Stores | `store/*Store.ts` |
 | Sync | `database/sync/queue.ts`, `services/sync.ts` |
-| Auth | `store/authStore.ts`, `services/supabase.ts`, `services/identity.ts` |
+| Auth | `store/authStore.ts`, `services/supabase.ts`, `services/identity.ts`, `services/authDeepLinks.ts` |
 | Settings | `store/settingsStore.ts` |
 | AI | `services/ai/` |
 | AI insight rendering | `components/InsightText.tsx` |
@@ -123,13 +123,14 @@
 
 ### B1/B2 Verification
 
-Code is implemented. Sync has been manually verified as working; Google Auth still needs manual verification before public launch:
+Code is implemented. Sync has been manually verified as working; Google Auth and password recovery still need manual verification before public launch:
 
 - Run `docs/supabase-setup.sql` in the Supabase dashboard for the production project. (Re-run after 2026-06-12: adds the `finance_debt` table + RLS.)
 - Follow `docs/b1-b2-verification.md` for the full command/manual checklist.
 - Verified: create/update/delete/wipe sync from SQLite to Supabase is working.
 - Verified: per-module sync toggles and offline queue drain are working.
 - Still needs verification: Google Auth sign-in/callback/session restore on a real device or emulator.
+- Still needs verification: password reset email -> `batavasa://reset-password` deep link -> set new password -> app session.
 - Still needs spot check before release: email/password sign up, sign in, sign out, session restore, and login wall on a real device or emulator.
 
 ### B5 Tests
@@ -137,7 +138,7 @@ Code is implemented. Sync has been manually verified as working; Google Auth sti
 Current test infrastructure is ready, but global coverage is still below the public-launch target.
 
 - Latest automated run on 2026-06-20: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
-- Current status: 521 tests across 42 suites.
+- Current status: 530 tests across 44 suites.
 - Current coverage: 70.08% statements / 64.04% branches / 71.81% functions / 72.41% lines.
 - Current CI floor: 37% statements / 35% branches / 31% functions / 39% lines.
 - Target before public launch: keep statements/functions/lines above 70% and continue raising branch coverage toward 70%.
@@ -150,6 +151,9 @@ Current test infrastructure is ready, but global coverage is still below the pub
   - Settings store persistence tests.
   - Core migration tests.
   - AI insight builder tests for finance/habits/journals/cross-module.
+  - Auth deep-link redirect/parser tests.
+  - App-guide preset/fallback tests.
+  - Weekly teaser and long-term assistant context tests.
 - Next tests to add:
   - Continue raising coverage toward the 70% public-launch target.
 
@@ -182,6 +186,7 @@ Work in this order:
 3. **Beta-close verification**
    - Sync is verified working.
    - Verify Google Auth on device/emulator.
+   - Verify password recovery on device/emulator.
    - Spot check email/password Auth on device/emulator.
    - Run smoke test for all 4 modules.
    - Run a full smoke test of Global Search, Goals, Weekly Life Review, memory-aware AI, proactive notifications, and backup/restore.
@@ -565,7 +570,8 @@ Current status: Global Search and Goals MVP are now DONE at MVP scope. Continue 
 - Conflict handling is last-write-wins using `updated_at`.
 - Sync can be enabled/disabled per module in settings.
 - Sync was manually verified working before the 2026-06-13 docs update.
-- AI provider keys are stored in SecureStorage.
+- AI provider keys are backend-managed in Supabase Edge Function secrets; the client never stores provider API keys.
+- Auth deep links use fixed native custom schemes (`batavasa://auth/callback`, `batavasa://reset-password`) and centralized parsing in `services/authDeepLinks.ts`.
 - Category names use canonical DB values and translate at display time.
 - Locale-aware formatting must use `getDateFnsLocale(language)` and `getIntlLocale(language)`.
 - Create and edit screens are shared via route params.
@@ -586,6 +592,12 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-06-20 Auth deep-link hardening:
+  - Added `services/authDeepLinks.ts` as the single place for auth redirect URLs and query/hash token parsing. Native Google OAuth uses `batavasa://auth/callback`; native password recovery uses `batavasa://reset-password`; web still uses Expo-generated web URLs.
+  - `store/authStore.ts`, `useGoogleAuthCallback`, and `usePasswordRecoveryLink` now share the same parser, so PKCE `?code=...`, implicit `#access_token=...`, and mixed query/hash URLs are handled consistently.
+  - Added `app.config.js` so `@react-native-google-signin/google-signin` is wired only when an iOS URL scheme can be resolved from env (`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` or `EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME`), avoiding config-plugin build failures when iOS Google is not configured.
+  - Docs updated: `docs/auth-setup.md` and `docs/security.md` now specify native reset redirect as `batavasa://reset-password`. Remaining work is manual verification on device/emulator: Google sign-in/callback/session restore and reset-email deep link -> set new password.
+  - Verification: `npx expo config --type public` passed; `npx jest auth --runInBand` passed; `npx tsc --noEmit` clean; `npm test -- --runInBand` passed with 530 tests across 44 suites.
 - 2026-06-20 Smart teaser on the weekly-review notification:
   - `services/weeklyTeaser.ts`: deterministic one-glance week summary (expense + % vs last week, habit completions, avg mood, overdue tasks) from SQLite, formatted as a language-proof icon+number line (`💸 2.1M (−12%)  ✅ 5  🙂 3.9/5  ⏰ 2`). Stamped onto the scheduled notification body in `proactiveNotifications.ts` (fallback to the static localized body when empty); re-stamped on app start + every foreground (`app/_layout.tsx`). Pure `formatWeeklyTeaser` is tested (`__tests__/weeklyTeaser.test.ts`). No background task — reliable + Expo-Go-safe.
   - Verification: `npx tsc --noEmit` clean; `npm test -- --runInBand` passed with 521 tests across 42 suites.

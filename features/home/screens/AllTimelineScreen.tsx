@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { View, ScrollView, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@design/useTheme'
 import { spacing } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
@@ -11,10 +12,12 @@ import { useJournals } from '@features/journals/hooks/useJournals'
 import { listRecentLogs } from '@features/habits/services'
 import type { DailyTimelineItem } from '../hooks/useDailyDigest'
 import { format } from 'date-fns'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 export function AllTimelineScreen() {
   const theme = useTheme()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { t } = useTranslation()
 
   const txs = useTransactions()
@@ -86,14 +89,14 @@ export function AllTimelineScreen() {
   }, [txs, reminders, journals, habitLogs, t])
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
-      <AppHeader title={t.view_all} onSettings={() => router.push('/settings')} />
+    <View style={{ flex: 1, backgroundColor: theme.bg.primary, paddingTop: insets.top }}>
+      <AppHeader title={t.view_all} onBack={router.canGoBack() ? () => router.back() : undefined} onSettings={() => router.push('/settings')} />
       <ScrollView contentContainerStyle={[styles.content]}>
         {items.map((item) => (
           <ListRow
             key={item.id}
             icon={item.kind === 'finance' ? 'trending-up' : item.kind === 'task' ? 'bell' : item.kind === 'habit' ? 'check-circle' : 'book-open'}
-            color={item.kind === 'finance' ? '#2ecc71' : item.kind === 'task' ? '#f39c12' : item.kind === 'habit' ? '#6c5ce7' : '#0984e3'}
+            color={item.kind === 'finance' ? MODULE_COLORS.finance : item.kind === 'task' ? MODULE_COLORS.tasks : item.kind === 'habit' ? MODULE_COLORS.habits : MODULE_COLORS.journal}
             title={item.title}
             subtitle={item.subtitle}
             meta={format(item.occurredAt, 'PP pp')}
@@ -106,5 +109,5 @@ export function AllTimelineScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing[4], paddingBottom: 120, gap: spacing[2] },
+  content: { padding: spacing[4], paddingBottom: 120, gap: spacing[3] },
 })

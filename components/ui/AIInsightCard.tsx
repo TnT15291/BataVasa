@@ -45,8 +45,8 @@ export function AIInsightCard({ label, text, tags, actionLabel, onAction }: Prop
 const styles = StyleSheet.create({
   card: { borderRadius: radius.md, padding: spacing[2], gap: 5 },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
-  text: { fontSize: 12, lineHeight: 17 },
+  label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
+  text: { fontSize: 13, lineHeight: 19 },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -56,5 +56,5 @@ const styles = StyleSheet.create({
   },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   action: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  actionText: { fontSize: 10, fontWeight: '600' },
+  actionText: { fontSize: 11, fontWeight: '600' },
 })

@@ -174,7 +174,7 @@ export default function RootLayout() {
               gestureDirection: 'vertical',
             }}
           />
-          <Stack.Screen name="settings" options={{ title: t.nav_settings }} />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="search" options={{ title: t.nav_search }} />
           <Stack.Screen name="goals" options={{ headerShown: false }} />
           <Stack.Screen name="goal-detail" options={{ title: t.nav_goals }} />
@@ -195,7 +195,7 @@ export default function RootLayout() {
           <Stack.Screen name="ai-settings" options={{ title: t.nav_ai_settings }} />
           <Stack.Screen name="ai-memory" options={{ title: t.ai_memory }} />
           <Stack.Screen name="currency" options={{ title: t.nav_currency }} />
-          <Stack.Screen name="insights" options={{ title: t.nav_insights }} />
+          <Stack.Screen name="finance-insights" options={{ title: t.nav_insights }} />
           <Stack.Screen name="reports" options={{ title: t.nav_reports }} />
           <Stack.Screen name="chat" options={{ title: t.nav_chat }} />
           <Stack.Screen name="categories" options={{ title: t.nav_categories }} />
@@ -211,8 +211,12 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="display-currency" options={{ title: t.display_currency }} />
-          <Stack.Screen name="analysis" options={{ title: t.analysis_title }} />
-          <Stack.Screen name="weekly-review" options={{ title: t.weekly_life_review }} />
+          {/* These screens render their own in-content AppHeader (like the Home
+              and Goals tabs), so the native Stack header is hidden to avoid a
+              double header. Each provides its own back affordance. */}
+          <Stack.Screen name="analysis" options={{ headerShown: false }} />
+          <Stack.Screen name="weekly-review" options={{ headerShown: false }} />
+          <Stack.Screen name="timeline" options={{ headerShown: false }} />
           <Stack.Screen name="habits-report" options={{ title: t.habits_report_title }} />
           <Stack.Screen name="journals-report" options={{ title: t.journals_report_title }} />
           <Stack.Screen name="reminders-report" options={{ title: t.reminders_report_title }} />

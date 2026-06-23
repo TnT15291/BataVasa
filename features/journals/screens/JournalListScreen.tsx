@@ -174,8 +174,8 @@ export function JournalListScreen() {
       <ScrollView contentContainerStyle={[styles.list, { paddingTop: insets.top + spacing[2] }]}>
         <AppHeader subtitle={t.nav_journal} onSettings={() => router.push('/settings')} />
         <ModuleOverview
-          eyebrow={t.nav_journal}
-          value={String(journals.length)}
+          eyebrow={t.report_avg_mood}
+          value={journalStats.avgMood > 0 ? `${journalStats.avgMood.toFixed(1)}/5` : String(journals.length)}
           subtitle={journalStats.latest
             ? journalStats.latest.content.replace(/^#+\s?/gm, '').replace(/[*_`]/g, '').replace(/\n+/g, ' ').trim().slice(0, 60)
             : t.journal_empty_prompt}

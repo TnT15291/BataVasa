@@ -11,8 +11,10 @@ import { WEEKLY_REVIEW_NOTIFICATION_TYPE } from '@services/proactiveNotification
  * stops the same response from re-navigating on re-render.
  */
 export function useNotificationRouting(): void {
+  if ((Platform.OS as string) === 'web') return
+
   const router = useRouter()
-  const lastResponse = Platform.OS === 'web' ? null : Notifications.useLastNotificationResponse()
+  const lastResponse = Notifications.useLastNotificationResponse()
   const handledId = useRef<string | null>(null)
 
   useEffect(() => {

@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useTheme } from '@design/useTheme'
 import { radius, spacing } from '@design/tokens'
+import { IconBadge } from './IconBadge'
 
 type IconName = keyof typeof Feather.glyphMap
 
@@ -47,19 +48,13 @@ export function ListRow({
         { backgroundColor: pressed ? theme.bg.secondary : 'transparent' },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: color }]}>
-        {emoji ? (
-          <Text style={styles.emoji}>{emoji}</Text>
-        ) : (
-          <Feather name={icon ?? 'circle'} size={12} color="#fff" />
-        )}
-      </View>
+      <IconBadge color={color} icon={icon} emoji={emoji} size="md" />
       <View style={styles.body}>
-        <Text style={[styles.title, { color: theme.text.primary }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: theme.text.primary }]} numberOfLines={2}>
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[styles.subtitle, { color: theme.text.secondary }]} numberOfLines={1}>
+          <Text style={[styles.subtitle, { color: theme.text.secondary }]} numberOfLines={2}>
             {subtitle}
           </Text>
         ) : null}
@@ -82,25 +77,17 @@ export function ListRow({
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 44,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
+    minHeight: 52,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
   },
-  iconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emoji: { fontSize: 13 },
-  body: { flex: 1, gap: 2 },
-  title: { fontSize: 13, fontWeight: '600' },
+  body: { flex: 1, minWidth: 0, gap: 4 },
+  title: { fontSize: 14, fontWeight: '600' },
   subtitle: { fontSize: 12, fontWeight: '500' },
-  trailing: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
-  meta: { fontSize: 12, fontWeight: '500' },
+  trailing: { maxWidth: 116, flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  meta: { fontSize: 12, fontWeight: '600' },
 })

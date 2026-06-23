@@ -209,8 +209,9 @@ export function SettingsScreen() {
     format(weekdayToDate(weekday), 'EEE', { locale: getDateFnsLocale(language) })
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing[2] }]}>
-      <AppHeader subtitle={t.settings} />
+    <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing[2] }]}>
+      <AppHeader subtitle={t.settings} onBack={router.canGoBack() ? () => router.back() : undefined} />
       {authConfigured && (
         <>
           <SectionHeader label={t.account} />
@@ -566,11 +567,16 @@ export function SettingsScreen() {
       </View>
 
     </ScrollView>
+    {/* Opaque backdrop behind the translucent status bar (native header now
+        hidden) so scrolled content doesn't collide with the system clock. */}
+    <View pointerEvents="none" style={[styles.statusScrim, { height: insets.top, backgroundColor: theme.bg.primary }]} />
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { padding: spacing[4], gap: spacing[1] },
+  statusScrim: { position: 'absolute', top: 0, left: 0, right: 0 },
   sectionHeader: {
     fontSize: 12,
     fontWeight: '700',

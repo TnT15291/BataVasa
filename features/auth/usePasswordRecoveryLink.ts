@@ -3,24 +3,10 @@ import * as Linking from 'expo-linking'
 import { useAuthStore } from '@store/authStore'
 import { getTranslations } from '@services/i18n'
 import { logger } from '@services/logger'
+import { extractAuthParams, isPasswordRecoveryUrl } from '@services/authDeepLinks'
 
 const MODULE = 'auth.recovery'
 const handledRecoveryUrls = new Set<string>()
-
-/**
- * Supabase's implicit flow returns the recovery tokens in the URL **fragment**
- * (`...#access_token=…&type=recovery`), and some setups use the query string.
- * `Linking.parse` only reads the query, so pull params from whichever part the
- * link carries. `URLSearchParams` is available via `react-native-url-polyfill`
- * (loaded by services/supabase.ts).
- */
-function parseAuthParams(url: string): URLSearchParams {
-  const hashIndex = url.indexOf('#')
-  if (hashIndex >= 0) return new URLSearchParams(url.slice(hashIndex + 1))
-  const queryIndex = url.indexOf('?')
-  if (queryIndex >= 0) return new URLSearchParams(url.slice(queryIndex + 1))
-  return new URLSearchParams()
-}
 
 /**
  * Listens for `batavasa://reset-password` deep links opened from a password
@@ -40,11 +26,11 @@ export function usePasswordRecoveryLink() {
 
     async function handle(url: string | null) {
       // Only act on our recovery deep link — never hijack other incoming URLs.
-      if (!active || !url || !url.includes('reset-password')) return
+      if (!active || !url || !isPasswordRecoveryUrl(url)) return
       if (handledRecoveryUrls.has(url)) return
       handledRecoveryUrls.add(url)
 
-      const params = parseAuthParams(url)
+      const params = extractAuthParams(url)
       const accessToken = params.get('access_token')
       const refreshToken = params.get('refresh_token')
       const errorDescription = params.get('error_description') ?? params.get('error')

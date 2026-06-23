@@ -207,9 +207,9 @@ export function AnalysisScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing[2] }]}>
-        <AppHeader subtitle={t.nav_insights} onSettings={() => router.push('/settings')} />
+        <AppHeader subtitle={t.nav_insights} onBack={router.canGoBack() ? () => router.back() : undefined} onSettings={() => router.push('/settings')} />
         <ModuleOverview
-          eyebrow={t.analysis_title}
+          eyebrow={t.report_snapshot}
           value={t.analysis_subtitle}
           subtitle={moduleCount >= 2 ? t.analysis_patterns : t.analysis_no_data_msg}
           icon="cpu"
@@ -336,6 +336,14 @@ export function AnalysisScreen() {
         )}
       </ScrollView>
 
+      {/* Opaque backdrop behind the translucent status bar so scrolled content
+          doesn't collide with the system clock when this screen is shown as a
+          tab (no native header). A no-op when pushed with a native header. */}
+      <View
+        pointerEvents="none"
+        style={[styles.statusScrim, { height: insets.top, backgroundColor: theme.bg.primary }]}
+      />
+
       <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated, paddingBottom: spacing[4] + insets.bottom }]}>
         <Pressable
           onPress={run}
@@ -415,6 +423,7 @@ const styles = StyleSheet.create({
   compValue: { fontSize: 13, fontWeight: '600' },
   deltaBadge: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm },
   deltaText: { fontSize: 12, fontWeight: '600' },
+  statusScrim: { position: 'absolute', top: 0, left: 0, right: 0 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: spacing[6] },
   emptyTitle: { fontSize: 16, fontWeight: '600', marginBottom: spacing[2], textAlign: 'center' },
   emptyBody: { fontSize: 13, textAlign: 'center', paddingHorizontal: spacing[4] },

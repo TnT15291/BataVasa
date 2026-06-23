@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { AppState, Platform } from 'react-native'
-import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '@services/supabase'
@@ -8,6 +7,7 @@ import { logger } from '@services/logger'
 import { track } from '@services/analytics'
 import { getTranslations } from '@services/i18n'
 import { localizeAuthError } from '@services/authErrors'
+import { extractAuthParams, getGoogleAuthRedirectTo, getPasswordRecoveryRedirectTo } from '@services/authDeepLinks'
 import {
   isNativeGoogleAvailable,
   configureGoogleSignin,
@@ -206,9 +206,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!client) return { ok: false }
     set({ busy: true, error: null })
     try {
-      // Use a fixed scheme URL — Linking.createURL() generates exp:// in Expo Go
-      // which cannot be pre-registered in Supabase. The fixed scheme matches app.json.
-      const redirectTo = 'batavasa://auth/callback'
+      // Native uses the fixed app scheme; web uses Expo's generated web URL.
+      const redirectTo = getGoogleAuthRedirectTo()
       const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo, skipBrowserRedirect: true },
@@ -237,14 +236,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!client) return { ok: false }
     set({ busy: true, error: null })
     try {
-      // Tokens/code may live in the hash (implicit flow — supabase-js default) or
-      // the query string (PKCE). Read whichever the redirect carries.
-      const hashIndex = url.indexOf('#')
-      const queryIndex = url.indexOf('?')
-      const paramStr = hashIndex >= 0 ? url.slice(hashIndex + 1)
-        : queryIndex >= 0 ? url.slice(queryIndex + 1)
-        : ''
-      const params = new URLSearchParams(paramStr)
+      // Tokens/code may live in the hash (implicit flow) or the query string
+      // (PKCE). Some providers include both, so merge them.
+      const params = extractAuthParams(url)
 
       const errorDescription = params.get('error_description') ?? params.get('error')
       if (errorDescription) {
@@ -297,7 +291,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // set a new password. This URL MUST be in Supabase → Auth → URL Configuration
     // → Redirect URLs (see docs/security.md#password-recovery).
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: Linking.createURL('reset-password'),
+      redirectTo: getPasswordRecoveryRedirectTo(),
     })
     if (error) {
       set({ busy: false, error: localizeAuthError(error, getTranslations()) })

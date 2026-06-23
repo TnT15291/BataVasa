@@ -20,7 +20,7 @@ export const colors = {
 export const typography = {
   family: { sans: 'System', mono: 'Courier' },
   // Floor: 12px. Never use values below xs in user-facing text.
-  size: { xs: 12, sm: 14, base: 16, lg: 18, xl: 22, '2xl': 28, '3xl': 34 },
+  size: { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '3xl': 32 },
   // Ceiling: bold (700). Never hardcode '800' — use bold for primary metric values only.
   weight: { regular: '400', medium: '500', semibold: '600', bold: '700' },
   lineHeight: { tight: 1.2, normal: 1.4, relaxed: 1.6 },
@@ -47,11 +47,11 @@ export const textStyles = {
   bodyBold:      { fontSize: 14, fontWeight: '700' } as const,
 
   // Section headers, card titles
-  sectionTitle:  { fontSize: 15, fontWeight: '600' } as const,
-  sectionBold:   { fontSize: 15, fontWeight: '700' } as const,
+  sectionTitle:  { fontSize: 18, fontWeight: '600' } as const,
+  sectionBold:   { fontSize: 18, fontWeight: '700' } as const,
 
   // Primary metric values (net amount, hero spend)
-  metric:        { fontSize: 26, fontWeight: '700' } as const,
+  metric:        { fontSize: 32, fontWeight: '700' } as const,
   metricSm:      { fontSize: 18, fontWeight: '700' } as const,
 } as const
 

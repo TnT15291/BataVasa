@@ -16,11 +16,12 @@ import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved, toast } from '@store/toastStore'
 import { getProviderKey } from '@services/ai/openai'
 import { parseReminderEntry } from '../aiParser'
-import { VoiceButton } from '@components/VoiceButton'
 import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
 import type { Recurrence, ReminderPriority } from '../types'
-import { MODULE_COLORS } from '@design/moduleColors'
+import { FormSection } from '@components/ui/FormSection'
+import { ChipGroup } from '@components/ui/ChipGroup'
+import { SmartEntryCard } from '@components/ui/SmartEntryCard'
 
 const RECURRENCES: Recurrence[] = ['none', 'daily', 'weekly', 'monthly']
 const ADVANCE_OPTIONS = [0, 5, 10, 15, 30, 60, 120, 1440, 2880] as const
@@ -318,61 +319,15 @@ export function ReminderFormScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
-              <Feather name="zap" size={16} color={theme.brand.primary} />
-            </View>
-            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.smart_entry}</Text>
-          </View>
-          <View style={[styles.smartInputWrap, { backgroundColor: theme.bg.primary, borderColor: theme.border.strong }]}>
-            <TextInput
-              value={smartText}
-              onChangeText={setSmartText}
-              placeholder={t.nl_placeholder_reminder}
-              placeholderTextColor={theme.text.muted}
-              style={[styles.smartInput, { color: theme.text.primary }]}
-              returnKeyType="done"
-              editable={!parsing}
-              multiline
-              onSubmitEditing={() => handleSmartParse()}
-            />
-            <View style={styles.smartActions}>
-              <VoiceButton onResult={(text) => handleSmartParse(text)} disabled={parsing} size={38} module="reminders" />
-              <Pressable
-                onPress={() => handleSmartParse()}
-                disabled={parsing || !smartText.trim()}
-                style={[styles.smartSend, { backgroundColor: parsing || !smartText.trim() ? theme.border.strong : theme.brand.primary }]}
-              >
-                {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
-        <View style={[styles.previewCard, { backgroundColor: MODULE_COLORS.tasks + '14', borderColor: MODULE_COLORS.tasks + '44' }]}>
-          <View style={[styles.previewIcon, { backgroundColor: MODULE_COLORS.tasks + '1F' }]}>
-            <Feather name="bell" size={26} color={MODULE_COLORS.tasks} />
-          </View>
-          <View style={styles.previewBody}>
-            <Text style={[styles.previewKicker, { color: theme.text.muted }]}>{isEditing ? t.update : t.new_reminder}</Text>
-            <Text style={[styles.previewTitle, { color: theme.text.primary }]} numberOfLines={2}>
-              {title.trim() || t.reminder_title_placeholder}
-            </Text>
-            <View style={styles.previewMetaRow}>
-              <Feather name={isInbox ? 'inbox' : 'calendar'} size={13} color={theme.text.muted} />
-              <Text style={[styles.previewMeta, { color: theme.text.muted }]}>
-                {isInbox ? t.reminder_inbox : `${dateStr} / ${timeStr}`}
-              </Text>
-            </View>
-            {notifyTimeStr ? (
-              <View style={styles.previewMetaRow}>
-                <Feather name="clock" size={13} color={MODULE_COLORS.tasks} />
-                <Text style={[styles.previewMeta, { color: theme.text.muted }]}>{t.remind_before}: {notifyTimeStr}</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
+        <SmartEntryCard
+          value={smartText}
+          onChangeText={setSmartText}
+          onSubmit={() => handleSmartParse()}
+          onVoiceResult={(text) => handleSmartParse(text)}
+          parsing={parsing}
+          placeholder={t.nl_placeholder_reminder}
+          module="reminders"
+        />
 
         <Pressable
           onPress={() => setIsInbox((v) => !v)}
@@ -410,13 +365,7 @@ export function ReminderFormScreen() {
           />
         </View>
 
-        {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
-              <Feather name="calendar" size={16} color={theme.brand.primary} />
-            </View>
-            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.event_time}</Text>
-          </View>
+        {!isInbox && <FormSection title={t.event_time}>
           <View style={styles.dateRow}>
             <Pressable
               onPress={() => { setShowTimePicker(false); setShowDatePicker(true) }}
@@ -450,102 +399,43 @@ export function ReminderFormScreen() {
               onChange={(_, date) => { setShowTimePicker(Platform.OS === 'ios'); if (date) setRemindAt((prev) => { const d = new Date(prev); d.setHours(date.getHours(), date.getMinutes(), 0, 0); return d }) }}
             />
           )}
-        </View>}
+        </FormSection>}
 
-        {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: MODULE_COLORS.tasks + '1F' }]}>
-              <Feather name="bell" size={16} color={MODULE_COLORS.tasks} />
-            </View>
-            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.remind_before}</Text>
-          </View>
-          <View style={styles.optionRow}>
-            {ADVANCE_OPTIONS.map((mins) => {
-              const active = advanceMinutes === mins
-              return (
-                <Pressable
-                  key={mins}
-                  onPress={() => setAdvanceMinutes(mins)}
-                  style={[styles.optionBtn, {
-                    backgroundColor: active ? theme.brand.primary : theme.bg.primary,
-                    borderColor: active ? theme.brand.primary : theme.border.subtle,
-                  }]}
-                >
-                  <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700' }}>
-                    {advanceLabel(mins)}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-          {notifyTimeStr ? (
-            <View style={styles.notifyHintRow}>
-              <Feather name="clock" size={13} color={theme.text.muted} />
-              <Text style={[styles.notifyHint, { color: theme.text.muted }]}>{notifyTimeStr}</Text>
+        <FormSection>
+          {!isInbox ? (
+            <View style={{ gap: spacing[2] }}>
+              <ChipGroup
+                label={t.remind_before}
+                options={ADVANCE_OPTIONS.map((mins) => ({ value: mins, label: advanceLabel(mins) }))}
+                value={advanceMinutes}
+                onChange={setAdvanceMinutes}
+              />
+              {notifyTimeStr ? (
+                <View style={styles.notifyHintRow}>
+                  <Feather name="clock" size={13} color={theme.text.muted} />
+                  <Text style={[styles.notifyHint, { color: theme.text.muted }]}>{notifyTimeStr}</Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
-        </View>}
-
-        <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
-              <Feather name="flag" size={16} color={theme.brand.primary} />
-            </View>
-            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.reminder_priority}</Text>
-          </View>
-          <View style={styles.optionRow}>
-            {PRIORITIES.map((p) => {
-              const active = priority === p
-              const label = p === 'low'
-                ? t.reminder_priority_low
-                : p === 'medium'
-                ? t.reminder_priority_medium
-                : t.reminder_priority_high
-              return (
-                <Pressable
-                  key={p}
-                  onPress={() => setPriority(p)}
-                  style={[styles.optionBtn, {
-                    backgroundColor: active ? theme.brand.primary : theme.bg.primary,
-                    borderColor: active ? theme.brand.primary : theme.border.subtle,
-                  }]}
-                >
-                  <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700' }}>
-                    {label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        </View>
-
-        {!isInbox && <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
-              <Feather name="repeat" size={16} color={theme.brand.primary} />
-            </View>
-            <Text style={[styles.cardTitle, { color: theme.text.primary }]}>{t.reminder_recurrence}</Text>
-          </View>
-          <View style={styles.optionRow}>
-            {RECURRENCES.map((r) => {
-              const active = recurrence === r
-              return (
-                <Pressable
-                  key={r}
-                  onPress={() => setRecurrence(r)}
-                  style={[styles.optionBtn, {
-                    backgroundColor: active ? theme.brand.primary : theme.bg.primary,
-                    borderColor: active ? theme.brand.primary : theme.border.subtle,
-                  }]}
-                >
-                  <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700' }}>
-                    {recurrenceLabel(r)}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        </View>}
+          <ChipGroup
+            label={t.reminder_priority}
+            options={PRIORITIES.map((p) => ({
+              value: p,
+              label: p === 'low' ? t.reminder_priority_low : p === 'medium' ? t.reminder_priority_medium : t.reminder_priority_high,
+            }))}
+            value={priority}
+            onChange={setPriority}
+          />
+          {!isInbox ? (
+            <ChipGroup
+              label={t.reminder_recurrence}
+              options={RECURRENCES.map((r) => ({ value: r, label: recurrenceLabel(r) }))}
+              value={recurrence}
+              onChange={setRecurrence}
+            />
+          ) : null}
+        </FormSection>
 
         {isEditing && (
           <Pressable onPress={onDelete} style={[styles.deleteBtn, { borderColor: theme.semantic.danger + '55' }]}>
@@ -583,25 +473,6 @@ export function ReminderFormScreen() {
 
 const styles = StyleSheet.create({
   body: { padding: spacing[4], gap: spacing[3], paddingBottom: 112 },
-  previewCard: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing[4],
-    flexDirection: 'row',
-    gap: spacing[3],
-  },
-  previewIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewBody: { flex: 1, gap: spacing[1] },
-  previewKicker: { fontSize: 12, fontWeight: '700' },
-  previewTitle: { fontSize: 21, lineHeight: 27, fontWeight: '700' },
-  previewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
-  previewMeta: { fontSize: 12, lineHeight: 17 },
   card: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -619,39 +490,6 @@ const styles = StyleSheet.create({
   },
   inboxTitle: { fontSize: 15, fontWeight: '700' },
   inboxBody: { fontSize: 12, marginTop: 2 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  cardIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: { fontSize: 15, fontWeight: '700' },
-  smartInputWrap: {
-    minHeight: 88,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing[3],
-    paddingBottom: 46,
-  },
-  smartInput: { minHeight: 42, fontSize: 14, lineHeight: 19 },
-  smartActions: {
-    position: 'absolute',
-    right: spacing[2],
-    bottom: spacing[2],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  smartSend: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: { fontSize: 12, fontWeight: '700' },
   titleInput: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 17, fontWeight: '700' },
   input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
   noteInput: { minHeight: 80, textAlignVertical: 'top' },
@@ -668,8 +506,6 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   datePillText: { fontSize: 15, fontWeight: '700' },
-  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  optionBtn: { paddingVertical: spacing[2], paddingHorizontal: spacing[3], borderRadius: radius.full, borderWidth: 1 },
   notifyHintRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
   notifyHint: { fontSize: 12, fontStyle: 'italic' },
   footer: {

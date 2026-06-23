@@ -41,7 +41,7 @@ import { SkeletonTransactionList } from '@components/SkeletonBox'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { AppHeader } from '@components/ui'
+import { AppHeader, Button, SegmentedControl } from '@components/ui'
 import { toast } from '@store/toastStore'
 
 type Period = 'today' | 'week' | 'month' | 'all'
@@ -256,7 +256,6 @@ export function TransactionListScreen() {
   const overviewIncome = activeConverted?.income ?? activeSummary.income
   const overviewExpense = activeConverted?.expense ?? activeSummary.expense
   const overviewCurrency = activeConverted ? displayCurrency : currency
-  const overviewNet = overviewIncome - overviewExpense
   const reviewCount = periodReviewCount
   const chartMax = Math.max(overviewIncome, overviewExpense, 1)
   const incomePct = Math.max(6, (overviewIncome / chartMax) * 100)
@@ -580,13 +579,13 @@ export function TransactionListScreen() {
               <View style={styles.overviewTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.eyebrow, { color: theme.text.muted }]}>
-                    {PERIOD_ROWS.find((p) => p.key === activePeriod)?.label}
+                    {t.safe_to_spend}
                   </Text>
                   <Text
-                    style={[styles.netAmount, { color: overviewNet < 0 ? theme.finance.expense : theme.finance.income }]}
+                    style={[styles.netAmount, { color: safeToSpend.safeToSpend < 0 ? theme.finance.expense : MODULE_COLORS.finance }]}
                     numberOfLines={1}
                   >
-                    {formatAmount(overviewNet, overviewCurrency, language)}
+                    {formatAmount(safeToSpend.safeToSpend, safeCurrency, language)}
                   </Text>
                   <Text style={[styles.insightLine, { color: theme.text.muted }]} numberOfLines={1}>
                     {reviewCount > 0
@@ -596,11 +595,11 @@ export function TransactionListScreen() {
                         : t.no_transactions}
                   </Text>
                 </View>
-                <View style={[styles.netBadge, { backgroundColor: (overviewNet < 0 ? theme.finance.expense : MODULE_COLORS.finance) + '1A' }]}>
+                <View style={[styles.netBadge, { backgroundColor: (safeToSpend.safeToSpend < 0 ? theme.finance.expense : MODULE_COLORS.finance) + '1A' }]}>
                   <Feather
-                    name={overviewNet < 0 ? 'trending-down' : 'trending-up'}
+                    name={safeToSpend.safeToSpend < 0 ? 'alert-triangle' : 'shield'}
                     size={20}
-                    color={overviewNet < 0 ? theme.finance.expense : MODULE_COLORS.finance}
+                    color={safeToSpend.safeToSpend < 0 ? theme.finance.expense : MODULE_COLORS.finance}
                   />
                 </View>
               </View>
@@ -620,24 +619,11 @@ export function TransactionListScreen() {
               ) : null}
             </View>
 
-            <View style={[styles.segmented, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-              {PERIOD_ROWS.map((row) => {
-                const active = activePeriod === row.key
-                return (
-                  <Pressable
-                    key={row.key}
-                    onPress={() => setActivePeriod(row.key)}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                    style={[styles.segment, { backgroundColor: active ? MODULE_COLORS.finance + '18' : 'transparent' }]}
-                  >
-                    <Text style={[styles.segmentText, { color: active ? MODULE_COLORS.finance : theme.text.secondary }]}>
-                      {row.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
+            <SegmentedControl<Period>
+              value={activePeriod}
+              onChange={setActivePeriod}
+              options={PERIOD_ROWS.map((row) => ({ ...row, color: MODULE_COLORS.finance }))}
+            />
 
             <View style={[styles.searchBox, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
               <Feather name="search" size={16} color={theme.text.muted} />
@@ -970,22 +956,17 @@ export function TransactionListScreen() {
             <View style={styles.analysisRow}>
               {[
                 { label: t.nav_reports, icon: 'bar-chart-2' as const, route: '/reports', bg: MODULE_COLORS.finance },
-                { label: t.nav_insights, icon: 'cpu' as const, route: '/insights', bg: theme.brand.accent },
+                { label: t.nav_insights, icon: 'cpu' as const, route: '/finance-insights', bg: MODULE_COLORS.finance },
               ].map((item) => (
-                <Pressable
+                <Button
                   key={item.route}
+                  label={item.label}
+                  icon={item.icon}
                   onPress={() => router.push(item.route as any)}
-                  style={({ pressed }) => [
-                    styles.analysisBtn,
-                    {
-                      backgroundColor: pressed ? item.bg + '12' : theme.bg.elevated,
-                      borderColor: item.bg + '66',
-                    },
-                  ]}
-                >
-                  <Feather name={item.icon} size={16} color={item.bg} />
-                  <Text style={[styles.analysisBtnText, { color: item.bg }]} numberOfLines={1}>{item.label}</Text>
-                </Pressable>
+                  variant="secondary"
+                  color={item.bg}
+                  style={styles.analysisButton}
+                />
               ))}
             </View>
           </View>
@@ -1033,9 +1014,7 @@ export function TransactionListScreen() {
               {loadingMore ? (
                 <ActivityIndicator size="small" color={MODULE_COLORS.finance} />
               ) : (
-                <Pressable onPress={loadMore} style={[styles.loadMoreBtn, { borderColor: theme.border.subtle }]}>
-                  <Text style={{ color: theme.text.secondary, fontSize: 13 }}>{t.load_more}</Text>
-                </Pressable>
+                <Button label={t.load_more} onPress={loadMore} variant="secondary" style={styles.loadMoreButton} />
               )}
             </View>
           ) : null
@@ -1057,12 +1036,11 @@ export function TransactionListScreen() {
               </View>
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_matching_transactions}</Text>
               <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{search.trim()}</Text>
-              <Pressable
+              <Button
+                label={t.clear_search}
                 onPress={() => setSearch('')}
-                style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
-              >
-                <Text style={styles.emptyBtnText}>{t.clear_search}</Text>
-              </Pressable>
+                style={styles.emptyButton}
+              />
             </View>
           ) : (
             <View style={styles.empty}>
@@ -1071,12 +1049,11 @@ export function TransactionListScreen() {
               </View>
               <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_transactions}</Text>
               <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.tap_to_add}</Text>
-              <Pressable
+              <Button
+                label={t.nav_new_transaction}
                 onPress={() => router.push('/new')}
-                style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
-              >
-                <Text style={styles.emptyBtnText}>{t.nav_new_transaction}</Text>
-              </Pressable>
+                style={styles.emptyButton}
+              />
             </View>
           )
         }
@@ -1103,7 +1080,7 @@ export function TransactionListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: { padding: spacing[4], paddingBottom: 112 },
-  headerContent: { gap: spacing[3], marginBottom: spacing[3] },
+  headerContent: { gap: spacing[4], marginBottom: spacing[4] },
   radarStats: { gap: spacing[2] },
   radarMetricRow: { flexDirection: 'row', gap: spacing[2] },
   overviewCard: {
@@ -1113,15 +1090,15 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   overviewTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3] },
-  netBadge: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  netBadge: { width: 48, height: 48, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { fontSize: 12, fontWeight: '500', marginBottom: spacing[1] },
-  netAmount: { fontSize: 26, fontWeight: '700' },
+  netAmount: { fontSize: 32, fontWeight: '700', lineHeight: 38 },
   converted: { fontSize: 12, fontWeight: '600' },
   metricRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   metric: { flex: 1, gap: spacing[1] },
   metricDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
   metricLabel: { fontSize: 12, fontWeight: '500' },
-  metricValue: { fontSize: 16, fontWeight: '700' },
+  metricValue: { fontSize: 18, fontWeight: '700' },
   chartRows: { gap: spacing[2] },
   chartRow: { gap: spacing[1] },
   chartTrack: { height: 8, borderRadius: radius.full, overflow: 'hidden' },
@@ -1130,28 +1107,19 @@ const styles = StyleSheet.create({
   safePanel: {
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing[3],
-    gap: spacing[1],
+    padding: spacing[4],
+    gap: spacing[2],
   },
   safeLine: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
   safeTitleRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   safeRight: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   safeLabel: { fontSize: 13, fontWeight: '700' },
-  safeAmount: { fontSize: 17, fontWeight: '700' },
+  safeAmount: { fontSize: 20, fontWeight: '700' },
   safeMeta: { fontSize: 12 },
   safeWarnRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1], paddingTop: spacing[1] },
   safeWarn: { flex: 1, fontSize: 12, fontWeight: '600' },
-  safeBreakdown: { gap: 2, paddingTop: spacing[1] },
-  safeFormula: { fontSize: 12, lineHeight: 16, paddingTop: spacing[1] },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: 3,
-    gap: 3,
-  },
-  segment: { flex: 1, alignItems: 'center', borderRadius: radius.sm, paddingVertical: spacing[2] },
-  segmentText: { fontSize: 13, fontWeight: '700' },
+  safeBreakdown: { gap: spacing[1], paddingTop: spacing[1] },
+  safeFormula: { fontSize: 12, lineHeight: 18, paddingTop: spacing[1] },
   searchBox: {
     minHeight: 46,
     borderRadius: radius.md,
@@ -1173,12 +1141,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
   },
   reviewFilterText: { flex: 1, fontSize: 13, fontWeight: '600' },
-  reviewFilterCount: { fontSize: 12, fontWeight: '600' },
+  reviewFilterCount: { fontSize: 13, fontWeight: '700' },
   recurringCard: {
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing[3],
-    gap: spacing[2],
+    padding: spacing[4],
+    gap: spacing[3],
   },
   planCard: {
     borderRadius: radius.lg,
@@ -1259,17 +1227,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
   },
   planMoreText: { fontSize: 13, fontWeight: '700' },
-  analysisBtn: {
+  analysisButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    paddingVertical: spacing[4],
-    borderRadius: radius.md,
-    borderWidth: 1,
+    minHeight: 48,
   },
-  analysisBtnText: { fontSize: 12, fontWeight: '600' },
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1291,14 +1252,10 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
   emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[8] },
-  emptyBtn: { paddingHorizontal: spacing[5], paddingVertical: spacing[3], borderRadius: radius.full, marginTop: spacing[2] },
-  emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  emptyButton: { marginTop: spacing[2], borderRadius: radius.full },
   footer: { alignItems: 'center', paddingVertical: spacing[4] },
-  loadMoreBtn: {
+  loadMoreButton: {
     paddingHorizontal: spacing[6],
-    paddingVertical: spacing[2],
-    borderRadius: radius.md,
-    borderWidth: 1,
   },
   swipeDelete: {
     width: 72,
@@ -1311,9 +1268,9 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: spacing[6],
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
+    width: 60,
+    height: 60,
+    borderRadius: radius.full,
     borderWidth: 2,
     borderColor: '#fff',
     alignItems: 'center',
