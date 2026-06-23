@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
   iconText: { fontSize: 20, opacity: 0.82 },
   iconTextSelected: { opacity: 0.68 },
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  colorBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 3 },
+  colorBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 3 },
   cadenceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   cadenceBtn: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: radius.md, borderWidth: 1, alignItems: 'center' },
   weekdayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },

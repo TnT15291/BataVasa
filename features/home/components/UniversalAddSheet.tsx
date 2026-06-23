@@ -844,7 +844,6 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
                   numberOfLines={3}
                   style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
                 />
-                <Text style={[styles.examples, { color: theme.text.muted }]}>{t.universal_add_examples}</Text>
                 <View style={styles.analyzeRow}>
                   <VoiceButton onResult={(voiceText) => onAnalyze(voiceText, 'voice')} disabled={analyzing} size={44} module="quick_add" />
                   <Pressable
@@ -1000,7 +999,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderRadius: radius.md,
     padding: spacing[3], fontSize: 16, minHeight: 92, textAlignVertical: 'top',
   },
-  examples: { fontSize: 14, marginTop: -spacing[2] },
   analyzeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: spacing[2] },
   analyzeBtn: { flex: 1, paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },
   analyzeBtnContent: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },

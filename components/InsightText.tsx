@@ -69,12 +69,20 @@ export function InsightText({ text }: { text: string }) {
               <Text style={[styles.title, { color: theme.text.primary }]}>{section.title}</Text>
             </View>
           ) : null}
-          {section.body.map((line, lineIndex) => (
-            <View key={`${line}-${lineIndex}`} style={styles.lineRow}>
-              <View style={[styles.dot, { backgroundColor: theme.brand.primary }]} />
-              <Text style={[styles.body, { color: theme.text.secondary }]}>{line}</Text>
-            </View>
-          ))}
+          {section.body.map((line, lineIndex) => {
+            // Short items in a multi-point section read as bullets; long prose
+            // (or a lone paragraph) renders flush so a tiny dot doesn't sit
+            // beside a five-line block.
+            const isBullet = section.body.length > 1 && line.length <= 90
+            return isBullet ? (
+              <View key={`${line}-${lineIndex}`} style={styles.lineRow}>
+                <View style={[styles.dot, { backgroundColor: theme.brand.primary }]} />
+                <Text style={[styles.body, { color: theme.text.secondary }]}>{line}</Text>
+              </View>
+            ) : (
+              <Text key={`${line}-${lineIndex}`} style={[styles.paragraph, { color: theme.text.secondary }]}>{line}</Text>
+            )
+          })}
         </View>
       ))}
     </View>
@@ -93,5 +101,6 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 14, fontWeight: '700', lineHeight: 20 },
   lineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[2] },
   dot: { width: 4, height: 4, borderRadius: radius.full, marginTop: 8 },
-  body: { flex: 1, fontSize: 13, lineHeight: 20 },
+  body: { flex: 1, fontSize: 14, lineHeight: 21 },
+  paragraph: { fontSize: 14, lineHeight: 21 },
 })
