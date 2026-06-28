@@ -172,6 +172,27 @@ const MIGRATIONS: Array<(db: SQLiteDatabase) => Promise<void>> = [
   async (db) => {
     await createContextSchema(db)
   },
+  // v24 - habit identity ("I am becoming…", Atomic Habits identity-based framing).
+  async (db) => {
+    await safeAddColumn(db, 'habit', 'identity', 'TEXT')
+  },
+  // v25 - bills (finance_plan_item) get a linked due-date reminder, mirroring
+  // the debt → reminder pattern so expense bills actually notify the user.
+  async (db) => {
+    await safeAddColumn(db, 'finance_plan_item', 'reminder_id', 'TEXT')
+  },
+  // v26 - goal direction: 'reach' (accumulate up to target) vs 'cap' (stay under
+  // a ceiling, e.g. a spending budget). Existing goals default to 'reach'.
+  async (db) => {
+    await safeAddColumn(db, 'goal', 'direction', "TEXT NOT NULL DEFAULT 'reach'")
+  },
+  // v27 - goals can track multiple measures at once (finance + habits + …). The
+  // JSON `measures` array is the source of truth; legacy single columns mirror
+  // the first measure for backward-compatible reads. Existing goals stay null
+  // and fall back to a single measure derived from those columns.
+  async (db) => {
+    await safeAddColumn(db, 'goal', 'measures', 'TEXT')
+  },
 ]
 
 async function safeAddColumn(

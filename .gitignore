@@ -46,6 +46,9 @@ __pycache__/
 # test coverage
 coverage/
 
+# Supabase local CLI metadata
+supabase/.temp/
+
 # generated native folders
 /ios
 /android

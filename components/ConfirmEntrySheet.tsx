@@ -67,7 +67,7 @@ export function ConfirmEntrySheet({ visible, rawInput, fields, onSave, onEdit, o
               disabled={busy}
               style={[styles.btn, { backgroundColor: busy ? theme.text.muted : theme.brand.primary }]}
             >
-              <Text style={[styles.btnText, { color: '#fff' }]}>{busy ? '…' : t.ai_confirm_save}</Text>
+              <Text style={[styles.btnText, { color: theme.brand.onPrimary }]}>{busy ? '…' : t.ai_confirm_save}</Text>
             </Pressable>
           </View>
         </Pressable>

@@ -56,7 +56,7 @@ export function TransactionRow({ tx, category, onPress }: Props) {
         </View>
       </IconBadge>
       <View style={styles.middle}>
-        <Text style={[styles.title, { color: theme.text.primary }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: theme.text.primary }]} numberOfLines={2}>
           {displayName}
         </Text>
         {categoryMismatch ? (

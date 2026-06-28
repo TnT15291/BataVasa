@@ -77,7 +77,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ catState: 'loading' })
     const r = await svc.listCategories()
     if (r.ok) {
-      set({ categories: r.value, catState: 'ready' })
+      // Preserve categories created locally while this load was in flight (e.g.
+      // a category added from the goal screen): the DB snapshot can pre-date the
+      // insert, so a plain overwrite would drop it. Limited to recent rows so a
+      // category deleted elsewhere (sync) isn't resurrected.
+      const fetchedIds = new Set(r.value.map((c) => c.id))
+      const cutoff = Date.now() - 60_000
+      const localOnly = get().categories.filter((c) => !fetchedIds.has(c.id) && new Date(c.created_at).getTime() > cutoff)
+      set({ categories: [...r.value, ...localOnly], catState: 'ready' })
     } else {
       logger.error('finance.store', 'loadCategories failed', { code: r.error.code })
       set({ catState: 'error', lastError: r.error.message })

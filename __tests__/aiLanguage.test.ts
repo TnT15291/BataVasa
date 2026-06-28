@@ -35,9 +35,9 @@ describe('fmtAI', () => {
     expect(fmtAI(12345, 'USD')).toBe('$123.45')
   })
 
-  it('formats zero-decimal currencies as whole units', () => {
-    expect(fmtAI(500, 'JPY')).toBe('JPY 500')
-    expect(fmtAI(500, 'KRW')).toBe('KRW 500')
+  it('formats zero-decimal currencies as whole units with their symbol', () => {
+    expect(fmtAI(500, 'JPY')).toBe('¥500')
+    expect(fmtAI(500, 'KRW')).toBe('₩500')
   })
 
   it('uses absolute value for negative expense amounts', () => {

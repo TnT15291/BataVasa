@@ -3,7 +3,7 @@ import { useSettingsStore } from '../store/settingsStore'
 
 describe('assistant context', () => {
   beforeEach(() => {
-    useSettingsStore.setState({ language: 'en', currency: 'USD' })
+    useSettingsStore.setState({ language: 'en', currency: 'USD', hideJournals: false })
   })
 
   it('summarizes user data across modules for assistant answers', () => {
@@ -30,7 +30,7 @@ describe('assistant context', () => {
         { id: 'r2', title: 'Plan Sunday', remind_at: '2026-06-21T09:00:00.000Z', advance_minutes: 0, priority: 'medium', is_inbox: 0, completed: 0, deleted_at: null },
       ] as any,
       goals: [
-        { title: 'Save GPU fund', status: 'active', deleted_at: null, binding: { module: 'finance', aggregation: 'sum_amount', category_id: 'gpu-fund', kind: 'savings' }, progress: { percent: 30, label: '$300 / $1,000', sourceLabel: 'GPU Fund' } },
+        { title: 'Save GPU fund', status: 'active', deleted_at: null, binding: { module: 'finance', aggregation: 'sum_amount', category_id: 'gpu-fund', kind: 'savings' }, progress: { percent: 30, label: '$300 / $1,000', sourceLabel: 'GPU Fund', note: '1 foreign-currency group was not counted.' } },
       ] as any,
     })
 
@@ -47,6 +47,28 @@ describe('assistant context', () => {
     expect(ctx).toContain('GOALS: active 1')
     expect(ctx).toContain('Save GPU fund: 30%')
     expect(ctx).toContain('GPU Fund (savings fund; set-aside expenses count as progress)')
+    expect(ctx).toContain('note: 1 foreign-currency group was not counted.')
+  })
+
+  it('masks journal details when hidden journal privacy is enabled', () => {
+    useSettingsStore.setState({ hideJournals: true })
+
+    const ctx = buildAssistantContext({
+      now: new Date('2026-06-20T12:00:00.000Z'),
+      categories: [],
+      transactions: [],
+      habits: [],
+      journals: [
+        { id: 'j1', content: 'ULTRA_PRIVATE_JOURNAL_TEXT', mood: 5, is_important: 1, tags: 'secret_tag', occurred_at: '2026-06-19T21:00:00.000Z', deleted_at: null },
+      ] as any,
+      reminders: [],
+    })
+
+    expect(ctx).toContain('JOURNALS: 7d entries 1, 30d entries 1')
+    expect(ctx).toContain('Journal privacy is enabled')
+    expect(ctx).not.toContain('ULTRA_PRIVATE_JOURNAL_TEXT')
+    expect(ctx).not.toContain('secret_tag')
+    expect(ctx).not.toContain('avg mood')
   })
 
   it('adds grounding rules to the assistant prompt', () => {
@@ -57,6 +79,7 @@ describe('assistant context', () => {
     expect(prompt).toContain('Do not invent records')
     expect(prompt).toContain('A negative transaction in a savings category is money set aside')
     expect(prompt).toContain('Each goal has one primary measured source')
+    expect(prompt).toContain('skipped foreign-currency groups')
     expect(prompt).toContain('FINANCE: no data')
   })
 })

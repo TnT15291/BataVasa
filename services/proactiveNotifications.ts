@@ -1,4 +1,3 @@
-import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import { logger } from './logger'
 import { getTranslations } from './i18n'
@@ -7,6 +6,19 @@ import { requestNotificationPermission } from './notifications'
 import { buildWeeklyReviewTrigger } from './proactiveSchedule'
 import { buildWeeklyTeaserBody } from './weeklyTeaser'
 
+async function importNotifications() {
+  try {
+    return await import('expo-notifications')
+  } catch (e) {
+    try {
+      return require('expo-notifications') as typeof import('expo-notifications')
+    } catch {
+      logger.warn('notifications', 'load expo-notifications failed', { error: String(e) })
+      return null
+    }
+  }
+}
+
 // Data tag carried on the notification so the deep-link router (and the
 // cancel sweep) can recognize the weekly-review nudge.
 export const WEEKLY_REVIEW_NOTIFICATION_TYPE = 'weekly_review'
@@ -14,6 +26,8 @@ const WEEKLY_REVIEW_CHANNEL = 'weekly-review'
 
 async function ensureWeeklyReviewChannel(): Promise<void> {
   if (Platform.OS !== 'android') return
+  const Notifications = await importNotifications()
+  if (!Notifications) return
   await Notifications.setNotificationChannelAsync(WEEKLY_REVIEW_CHANNEL, {
     name: 'Weekly review',
     importance: Notifications.AndroidImportance.DEFAULT,
@@ -23,6 +37,8 @@ async function ensureWeeklyReviewChannel(): Promise<void> {
 
 export async function cancelWeeklyReviewNotification(): Promise<void> {
   try {
+    const Notifications = await importNotifications()
+    if (!Notifications) return
     const scheduled = await Notifications.getAllScheduledNotificationsAsync()
     await Promise.all(
       scheduled
@@ -44,6 +60,8 @@ async function scheduleWeeklyReviewNotification(): Promise<void> {
   const { weekday, hour, minute } = buildWeeklyReviewTrigger(s.proactiveWeeklyDay, s.proactiveWeeklyHour)
   // Smart teaser computed now (from the latest data) is stamped onto the
   // scheduled notification; fall back to the static body when there's no data.
+  const Notifications = await importNotifications()
+  if (!Notifications) return
   const teaser = await buildWeeklyTeaserBody()
   await Notifications.scheduleNotificationAsync({
     content: {
@@ -64,7 +82,7 @@ async function scheduleWeeklyReviewNotification(): Promise<void> {
 /**
  * Reconcile the scheduled weekly-review notification with current settings:
  * schedule it when opted in (and notifications are allowed + permitted), or
- * cancel it otherwise. Idempotent — safe to call on app start and on any
+ * cancel it otherwise. Idempotent; safe to call on app start and on any
  * settings change. Returns whether a notification is now scheduled.
  */
 export async function syncWeeklyReviewNotification(): Promise<boolean> {

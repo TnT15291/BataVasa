@@ -60,7 +60,7 @@ export default function ResetPasswordRoute() {
             {error ?? t.auth_reset_link_invalid}
           </Text>
           <Pressable onPress={backToSignIn} style={[styles.cta, { backgroundColor: theme.brand.primary }]}>
-            <Text style={styles.ctaText}>{t.auth_back_to_sign_in}</Text>
+            <Text style={[styles.ctaText, { color: theme.brand.onPrimary }]}>{t.auth_back_to_sign_in}</Text>
           </Pressable>
         </>
       ) : (

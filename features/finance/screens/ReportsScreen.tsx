@@ -36,7 +36,7 @@ import { translateCategoryName } from '../i18n'
 import { generateReport, type ReportType } from '@services/ai/reports'
 import { getDateFnsLocale } from '@services/locale'
 import { useSettingsStore } from '@store/settingsStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { track } from '@services/analytics'
 import { convertMinorAmount, getRates } from '@services/fx'
 import { buildCategoryBreakdown, formatAmount, type CategoryBreakdownDirection, type CategoryBreakdownItem } from '../services'
@@ -268,11 +268,10 @@ export function ReportsScreen() {
   const language = useSettingsStore((s) => s.language)
   const currency = useSettingsStore((s) => s.currency)
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
   const dfLocale = getDateFnsLocale(language)
 
-  const [hasApiKey, setHasApiKey] = useState(false)
-  const [keyChecked, setKeyChecked] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState(isAiAvailable())
+  const [keyChecked] = useState(true)
   const [period, setPeriod] = useState<Period>('monthly')
   const [anchorDate, setAnchorDate] = useState(new Date())
   const [customFrom, setCustomFrom] = useState('')
@@ -282,13 +281,6 @@ export function ReportsScreen() {
   const [report, setReport] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [fxRates, setFxRates] = useState<Record<string, number> | null>(null)
-
-  useEffect(() => {
-    getProviderKey(aiProvider).then((k) => {
-      setHasApiKey(!!k)
-      setKeyChecked(true)
-    })
-  }, [aiProvider])
 
   useEffect(() => {
     getRates(displayCurrency).then(setFxRates)
@@ -358,7 +350,10 @@ export function ReportsScreen() {
     else if (period === 'yearly') setAnchorDate((d) => dir === 1 ? addYears(d, 1) : subYears(d, 1))
   }
 
-  const range = getRange()
+  // Memoize so range.from/range.to keep a stable identity between renders —
+  // otherwise getRange() returns fresh Date objects each render and every memo
+  // keyed on them (rangeTxs/summary/chartBuckets/breakdowns) recomputes for nothing.
+  const range = useMemo(() => getRange(), [getRange])
   const reportCurrency = fxRates ? displayCurrency : currency
   const rangeTxs = useMemo(() => {
     if (!range) return []
@@ -502,7 +497,7 @@ export function ReportsScreen() {
       setReport(text)
       track('report_generated', { module: 'finance', kind: period, item_count: filtered.length })
     } catch (e: any) {
-      if (e?.message === 'NO_API_KEY') {
+      if (e?.message === 'NO_BACKEND') {
         setHasApiKey(false)
       } else if (e?.message === 'NO_DATA') {
         Alert.alert(t.no_insights, t.no_insights_msg)
@@ -680,7 +675,7 @@ export function ReportsScreen() {
               onPress={() => { setKindFilter(key); setReport(null) }}
               style={[styles.filterPill, { backgroundColor: kindFilter === key ? theme.brand.primary : theme.bg.elevated, borderColor: theme.border.subtle }]}
             >
-              <Text style={[styles.filterText, { color: kindFilter === key ? '#fff' : theme.text.secondary }]}>
+              <Text style={[styles.filterText, { color: kindFilter === key ? theme.brand.onPrimary : theme.text.secondary }]}>
                 {key === 'all' ? t.all_period : key === 'income' ? t.income : t.expense}
               </Text>
             </Pressable>
@@ -731,7 +726,7 @@ export function ReportsScreen() {
           <EmptyState
             icon={keyChecked && !hasApiKey ? 'key' : 'bar-chart-2'}
             accent={MODULE_COLORS.finance}
-            title={keyChecked && !hasApiKey ? t.setup_ai_first : (range ? range.label : t.custom_range)}
+            title={keyChecked && !hasApiKey ? t.no_api_key : (range ? range.label : t.custom_range)}
             body={keyChecked && !hasApiKey ? t.no_api_key_msg : t.no_insights_msg}
           />
         ) : null}
@@ -761,9 +756,9 @@ export function ReportsScreen() {
             ]}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={theme.brand.onPrimary} />
             ) : (
-              <Text style={styles.btnText}>{report ? t.refresh : t.generate}</Text>
+              <Text style={[styles.btnText, { color: theme.brand.onPrimary }]}>{report ? t.refresh : t.generate}</Text>
             )}
           </Pressable>
         )}
@@ -846,10 +841,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing[1],
   },
-  columnItem: { alignItems: 'center', gap: spacing[1], minWidth: 28 },
-  columnBars: { height: 132, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 3 },
+  columnItem: { alignItems: 'center', gap: spacing[1], minWidth: 38 },
+  columnBars: { height: 132, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 4 },
   columnTrack: {
-    width: 10,
+    width: 14,
     height: '100%',
     borderRadius: radius.sm,
     overflow: 'hidden',
@@ -859,7 +854,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
   },
   columnBar: { width: '100%', borderRadius: radius.sm },
-  columnLabel: { fontSize: 12, maxWidth: 34, textAlign: 'center' },
+  columnLabel: { fontSize: 12, maxWidth: 42, textAlign: 'center' },
   filterRow: { flexDirection: 'row', gap: spacing[2] },
   filterPill: {
     flex: 1,

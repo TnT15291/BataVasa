@@ -574,9 +574,9 @@ export function ReminderListScreen() {
           router.push(date ? { pathname: '/reminder', params: { date } } : '/reminder')
         }}
         accessibilityLabel={t.new_reminder}
-        style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
+        style={[styles.fab, { backgroundColor: theme.brand.primary, borderColor: theme.bg.elevated, bottom: spacing[5] }]}
       >
-        <Feather name="plus" size={28} color="#fff" />
+        <Feather name="plus" size={28} color={theme.brand.onPrimary} />
       </FAB>
     </ScreenTransition>
   )
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute', right: spacing[6],
-    width: 56, height: 56, borderRadius: radius.lg, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    width: 56, height: 56, borderRadius: radius.lg, borderWidth: 2, alignItems: 'center', justifyContent: 'center',
     elevation: 5, shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
   calCard: { borderRadius: radius.lg, borderWidth: 1, overflow: 'hidden' },

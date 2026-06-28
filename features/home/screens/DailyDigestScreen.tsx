@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { format } from 'date-fns'
 import { useTheme } from '@design/useTheme'
-import { spacing, radius } from '@design/tokens'
+import { spacing, radius, textStyles } from '@design/tokens'
 import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
@@ -21,7 +21,6 @@ import { OnboardingModal } from '../components/OnboardingModal'
 import { ScreenTransition } from '@components/ScreenTransition'
 import {
   AppHeader,
-  CommandBar,
   SectionHeader,
   ListRow,
   StatusPill,
@@ -44,12 +43,20 @@ const KIND_META: Record<ReviewInboxItem['kind'], { icon: IconName; color: string
 }
 
 // Short relative-time meta for review rows (UI1: "10m" / "2h" / "3d").
+// Direction matters here: a review item can be overdue (past) or upcoming
+// (future remind_at), so past stays terse ("2h" = ago) while future is prefixed
+// ("+2h" = due in) — abs alone would render "due in 2h" and "2h overdue" alike.
 const relShort = (iso: string | undefined, now: Date): string | undefined => {
   if (!iso) return undefined
-  const m = Math.round(Math.abs(now.getTime() - new Date(iso).getTime()) / 60000)
-  if (m < 60) return `${m}m`
-  const h = Math.round(m / 60)
-  return h < 24 ? `${h}h` : `${Math.round(h / 24)}d`
+  const diffMs = new Date(iso).getTime() - now.getTime() // > 0 = future/upcoming
+  const m = Math.round(Math.abs(diffMs) / 60000)
+  let mag: string
+  if (m < 60) mag = `${m}m`
+  else {
+    const h = Math.round(m / 60)
+    mag = h < 24 ? `${h}h` : `${Math.round(h / 24)}d`
+  }
+  return diffMs > 0 ? `+${mag}` : mag
 }
 
 // Day-rhythm window for the timeline visual: 6 AM → 9 PM, ticks every 3h.
@@ -69,40 +76,6 @@ const dayFraction = (d: Date): number => {
 // changes — which keeps the provider's per-minute token budget for real work.
 let homeStoryCache: { key: string; line: string } | null = null
 
-function NeedRow({
-  icon,
-  color,
-  title,
-  body,
-  onPress,
-}: {
-  icon: IconName
-  color: string
-  title: string
-  body: string
-  onPress?: () => void
-}) {
-  const theme = useTheme()
-  const content = (
-    <>
-      <View style={[styles.needIcon, { backgroundColor: color + '18' }]}>
-        <Feather name={icon} size={15} color={color} />
-      </View>
-      <View style={styles.needBody}>
-        <Text style={[styles.needTitle, { color: theme.text.primary }]} numberOfLines={1}>{title}</Text>
-        <Text style={[styles.needText, { color: theme.text.muted }]} numberOfLines={2}>{body}</Text>
-      </View>
-      {onPress ? <Feather name="chevron-right" size={16} color={theme.text.muted} /> : null}
-    </>
-  )
-  if (!onPress) return <View style={styles.needRow}>{content}</View>
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.needRow, pressed && { opacity: 0.72 }]}>
-      {content}
-    </Pressable>
-  )
-}
-
 export function DailyDigestScreen() {
   const theme = useTheme()
   const router = useRouter()
@@ -110,10 +83,10 @@ export function DailyDigestScreen() {
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
   const goals = useGoalsStore((s) => s.goals)
   const loadGoals = useGoalsStore((s) => s.loadGoals)
   const [showAdd, setShowAdd] = useState(false)
-  const [showNeedReview, setShowNeedReview] = useState(false)
   const [coachLine, setCoachLine] = useState('')
 
   const {
@@ -126,14 +99,15 @@ export function DailyDigestScreen() {
     safeToSpendCurrency,
     overspendPercent,
     dailySafeToSpend,
+    cycleDaysRemaining,
     habitsTotal,
     pendingHabitNames,
     worstHabitMissed,
     timelineItems,
     reviewItems,
     reviewCount,
-    todayTaskCount,
     overdueTaskCount,
+    dueTaskCount,
     highPriorityTaskCount,
     openTaskTitles,
     todayJournalCount,
@@ -150,11 +124,12 @@ export function DailyDigestScreen() {
 
   const priorityReminder = nextReminder ?? nextFutureReminder
   const priorityTitle = priorityReminder?.title ?? nextHabit?.name ?? null
-  const priorityDone = priorityReminder
-    ? priorityReminder.completed === 1
-    : nextHabit
-      ? nextHabit.todayCount >= nextHabit.target_per_period
-      : false
+  // The priority is always the next *open* item (reminders/habits are filtered to
+  // incomplete upstream), so a "done" state is unreachable. Surface what's
+  // actually useful instead: whether that reminder is already overdue.
+  const priorityOverdue = priorityReminder?.remind_at
+    ? new Date(priorityReminder.remind_at) < now
+    : false
   const prioritySubtitle = priorityReminder
     ? (priorityReminder.remind_at ? format(new Date(priorityReminder.remind_at), 'EEEE · HH:mm', { locale }) : t.nav_reminders)
     : nextHabit
@@ -182,14 +157,23 @@ export function DailyDigestScreen() {
     : t.home_money_daily
         .replace('{{amount}}', formatAmount(dailySafeToSpend, safeToSpendCurrency, language))
         .replace('{{spent}}', formatAmount(todayExpense, todayExpenseCurrency, language))
+
+  // Hero shows the whole-cycle figure framed as "X to spend over N days" — the
+  // total you have and how long it must last — instead of a per-day average.
+  const heroAmountText = safeToSpend < 0
+    ? `- ${formatAmount(Math.abs(safeToSpend), safeToSpendCurrency, language)}`
+    : formatAmount(safeToSpend, safeToSpendCurrency, language)
+  const heroDaysText = t.home_safe_over_days.replace('{{days}}', String(cycleDaysRemaining))
   const habitLine = pendingHabitNames.length > 0
     ? t.home_habits_pending.replace('{{count}}', String(pendingHabitNames.length)).replace('{{names}}', pendingHabitNames.join(', '))
     : habitsTotal > 0 ? t.home_habits_all_done : t.no_habits
   const taskLine = openTaskTitles.length > 0
-    ? t.home_tasks_due.replace('{{count}}', String(todayTaskCount + overdueTaskCount)).replace('{{names}}', openTaskTitles.join(', '))
+    ? t.home_tasks_due.replace('{{count}}', String(dueTaskCount)).replace('{{names}}', openTaskTitles.join(', '))
     : t.home_tasks_none
   const journalLine = todayJournalCount === 0
     ? t.home_journal_invite
+    : hideJournals
+      ? t.hide_journals_locked_count.replace('{{count}}', String(todayJournalCount))
     : recentMoodAvg !== null
       ? t.home_journal_mood.replace('{{mood}}', recentMoodAvg.toFixed(1)).replace('{{count}}', String(todayJournalCount))
       : t.journal_card_subtitle
@@ -276,56 +260,57 @@ export function DailyDigestScreen() {
         }
       >
         <AppHeader
-          onSearch={() => router.push('/quick-batavasa')}
-          searchIcon="help-circle"
-          searchLabel={t.command_placeholder}
+          onSearch={() => router.push('/search')}
           onSettings={() => router.push('/settings')}
         />
 
-        <CommandBar
-          placeholder={t.nav_search}
-          onPress={() => router.push('/search')}
-        />
-
-        {/* ── Today brief: AI coach line + expandable per-module detail ──
-            Merges the old standalone quote card and the "Cần xem" digest into
-            one block so the same facts aren't shown twice at the top. */}
+        {/* ── Today brief: a single AI coach line (the narrative). Per-module
+            detail lives in each tab + the cards below, so nothing is repeated. */}
         <View style={[styles.storyCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
           <View style={styles.storyHeader}>
             <View style={[styles.storyIcon, { backgroundColor: theme.brand.primary }]}>
-              <Feather name="message-circle" size={17} color="#fff" />
+              <Feather name="message-circle" size={17} color={theme.brand.onPrimary} />
             </View>
             <Text style={[styles.storyLabel, { color: theme.text.muted }]}>{t.home_story_title}</Text>
           </View>
           <Text style={[styles.storyText, { color: theme.text.primary }]}>{coachLine || t.home_story_default}</Text>
-
-          <Pressable
-            onPress={() => setShowNeedReview((v) => !v)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showNeedReview }}
-            style={({ pressed }) => [styles.briefToggle, { borderTopColor: theme.border.subtle, opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={[styles.briefToggleText, { color: theme.brand.primary }]}>{t.home_need_review_hint}</Text>
-            <Feather name={showNeedReview ? 'chevron-up' : 'chevron-down'} size={16} color={theme.brand.primary} />
-          </Pressable>
-
-          {showNeedReview ? (
-            <View style={styles.briefDetails}>
-              <NeedRow icon="flag" color={MODULE_COLORS.tasks} title={t.home_focus_question} body={priorityTitle ?? t.reminder_today_none} onPress={() => router.push('/reminders')} />
-              <NeedRow icon={MODULE_ICONS.finance} color={MODULE_COLORS.finance} title={t.home_money_question} body={moneyLine} onPress={() => router.push('/finance')} />
-              <NeedRow icon={MODULE_ICONS.habits} color={MODULE_COLORS.habits} title={t.home_habits_question} body={habitLine} onPress={() => router.push('/habits')} />
-              <NeedRow icon={MODULE_ICONS.tasks} color={MODULE_COLORS.tasks} title={t.home_tasks_question} body={taskLine} onPress={() => router.push('/reminders')} />
-              <NeedRow icon={MODULE_ICONS.journal} color={MODULE_COLORS.journal} title={t.home_journal_question} body={journalLine} onPress={() => router.push('/journals')} />
-              <NeedRow icon={focusIcon} color={focusColor} title={t.home_goal_question} body={goalLine} onPress={() => router.push(focusGoal ? { pathname: '/goal-detail', params: { id: focusGoal.id } } : '/goals')} />
-              <View style={styles.riskBox}>
-                <Text style={[styles.needTitle, { color: theme.text.primary }]}>{t.home_risks_title}</Text>
-                {(riskLines.length > 0 ? riskLines : [t.home_no_risks]).map((line) => (
-                  <Text key={line} style={[styles.needText, { color: riskLines.length > 0 ? theme.semantic.warning : theme.text.muted }]}>• {line}</Text>
-                ))}
-              </View>
-            </View>
-          ) : null}
         </View>
+
+        {/* ── Safe To Spend: the number users open the app for (product §6) ── */}
+        <Pressable
+          onPress={() => router.push('/finance')}
+          accessibilityRole="button"
+          accessibilityLabel={`${t.safe_to_spend}: ${heroAmountText}${safeToSpend >= 0 ? `. ${heroDaysText}` : ''}`}
+          style={({ pressed }) => [
+            styles.heroCard,
+            { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
+          ]}
+        >
+          <View style={styles.heroLabelRow}>
+            <View style={[styles.heroIcon, { backgroundColor: MODULE_COLORS.finance + '1A' }]}>
+              <Feather name={MODULE_ICONS.finance} size={15} color={MODULE_COLORS.finance} />
+            </View>
+            <Text style={[styles.heroLabel, { color: theme.text.muted }]}>{t.safe_to_spend}</Text>
+            {safeToSpend < 0 && overspendPercent !== null ? (
+              <StatusPill label={`${overspendPercent}%`} tone="danger" icon="alert-triangle" />
+            ) : null}
+          </View>
+          <Text
+            style={[styles.heroAmount, { color: safeToSpend < 0 ? theme.semantic.danger : theme.text.primary }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
+            {heroAmountText}
+          </Text>
+          {safeToSpend >= 0 ? (
+            <Text style={[styles.heroSub, { color: theme.text.secondary, fontWeight: '600' }]} numberOfLines={1}>
+              {heroDaysText}
+            </Text>
+          ) : null}
+          <Text style={[styles.heroSub, { color: theme.text.muted }]} numberOfLines={1}>
+            {t.home_spent_today.replace('{{amount}}', formatAmount(todayExpense, todayExpenseCurrency, language))}
+          </Text>
+        </Pressable>
 
         {/* ── Today Priority ── */}
         {priorityTitle ? (
@@ -349,9 +334,9 @@ export function DailyDigestScreen() {
                 </View>
               </View>
               <StatusPill
-                label={priorityDone ? t.priority_done : t.priority_not_done}
-                tone={priorityDone ? 'success' : 'warning'}
-                icon={priorityDone ? 'check-circle' : 'clock'}
+                label={priorityOverdue ? t.report_overdue : t.priority_not_done}
+                tone={priorityOverdue ? 'danger' : 'warning'}
+                icon={priorityOverdue ? 'alert-circle' : 'clock'}
               />
             </View>
           </View>
@@ -362,6 +347,8 @@ export function DailyDigestScreen() {
             label={t.weekly_review_focus}
             actionLabel={focusGoal ? t.view_all : t.new_goal}
             onAction={() => router.push(focusGoal ? '/goals' : '/goal')}
+            onAdd={focusGoal ? () => router.push('/goal') : undefined}
+            addLabel={t.new_goal}
           />
           {focusGoal ? (
             <Pressable
@@ -426,13 +413,26 @@ export function DailyDigestScreen() {
               {reviewItems.map((item) => {
                 const m = KIND_META[item.kind]
                 const moduleLabel = { finance: t.nav_finance, task: t.nav_reminders, habit: t.habits, journal: t.nav_journal }[item.kind]
+                // Use the reason + count the hook already computed (was dropped
+                // before, leaving "Finance / Finance"). Journal stays masked when
+                // privacy is on so the count never leaks.
+                const subtitleTpl =
+                  item.subtitleKey === 'financeReview' ? t.review_item_finance
+                  : item.subtitleKey === 'taskOverdue' ? t.review_item_overdue
+                  : item.subtitleKey === 'taskPriority' ? t.review_item_priority
+                  : item.subtitleKey === 'taskSchedule' ? t.review_item_schedule
+                  : item.subtitleKey === 'habitPending' ? t.review_item_habit
+                  : t.review_item_journal
+                const subtitle = item.kind === 'journal' && hideJournals
+                  ? t.hide_journals_locked
+                  : subtitleTpl.replace('{{count}}', String(item.count))
                 return (
                   <ListRow
                     key={item.id}
                     icon={m.icon}
                     color={m.color}
                     title={item.title || moduleLabel}
-                    subtitle={moduleLabel}
+                    subtitle={subtitle}
                     meta={relShort(item.at, now)}
                     hideChevron
                     onPress={() => router.push(item.route as any)}
@@ -492,7 +492,7 @@ export function DailyDigestScreen() {
             },
           ]}
         >
-          <Feather name="plus" size={26} color="#fff" />
+          <Feather name="plus" size={26} color={theme.brand.onPrimary} />
         </Pressable>
       </View>
 
@@ -524,34 +524,20 @@ const styles = StyleSheet.create({
   },
   storyHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   storyIcon: { width: 30, height: 30, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  storyLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
+  storyLabel: textStyles.eyebrow,
   storyText: { fontSize: 16, lineHeight: 23, fontWeight: '700' },
-  briefToggle: {
-    paddingTop: spacing[2],
-    marginHorizontal: -spacing[3],
-    paddingHorizontal: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  briefToggleText: { fontSize: 13, fontWeight: '700' },
-  // Rows provide their own horizontal padding; pull to the card edge so they
-  // align with the coach line above, not double-indented.
-  briefDetails: { marginHorizontal: -spacing[3] },
-  needRow: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  needIcon: { width: 30, height: 30, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  needBody: { flex: 1, gap: 2 },
-  needTitle: { fontSize: 13, fontWeight: '700' },
   needText: { fontSize: 12, lineHeight: 17, fontWeight: '500' },
-  riskBox: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], gap: 4 },
+  heroCard: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing[3],
+    gap: spacing[1],
+  },
+  heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  heroIcon: { width: 26, height: 26, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  heroLabel: { ...textStyles.eyebrow, flex: 1 },
+  heroAmount: { fontSize: 30, fontWeight: '800', marginTop: 2 },
+  heroSub: { fontSize: 13, fontWeight: '500' },
   emptyThread: {
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -599,9 +585,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   quickAddGroup: {
+    // `bottom` is set inline from safe-area insets at the call site.
     position: 'absolute',
     right: spacing[5],
-    bottom: 58,
     alignItems: 'center',
   },
   quickAddFab: {

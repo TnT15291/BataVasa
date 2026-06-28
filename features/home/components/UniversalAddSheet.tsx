@@ -22,7 +22,7 @@ import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { parseUniversalCandidates, getLastUniversalParseError, type UniversalCandidate, type UniversalEntry, type MissingField } from '@services/ai/universalEntry'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved, toast } from '@store/toastStore'
 import { VoiceButton } from '@components/VoiceButton'
@@ -477,10 +477,8 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
     if (override) setText(override)
     const runId = analyzeRunRef.current + 1
     analyzeRunRef.current = runId
-    const provider = useSettingsStore.getState().aiProvider
-    const key = await getProviderKey(provider)
     if (runId !== analyzeRunRef.current) return
-    if (!key) { Alert.alert(t.api_key_required, t.no_api_key_msg); return }
+    if (!isAiAvailable()) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
     setAnalyzing(true)
     try {
       const parsed = await parseUniversalCandidates(input)
@@ -725,12 +723,15 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
         const res = await createGoal({
           title: entry.title,
           description: entry.description || undefined,
-          target_type: entry.source === 'finance' ? 'amount' : entry.source === 'habits' ? 'rate' : 'count',
-          target_value: targetValue,
-          unit: entry.source === 'finance' ? currency : entry.source === 'habits' ? '%' : 'count',
           start_date: `${entry.start_date}T00:00:00.000Z`,
           due_date: entry.due_date ? `${entry.due_date}T23:59:59.999Z` : null,
-          metric_binding: binding,
+          measures: [{
+            binding,
+            target_type: entry.source === 'finance' ? 'amount' : entry.source === 'habits' ? 'rate' : 'count',
+            target_value: targetValue,
+            unit: entry.source === 'finance' ? currency : entry.source === 'habits' ? '%' : 'count',
+            direction: 'reach',
+          }],
         })
         if (!res.ok) { setSaving(false); Alert.alert(t.could_not_save, res.error); return }
         if (res.id) createdRefs.push({ module: 'goals', id: res.id })
@@ -852,11 +853,11 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
                     style={[styles.analyzeBtn, { backgroundColor: analyzing || !text.trim() ? theme.text.muted : theme.brand.primary }]}
                   >
                     {analyzing
-                      ? <ActivityIndicator color="#fff" />
+                      ? <ActivityIndicator color={theme.brand.onPrimary} />
                       : (
                         <View style={styles.analyzeBtnContent}>
-                          <Feather name="send" size={16} color="#fff" />
-                          <Text style={styles.analyzeBtnText}>{t.create_btn}</Text>
+                          <Feather name="send" size={16} color={theme.brand.onPrimary} />
+                          <Text style={[styles.analyzeBtnText, { color: theme.brand.onPrimary }]}>{t.create_btn}</Text>
                         </View>
                       )}
                   </Pressable>
@@ -926,7 +927,7 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
                       accessibilityRole="button"
                       accessibilityLabel={t.smart_augment_label}
                     >
-                      {analyzing ? <ActivityIndicator color="#fff" size="small" /> : <Feather name="plus" size={18} color="#fff" />}
+                      {analyzing ? <ActivityIndicator color={theme.brand.onPrimary} size="small" /> : <Feather name="plus" size={18} color={theme.brand.onPrimary} />}
                     </Pressable>
                   </View>
                 </View>
@@ -944,8 +945,8 @@ export function UniversalAddSheet({ visible, onClose, initialText = '', autoAnal
                     style={[styles.actionBtn, styles.saveBtn, { backgroundColor: theme.brand.primary }]}
                   >
                     {saving
-                      ? <ActivityIndicator color="#fff" size="small" />
-                      : <Text style={{ color: '#fff', fontWeight: '600' }}>{candidates.length > 1 ? t.smart_confirm_all : t.save}</Text>}
+                      ? <ActivityIndicator color={theme.brand.onPrimary} size="small" />
+                      : <Text style={{ color: theme.brand.onPrimary, fontWeight: '600' }}>{candidates.length > 1 ? t.smart_confirm_all : t.save}</Text>}
                   </Pressable>
                 </View>
               </>
@@ -1046,7 +1047,7 @@ const styles = StyleSheet.create({
   resultLine: { fontSize: 15 },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexWrap: 'wrap', marginTop: spacing[1] },
   dirToggle: { flexDirection: 'row', borderWidth: 1, borderRadius: radius.full, overflow: 'hidden' },
-  dirChip: { paddingHorizontal: spacing[3], paddingVertical: spacing[1], minHeight: 32, alignItems: 'center', justifyContent: 'center' },
+  dirChip: { paddingHorizontal: spacing[3], paddingVertical: spacing[1], minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   catChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1055,7 +1056,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    minHeight: 36,
+    minHeight: 44,
     flexShrink: 1,
   },
   missingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },

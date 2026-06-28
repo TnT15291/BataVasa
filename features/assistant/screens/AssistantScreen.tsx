@@ -100,7 +100,7 @@ export function AssistantScreen() {
     })
     const ctx = longTerm ? `${baseCtx}\n${longTerm}` : baseCtx
     const history: ChatMessage[] = [
-      { role: 'system', content: buildAssistantSystemPrompt(ctx) },
+      { role: 'system', content: buildAssistantSystemPrompt(ctx, text) },
       ...[...messages]
         .reverse()
         .filter((m) => m.id !== GREETING_ID)
@@ -112,11 +112,8 @@ export function AssistantScreen() {
       const reply = await chatCompletion(history, { max_tokens: 800, temperature: 0.4 })
       setMessages((prev) => [{ id: uuid(), role: 'assistant', content: reply }, ...prev])
     } catch (e: any) {
-      if (e?.message === 'NO_API_KEY') {
-        Alert.alert(t.no_api_key, t.no_api_key_msg, [
-          { text: t.go_to_settings, onPress: () => router.push('/ai-settings') },
-          { text: 'OK', style: 'cancel' },
-        ])
+      if (e?.message === 'NO_BACKEND') {
+        Alert.alert(t.no_api_key, t.no_api_key_msg)
         setMessages((prev) => prev.filter((m) => m.id !== userMsg.id))
       } else {
         setMessages((prev) => [{ id: uuid(), role: 'assistant', content: `[!] ${e?.message ?? t.ai_error}` }, ...prev])
@@ -180,7 +177,7 @@ export function AssistantScreen() {
                     borderColor: isUser ? theme.brand.primary : theme.border.subtle,
                   },
                 ]}>
-                  <Text style={[styles.bubbleText, { color: isUser ? '#fff' : theme.text.primary }]}>
+                  <Text style={[styles.bubbleText, { color: isUser ? theme.brand.onPrimary : theme.text.primary }]}>
                     {item.content}
                   </Text>
                 </View>
@@ -221,7 +218,7 @@ export function AssistantScreen() {
             accessibilityLabel={t.type_message}
             style={[styles.sendBtn, { backgroundColor: !input.trim() || loading ? theme.border.strong : theme.brand.primary }]}
           >
-            <Feather name="arrow-up" size={20} color="#fff" />
+            <Feather name="arrow-up" size={20} color={theme.brand.onPrimary} />
           </Pressable>
         </View>
       </View>

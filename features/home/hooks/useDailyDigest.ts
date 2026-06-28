@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { startOfDay, endOfDay } from 'date-fns'
 import { useSettingsStore } from '@store/settingsStore'
+import { getTranslations } from '@services/i18n'
 import { useFinanceBootstrap, useTransactions, useCategories, usePlanItems, useDebts } from '@features/finance/hooks/useFinance'
 import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
@@ -53,6 +54,9 @@ export type DailyDigestData = {
   // cycle (today included). 0 when already overspent. Answers "how much can I
   // spend today?" instead of dumping the whole-cycle figure.
   dailySafeToSpend: number
+  // Days left in the current cycle, today included (>= 1). Lets the Home hero
+  // frame the figure as "X to spend over N days".
+  cycleDaysRemaining: number
   // Reminders
   nextReminder: ReturnType<typeof useReminders>[number] | null
   nextFutureReminder: ReturnType<typeof useReminders>[number] | null
@@ -75,6 +79,8 @@ export type DailyDigestData = {
   reviewCount: number
   todayTaskCount: number
   overdueTaskCount: number
+  // Distinct tasks needing action today (overdue ∪ due-today, deduped).
+  dueTaskCount: number
   highPriorityTaskCount: number
   openTaskTitles: string[]
   // Loading / Refresh
@@ -94,6 +100,7 @@ export function useDailyDigest(): DailyDigestData {
   const cycleStartDay = useSettingsStore((s) => s.financeCycleStartDay)
   const countPlannedIncome = useSettingsStore((s) => s.safeToSpendCountPlannedIncome)
   const countCarryOver = useSettingsStore((s) => s.safeToSpendCarryOver)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
   const txs = useTransactions()
   const categories = useCategories()
   const planItems = usePlanItems()
@@ -125,9 +132,13 @@ export function useDailyDigest(): DailyDigestData {
     return () => { cancelled = true }
   }, [habits.length])
 
-  const now = new Date()
-  const todayStart = startOfDay(now)
-  const todayEnd = endOfDay(now)
+  // Stable "current time" so the heavy useMemo blocks below don't recompute on
+  // every render — a fresh `new Date()` each render changed every memo's deps,
+  // defeating memoization. Refreshed on pull-to-refresh; fine for a daily view.
+  const [nowTs, setNowTs] = useState(() => Date.now())
+  const now = useMemo(() => new Date(nowTs), [nowTs])
+  const todayStart = useMemo(() => startOfDay(now), [now])
+  const todayEnd = useMemo(() => endOfDay(now), [now])
 
   const todayExpense = useMemo(() => {
     return txs
@@ -186,6 +197,7 @@ export function useDailyDigest(): DailyDigestData {
   }, [journals, todayStart, todayEnd])
 
   const recentMoodAvg = useMemo(() => {
+    if (hideJournals) return null
     const since = new Date(todayStart)
     since.setDate(since.getDate() - 6)
     const moodEntries = journals.filter((j) => {
@@ -195,7 +207,7 @@ export function useDailyDigest(): DailyDigestData {
     })
     if (moodEntries.length === 0) return null
     return moodEntries.reduce((sum, j) => sum + (j.mood ?? 0), 0) / moodEntries.length
-  }, [journals, todayStart, todayEnd])
+  }, [journals, todayStart, todayEnd, hideJournals])
 
   const nextReminder = useMemo(() => {
     return reminders
@@ -214,9 +226,9 @@ export function useDailyDigest(): DailyDigestData {
   const habitsDoneCount = habits.filter((h) => h.todayCount >= h.target_per_period).length
   const habitsTotal = habits.length
   const habitProgress = habitsTotal === 0 ? 0 : Math.round((habitsDoneCount / habitsTotal) * 100)
-  const nextHabit = habits.find((h) => h.todayCount < h.target_per_period) ?? null
+  const nextHabit = habits.find((h) => h.dueToday !== false && h.todayCount < h.target_per_period && !h.skippedToday) ?? null
   const pendingHabitNames = habits
-    .filter((h) => h.dueToday !== false && h.todayCount < h.target_per_period)
+    .filter((h) => h.dueToday !== false && h.todayCount < h.target_per_period && !h.skippedToday)
     .map((h) => h.name)
     .slice(0, 4)
 
@@ -250,6 +262,10 @@ export function useDailyDigest(): DailyDigestData {
       return d >= todayStart && d <= todayEnd
     })
     const highPriorityToday = today.filter((r) => r.priority === 'high')
+    // Distinct count of tasks needing action — overdue OR due today. A task
+    // earlier today sits in BOTH `overdue` and `today`; summing the two counts
+    // double-counted it, so dedupe by id here.
+    const dueTaskCount = new Set([...overdue, ...today].map((r) => r.id)).size
     const openTaskTitles = [...overdue, ...highPriorityToday, ...today]
       .map((r) => r.title)
       .filter((title, index, arr) => arr.indexOf(title) === index)
@@ -257,6 +273,7 @@ export function useDailyDigest(): DailyDigestData {
     return {
       todayTaskCount: today.length,
       overdueTaskCount: overdue.length,
+      dueTaskCount,
       highPriorityTaskCount: highPriorityToday.length,
       openTaskTitles,
     }
@@ -333,7 +350,7 @@ export function useDailyDigest(): DailyDigestData {
     }
 
     const pendingHabits = habits
-      .filter((habit) => habit.dueToday !== false && habit.todayCount < habit.target_per_period)
+      .filter((habit) => habit.dueToday !== false && habit.todayCount < habit.target_per_period && !habit.skippedToday)
       .sort((a, b) => (b.streak ?? 0) - (a.streak ?? 0))
 
     if (pendingHabits.length > 0) {
@@ -360,10 +377,13 @@ export function useDailyDigest(): DailyDigestData {
       .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
 
     if (importantJournals.length > 0) {
+      const t = getTranslations()
       items.push({
         id: 'journal-important',
         kind: 'journal',
-        title: importantJournals[0].content.slice(0, 80).replace(/\n/g, ' '),
+        title: hideJournals
+          ? t.hide_journals_locked_count.replace('{{count}}', String(importantJournals.length))
+          : importantJournals[0].content.slice(0, 80).replace(/\n/g, ' '),
         route: '/journals',
         severity: 'low',
         subtitleKey: 'journalImportant',
@@ -374,7 +394,7 @@ export function useDailyDigest(): DailyDigestData {
 
     const score = { high: 0, medium: 1, low: 2 }
     return items.sort((a, b) => score[a.severity] - score[b.severity]).slice(0, 5)
-  }, [txs, reminders, habits, journals, now, todayStart, todayEnd])
+  }, [txs, reminders, habits, journals, now, todayStart, todayEnd, hideJournals])
 
   const timelineItems = useMemo<DailyTimelineItem[]>(() => {
     const items: DailyTimelineItem[] = []
@@ -416,46 +436,67 @@ export function useDailyDigest(): DailyDigestData {
       })
     }
 
-    for (const journal of journals) {
+    const todayJournals = journals.filter((journal) => {
       const occurredAt = new Date(journal.occurred_at)
-      if (occurredAt < todayStart || occurredAt > todayEnd) continue
-      items.push({
-        id: `journal-${journal.id}`,
-        kind: 'journal',
-        occurredAt,
-        title: journal.content.slice(0, 80).replace(/\n/g, ' '),
-        subtitle: journal.mood ? `Mood ${journal.mood}/5` : undefined,
-        route: '/journals',
-      })
+      return occurredAt >= todayStart && occurredAt <= todayEnd
+    })
+    if (hideJournals) {
+      if (todayJournals.length > 0) {
+        const t = getTranslations()
+        items.push({
+          id: 'journal-hidden-today',
+          kind: 'journal',
+          occurredAt: todayEnd,
+          title: t.hide_journals_locked_count.replace('{{count}}', String(todayJournals.length)),
+          subtitle: t.hide_journals_locked,
+          route: '/journals',
+        })
+      }
+    } else {
+      for (const journal of todayJournals) {
+        const occurredAt = new Date(journal.occurred_at)
+        items.push({
+          id: `journal-${journal.id}`,
+          kind: 'journal',
+          occurredAt,
+          title: journal.content.slice(0, 80).replace(/\n/g, ' '),
+          subtitle: journal.mood ? `Mood ${journal.mood}/5` : undefined,
+          route: '/journals',
+        })
+      }
     }
 
-    const habitBaseTime = new Date(todayStart)
-    habitBaseTime.setHours(7, 0, 0, 0)
-    habits
-      .filter((habit) => habit.dueToday !== false)
-      .slice(0, 4)
-      .forEach((habit, index) => {
-        const occurredAt = new Date(habitBaseTime.getTime() + index * 10 * 60 * 1000)
-        const done = habit.todayCount >= habit.target_per_period
-        items.push({
-          id: `habit-${habit.id}`,
-          kind: 'habit',
-          occurredAt,
-          title: habit.name,
-          subtitle: `${habit.todayCount}/${habit.target_per_period}`,
-          route: '/habits',
-          status: done ? 'done' : 'pending',
-          emoji: habit.icon && (habit.icon.codePointAt(0) ?? 0) > 127 ? habit.icon : undefined,
-        })
+    // Completed habit logs today, placed at their REAL completion time (not a
+    // synthetic 7 AM slot), so the day-rhythm reflects when things actually
+    // happened. Only kept (non-skipped) logs — a pending or rest-day habit is
+    // not an event that occurred. Mirrors AllTimelineScreen.
+    const habitById = new Map(habits.map((habit) => [habit.id, habit]))
+    for (const log of recentLogs) {
+      if ((log.skipped ?? 0) === 1) continue
+      const occurredAt = new Date(log.occurred_at)
+      if (occurredAt < todayStart || occurredAt > todayEnd) continue
+      const habit = habitById.get(log.habit_id)
+      if (!habit) continue
+      items.push({
+        id: `habitlog-${log.id}`,
+        kind: 'habit',
+        occurredAt,
+        title: habit.name,
+        subtitle: `${habit.todayCount}/${habit.target_per_period}`,
+        route: '/habits',
+        status: 'done',
+        emoji: habit.icon && (habit.icon.codePointAt(0) ?? 0) > 127 ? habit.icon : undefined,
       })
+    }
 
     return items
       .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
       .slice(0, 8)
-  }, [txs, reminders, habits, journals, todayStart, todayEnd, currency, displayCurrency, fxRates])
+  }, [txs, reminders, habits, journals, recentLogs, todayStart, todayEnd, currency, displayCurrency, fxRates, hideJournals])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
+    setNowTs(Date.now())
     try {
       const [, , , , , logs] = await Promise.all([
         loadCategories(),
@@ -478,6 +519,7 @@ export function useDailyDigest(): DailyDigestData {
     safeToSpendCurrency,
     overspendPercent,
     dailySafeToSpend,
+    cycleDaysRemaining,
     nextReminder,
     nextFutureReminder,
     habitsDoneCount,
@@ -493,6 +535,7 @@ export function useDailyDigest(): DailyDigestData {
     reviewCount: reviewItems.length,
     todayTaskCount: openTaskSummary.todayTaskCount,
     overdueTaskCount: openTaskSummary.overdueTaskCount,
+    dueTaskCount: openTaskSummary.dueTaskCount,
     highPriorityTaskCount: openTaskSummary.highPriorityTaskCount,
     openTaskTitles: openTaskSummary.openTaskTitles,
     isLoading,

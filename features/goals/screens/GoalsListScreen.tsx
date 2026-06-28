@@ -33,6 +33,7 @@ export function GoalsListScreen() {
 
   const active = goals.filter((g) => g.status === 'active')
   const done = goals.filter((g) => g.status === 'done')
+  const paused = goals.filter((g) => g.status === 'paused')
   const avg = active.length > 0 ? Math.round(active.reduce((sum, g) => sum + g.progress.percent, 0) / active.length) : 0
 
   // Swipe-left reveals a delete action (Cross-Module Rule 7: low-friction undo).
@@ -96,7 +97,7 @@ export function GoalsListScreen() {
             stats={[
               { key: 'active', label: t.goal_active, value: String(active.length), color: MODULE_COLORS.analysis },
               { key: 'done', label: t.goal_done, value: String(done.length), color: theme.semantic.success },
-              { key: 'total', label: t.data_records, value: String(goals.length) },
+              { key: 'paused', label: t.goal_paused, value: String(paused.length), color: MODULE_COLORS.analysis },
             ]}
           />
           <View style={[styles.infoCard, { backgroundColor: MODULE_COLORS.analysis + '14', borderColor: MODULE_COLORS.analysis + '33' }]}>
@@ -106,7 +107,7 @@ export function GoalsListScreen() {
           <View style={styles.block}>
             <SectionHeader label={t.goal_active} count={active.length} />
             <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-              {(active.length > 0 ? active : done).map((goal) => (
+              {active.length > 0 ? active.map((goal) => (
                 <ReanimatedSwipeable
                   key={goal.id}
                   renderRightActions={rightDelete(goal.id)}
@@ -119,16 +120,18 @@ export function GoalsListScreen() {
                       title={goal.title}
                       subtitle={`${goal.progress.label} · ${goal.progress.sourceLabel}`}
                       meta={`${goal.progress.percent}%`}
-                      metaColor={goal.progress.percent >= 100 ? theme.semantic.success : MODULE_COLORS.analysis}
+                      metaColor={goal.progress.status === 'over' ? theme.semantic.danger : goal.progress.percent >= 100 ? theme.semantic.success : MODULE_COLORS.analysis}
                       onPress={() => router.push({ pathname: '/goal-detail', params: { id: goal.id } })}
                       onLongPress={() => confirmDelete(goal.id)}
                     />
                   </View>
                 </ReanimatedSwipeable>
-              ))}
+              )) : (
+                <Text style={[styles.emptyLine, { color: theme.text.muted }]}>{t.goal_no_active}</Text>
+              )}
             </View>
           </View>
-          {done.length > 0 && active.length > 0 ? (
+          {done.length > 0 ? (
             <View style={styles.block}>
               <SectionHeader label={t.goal_done} count={done.length} />
               <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
@@ -154,12 +157,38 @@ export function GoalsListScreen() {
               </View>
             </View>
           ) : null}
+          {paused.length > 0 ? (
+            <View style={styles.block}>
+              <SectionHeader label={t.goal_paused} count={paused.length} />
+              <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+                {paused.map((goal) => (
+                  <ReanimatedSwipeable
+                    key={goal.id}
+                    renderRightActions={rightDelete(goal.id)}
+                    overshootRight={false}
+                  >
+                    <View style={{ backgroundColor: theme.bg.elevated }}>
+                      <ListRow
+                        icon="pause-circle"
+                        color={MODULE_COLORS.analysis}
+                        title={goal.title}
+                        subtitle={`${goal.progress.label} · ${goal.progress.sourceLabel}`}
+                        right={<StatusPill label={t.goal_paused} tone="warning" />}
+                        onPress={() => router.push({ pathname: '/goal-detail', params: { id: goal.id } })}
+                        onLongPress={() => confirmDelete(goal.id)}
+                      />
+                    </View>
+                  </ReanimatedSwipeable>
+                ))}
+              </View>
+            </View>
+          ) : null}
         </ScrollView>
       )}
       <FAB
         onPress={() => router.push('/goal')}
         accessibilityLabel={t.new_goal}
-        style={[styles.fab, { backgroundColor: MODULE_COLORS.analysis }]}
+        style={[styles.fab, { backgroundColor: MODULE_COLORS.analysis, borderColor: theme.bg.elevated }]}
       >
         <Feather name="plus" size={28} color="#fff" />
       </FAB>
@@ -174,6 +203,7 @@ const styles = StyleSheet.create({
   infoCard: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   infoText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   card: { borderWidth: 1, borderRadius: radius.md, padding: spacing[2], gap: spacing[1] },
+  emptyLine: { padding: spacing[3], fontSize: 13, lineHeight: 18, fontWeight: '600' },
   swipeDelete: { width: 64, justifyContent: 'center', alignItems: 'center', borderRadius: radius.sm },
   fab: {
     position: 'absolute',
@@ -183,7 +213,6 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: radius.lg,
     borderWidth: 2,
-    borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
   },

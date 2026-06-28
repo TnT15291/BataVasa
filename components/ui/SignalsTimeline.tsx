@@ -81,19 +81,19 @@ export function SignalsTimeline({ lanes, axisLabels, nowFraction, nowLabel }: Pr
 
 const styles = StyleSheet.create({
   wrap: { gap: 4 },
-  pillRow: { flexDirection: 'row', height: 14 },
+  pillRow: { flexDirection: 'row', height: 18 },
   trackArea: { flex: 1, position: 'relative' },
   nowPill: {
     position: 'absolute',
-    marginLeft: -18,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    marginLeft: -20,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: 999,
   },
-  nowPillText: { fontSize: 8, fontWeight: '700' },
+  nowPillText: { fontSize: 10, fontWeight: '700' },
   axisRow: { flexDirection: 'row', alignItems: 'center' },
   axisLabels: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
-  axisLabel: { fontSize: 8, fontWeight: '500' },
+  axisLabel: { fontSize: 11, fontWeight: '500' },
   laneRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   laneIcon: { width: GUTTER - 8, alignItems: 'center' },
   track: {
@@ -111,9 +111,9 @@ const styles = StyleSheet.create({
   },
   mark: {
     position: 'absolute',
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginLeft: -2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: -3,
   },
 })

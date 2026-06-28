@@ -42,7 +42,7 @@ export function QuickActionRow({ actions }: Props) {
           <Feather
             name={a.icon}
             size={a.featured ? 18 : 15}
-            color={a.featured ? '#fff' : a.color ?? theme.text.secondary}
+            color={a.featured ? theme.brand.onPrimary : a.color ?? theme.text.secondary}
           />
           {a.showLabel === false ? null : (
             <Text style={[styles.label, { color: a.color ?? theme.text.secondary }]} numberOfLines={1}>

@@ -9,15 +9,17 @@ const defaults = {
   displayCurrency: 'VND',
   colorMode: 'system' as const,
   themeName: 'default' as const,
-  aiProvider: 'openai' as const,
   locationAccess: false,
   aiAutoConfirm: true,
   syncFinance: true,
   syncReminders: true,
   syncHabits: true,
   syncJournals: true,
+  syncGoals: true,
+  syncContext: true,
   hasSeenOnboarding: false,
   biometricLock: false,
+  hideJournals: false,
   hideMicPermissionPrompt: false,
   loaded: false,
 }
@@ -43,15 +45,17 @@ describe('settings store', () => {
       display_currency: 'EUR',
       color_mode: 'dark',
       theme_name: 'ocean',
-      ai_provider: 'openai',
       location_access: 'true',
       ai_auto_confirm: 'false',
       sync_finance: 'false',
       sync_reminders: 'false',
       sync_habits: 'true',
       sync_journals: 'false',
+      sync_goals: 'false',
+      sync_context: 'false',
       has_seen_onboarding: 'true',
       biometric_lock: 'true',
+      hide_journals: 'true',
       hide_mic_permission_prompt: 'true',
     })
 
@@ -69,8 +73,11 @@ describe('settings store', () => {
       syncReminders: false,
       syncHabits: true,
       syncJournals: false,
+      syncGoals: false,
+      syncContext: false,
       hasSeenOnboarding: true,
       biometricLock: true,
+      hideJournals: true,
       hideMicPermissionPrompt: true,
       loaded: true,
     }))
@@ -84,6 +91,16 @@ describe('settings store', () => {
 
     expect(useSettingsStore.getState().hideMicPermissionPrompt).toBe(true)
     expect(mockQueries.setSetting).toHaveBeenCalledWith('hide_mic_permission_prompt', 'true')
+  })
+
+  it('persists hidden journal privacy mode', async () => {
+    const useSettingsStore = loadStore()
+    useSettingsStore.setState(defaults)
+
+    await useSettingsStore.getState().setHideJournals(true)
+
+    expect(useSettingsStore.getState().hideJournals).toBe(true)
+    expect(mockQueries.setSetting).toHaveBeenCalledWith('hide_journals', 'true')
   })
 
   it('updates locale currency defaults when language changes', async () => {
@@ -100,5 +117,43 @@ describe('settings store', () => {
     expect(mockQueries.setSetting).toHaveBeenCalledWith('language', 'ja')
     expect(mockQueries.setSetting).toHaveBeenCalledWith('currency', 'JPY')
     expect(mockQueries.setSetting).toHaveBeenCalledWith('display_currency', 'JPY')
+  })
+
+  it('keeps an explicit currency choice when the language changes', async () => {
+    const useSettingsStore = loadStore()
+    useSettingsStore.setState(defaults)
+
+    // User deliberately picks a currency that is not the language default…
+    await useSettingsStore.getState().setCurrency('USD')
+    jest.clearAllMocks()
+
+    // …then switches language. Currency must survive.
+    await useSettingsStore.getState().setLanguage('ja')
+
+    expect(useSettingsStore.getState()).toEqual(expect.objectContaining({
+      language: 'ja',
+      currency: 'USD',
+      displayCurrency: 'VND',
+    }))
+    expect(mockQueries.setSetting).toHaveBeenCalledWith('language', 'ja')
+    expect(mockQueries.setSetting).not.toHaveBeenCalledWith('currency', 'JPY')
+    expect(mockQueries.setSetting).not.toHaveBeenCalledWith('display_currency', 'JPY')
+  })
+
+  it('treats currency diverging from the language default as explicit on load', async () => {
+    const useSettingsStore = loadStore()
+    useSettingsStore.setState(defaults)
+    mockQueries.getAllSettings.mockResolvedValueOnce({
+      language: 'en',
+      currency: 'VND',
+    })
+
+    await useSettingsStore.getState().loadSettings()
+    jest.clearAllMocks()
+    await useSettingsStore.getState().setLanguage('ja')
+
+    // Loaded currency (VND) ≠ language default (USD) → inferred explicit → not clobbered.
+    expect(useSettingsStore.getState().currency).toBe('VND')
+    expect(mockQueries.setSetting).not.toHaveBeenCalledWith('currency', 'JPY')
   })
 })

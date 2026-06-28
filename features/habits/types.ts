@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MODULE_COLORS } from '@design/moduleColors'
 
 export const CadenceSchema = z.enum(['daily', 'weekdays', 'weekly', 'monthly', 'custom'])
 export type Cadence = z.infer<typeof CadenceSchema>
@@ -13,6 +14,7 @@ export type Habit = {
   target_per_period: number
   schedule_days: string | null // comma-separated weekday indexes, 0=Sun ... 6=Sat
   notification_times: string | null // JSON array of "HH:MM" strings, e.g. '["07:00","21:30"]'
+  identity: string | null // Atomic Habits identity, e.g. "a healthy person"
   location_lat: number | null
   location_lng: number | null
   location_label: string | null
@@ -38,11 +40,12 @@ export type HabitLog = {
 export const CreateHabitInputSchema = z.object({
   name: z.string().min(1).max(100),
   icon: z.string().min(1).max(10).default('✅'),
-  color: z.string().min(4).max(9).default('#C9853E'),
+  color: z.string().min(4).max(9).default(MODULE_COLORS.habits),
   cadence: CadenceSchema.default('daily'),
   target_per_period: z.number().int().min(1).max(99).default(1),
   schedule_days: z.string().max(20).nullable().optional(),
   notification_times: z.string().nullable().optional(),
+  identity: z.string().max(120).nullable().optional(),
   location_lat: z.number().min(-90).max(90).optional(),
   location_lng: z.number().min(-180).max(180).optional(),
   location_label: z.string().max(200).optional(),

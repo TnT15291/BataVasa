@@ -4,7 +4,7 @@ import { logger } from '@services/logger'
 import { getCurrentUserId } from '@services/identity'
 import { nowIso } from '@db/core/db'
 import { enqueue } from '@db/sync/queue'
-import { calculateGoalProgress, parseGoalBinding } from '@services/goalProgress'
+import { calculateGoalMeasureProgress, aggregateGoalProgress, parseGoalBinding } from '@services/goalProgress'
 import * as q from '@db/goals/queries'
 import {
   CreateGoalInputSchema,
@@ -12,33 +12,78 @@ import {
   type CreateGoalInput,
   type UpdateGoalInput,
   type Goal,
+  type GoalMeasure,
+  type GoalMetricBinding,
+  type GoalStatus,
+  type GoalProgress,
   type GoalWithProgress,
 } from './types'
 
 const MODULE = 'goals.service'
 
-function normalizeHabitRateTarget(
-  targetValue: number,
-  targetType: CreateGoalInput['target_type'],
-  unit: string,
-  binding: CreateGoalInput['metric_binding'] | null
-): number {
-  if (binding?.module === 'habits' && targetType === 'rate' && unit === '%' && targetValue < 20) return 100
+// A completion_rate target is a percentage of scheduled days, so it must land in
+// [1,100]; anything outside (incl. an AI parser emitting a quantity) collapses to
+// 100 = "every scheduled day". completion_count and all other goals keep their
+// raw target. Single source of truth for habit-rate normalization.
+function normalizeHabitRateTarget(targetValue: number, binding: GoalMetricBinding | null): number {
+  if (binding?.module === 'habits' && binding.aggregation === 'completion_rate') {
+    if (!Number.isFinite(targetValue) || targetValue <= 0) return 100
+    return Math.min(100, Math.max(1, Math.round(targetValue)))
+  }
   return targetValue
 }
 
 function normalizeGoalForDisplay(goal: Goal): Goal {
   const binding = parseGoalBinding(goal.metric_binding)
-  const targetValue = normalizeHabitRateTarget(goal.target_value, goal.target_type, goal.unit, binding)
+  const targetValue = normalizeHabitRateTarget(goal.target_value, binding)
   return targetValue === goal.target_value ? goal : { ...goal, target_value: targetValue }
+}
+
+// Clamp each measure's habit-rate target the same way the legacy primary target
+// is clamped, so stored measures are always display-ready.
+function normalizeMeasures(measures: GoalMeasure[]): GoalMeasure[] {
+  return measures.map((m) => ({ ...m, target_value: normalizeHabitRateTarget(m.target_value, m.binding) }))
+}
+
+// The columns a goal's measures project onto: the JSON array (source of truth)
+// plus the legacy single columns mirroring the first measure.
+function measureColumns(measures: GoalMeasure[]): Pick<Goal, 'target_type' | 'target_value' | 'unit' | 'direction' | 'metric_binding' | 'measures'> {
+  const primary = measures[0]!
+  return {
+    target_type: primary.target_type,
+    target_value: primary.target_value,
+    unit: primary.unit,
+    direction: primary.direction,
+    metric_binding: JSON.stringify(primary.binding),
+    measures: JSON.stringify(measures),
+  }
+}
+
+// When a 'reach' goal's progress hits its target, mark it done once and queue the
+// change so lists, detail, reports and AI context all see the completed state.
+async function autoCompleteIfReached(goal: Goal, progress: GoalProgress): Promise<GoalStatus> {
+  // The aggregate reports 'reached' only when every 'reach' measure has hit its
+  // target and no 'cap' is exceeded — so this covers single- and multi-measure
+  // goals without inspecting the primary measure's direction.
+  if (goal.status === 'active' && progress.status === 'reached') {
+    await q.updateGoal(goal.id, { status: 'done', updated_at: nowIso() })
+    void enqueue('goal', goal.id, 'upsert')
+    return 'done'
+  }
+  return goal.status
 }
 
 async function hydrateGoal(goal: Goal): Promise<GoalWithProgress> {
   const normalized = normalizeGoalForDisplay(goal)
+  const measureProgress = await calculateGoalMeasureProgress(normalized)
+  const progress = aggregateGoalProgress(measureProgress, normalized)
+  const status = await autoCompleteIfReached(normalized, progress)
   return {
     ...normalized,
-    binding: parseGoalBinding(normalized.metric_binding),
-    progress: await calculateGoalProgress(normalized),
+    status,
+    binding: measureProgress[0]?.binding ?? parseGoalBinding(normalized.metric_binding),
+    progress,
+    measureProgress,
   }
 }
 
@@ -71,17 +116,15 @@ export async function createGoal(input: CreateGoalInput): Promise<Result<GoalWit
   const data = parsed.data
   try {
     const ts = nowIso()
+    const measures = normalizeMeasures(data.measures)
     const goal: Goal = {
       id: uuid(),
       user_id: getCurrentUserId(),
       title: data.title,
       description: data.description ?? null,
-      target_type: data.target_type,
-      target_value: normalizeHabitRateTarget(data.target_value, data.target_type, data.unit, data.metric_binding),
-      unit: data.unit,
+      ...measureColumns(measures),
       start_date: data.start_date,
       due_date: data.due_date ?? null,
-      metric_binding: JSON.stringify(data.metric_binding),
       status: 'active',
       created_at: ts,
       updated_at: ts,
@@ -110,21 +153,10 @@ export async function updateGoal(input: UpdateGoalInput): Promise<Result<GoalWit
     const patch: Partial<Goal> = { updated_at: nowIso() }
     if (data.title !== undefined) patch.title = data.title
     if (data.description !== undefined) patch.description = data.description ?? null
-    if (data.target_type !== undefined) patch.target_type = data.target_type
-    if (data.target_value !== undefined) patch.target_value = data.target_value
-    if (data.unit !== undefined) patch.unit = data.unit
     if (data.start_date !== undefined) patch.start_date = data.start_date
     if (data.due_date !== undefined) patch.due_date = data.due_date ?? null
-    if (data.metric_binding !== undefined) patch.metric_binding = JSON.stringify(data.metric_binding)
+    if (data.measures !== undefined) Object.assign(patch, measureColumns(normalizeMeasures(data.measures)))
     if (data.status !== undefined) patch.status = data.status
-    const nextBinding = data.metric_binding ?? parseGoalBinding(existing.metric_binding)
-    const nextTargetValue = data.target_value ?? existing.target_value
-    const nextTargetType = data.target_type ?? existing.target_type
-    const nextUnit = data.unit ?? existing.unit
-    const normalizedTarget = normalizeHabitRateTarget(nextTargetValue, nextTargetType, nextUnit, nextBinding)
-    if (normalizedTarget !== nextTargetValue || data.target_value !== undefined || data.target_type !== undefined || data.unit !== undefined || data.metric_binding !== undefined) {
-      patch.target_value = normalizedTarget
-    }
     await q.updateGoal(data.id, patch)
     void enqueue('goal', data.id, 'upsert')
     const fresh = await q.getGoal(data.id, getCurrentUserId())

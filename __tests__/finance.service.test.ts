@@ -813,15 +813,18 @@ describe('finance plan item recovery', () => {
     synced_at: null,
   }
 
-  it('restores a soft-deleted plan item and queues sync', async () => {
+  it('restores a soft-deleted plan item, re-creates its bill reminder, and queues sync', async () => {
     mockQ.getPlanItemIncludingDeleted.mockResolvedValue(basePlanItem)
     mockQ.restorePlanItem.mockResolvedValue(undefined)
     mockQ.getPlanItem.mockResolvedValue({ ...basePlanItem, deleted_at: null })
+    ;(reminderSvc.createReminder as jest.Mock).mockResolvedValue({ ok: true, value: { id: 'rem-restored' } })
 
     const result = await restorePlanItem(basePlanItem.id)
 
     expect(result.ok).toBe(true)
     expect(mockQ.restorePlanItem).toHaveBeenCalledWith(basePlanItem.id, expect.any(String))
+    // Expense bill → its due-date reminder is re-created on restore.
+    expect(reminderSvc.createReminder).toHaveBeenCalled()
     expect(mockEnqueue).toHaveBeenCalledWith('finance_plan_item', basePlanItem.id, 'upsert')
   })
 })

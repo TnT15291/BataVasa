@@ -109,7 +109,7 @@ export function DateRow({ value, onChange, label }: Props) {
                 style={[styles.webDone, { backgroundColor: theme.brand.primary }]}
                 onPress={() => setShowPicker(false)}
               >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>OK</Text>
+                <Text style={{ color: theme.brand.onPrimary, fontWeight: '600' }}>OK</Text>
               </Pressable>
             </View>
           </Pressable>

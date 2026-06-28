@@ -153,18 +153,16 @@ export async function validateBoth(): Promise<{
   const b1 = await validateAuth()
   const b2 = await validateSync()
 
-  let summary = ''
-  if (!b1.configured) {
-    summary = '❌ Supabase not configured. Set env vars in .env.local'
-  } else if (!b1.has_session) {
-    summary = '⚠️  No session. User needs to sign in.'
-  } else if (!b2.user_authenticated) {
-    summary = '⚠️  Authenticated but sync not ready.'
-  } else if (b2.sync_queue_pending_count === 0) {
-    summary = '✅ Fully ready. No pending sync items.'
-  } else {
-    summary = `✅ Authenticated & sync ready. ${b2.sync_queue_pending_count} items pending sync.`
-  }
+  const summary =
+    !b1.configured
+      ? 'Supabase not configured. Set env vars in .env.local'
+      : !b1.has_session
+        ? 'No session. User needs to sign in.'
+        : !b2.user_authenticated
+          ? 'Authenticated but sync not ready.'
+          : b2.sync_queue_pending_count === 0
+            ? 'Fully ready. No pending sync items.'
+            : `Authenticated & sync ready. ${b2.sync_queue_pending_count} items pending sync.`
 
   return { b1, b2, summary }
 }

@@ -68,7 +68,11 @@ Rules:
       [
         {
           role: 'system',
-          content: withUserContext(`You are a helpful productivity assistant. Reply in ${language} ONLY. Return ONLY valid JSON.`),
+          content: withUserContext(`You are a helpful productivity assistant. Reply in ${language} ONLY. Return ONLY valid JSON.`, {
+            query: prompt,
+            domains: ['tasks', 'goals', 'profile'],
+            maxEntries: 8,
+          }),
         },
         { role: 'user', content: prompt },
       ],

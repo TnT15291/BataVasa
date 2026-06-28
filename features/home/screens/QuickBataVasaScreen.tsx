@@ -132,7 +132,7 @@ export function QuickBataVasaScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.bubbleText, { color: isUser ? '#fff' : theme.text.primary }]}>
+                <Text style={[styles.bubbleText, { color: isUser ? theme.brand.onPrimary : theme.text.primary }]}>
                   {item.content}
                 </Text>
               </View>
@@ -165,7 +165,7 @@ export function QuickBataVasaScreen() {
           accessibilityRole="button"
           accessibilityLabel={t.command_placeholder}
         >
-          <Feather name="arrow-up" size={19} color="#fff" />
+          <Feather name="arrow-up" size={19} color={theme.brand.onPrimary} />
         </Pressable>
       </View>
       </View>

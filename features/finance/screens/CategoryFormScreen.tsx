@@ -13,6 +13,7 @@ import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved } from '@store/toastStore'
 import { useFinanceBootstrap, useCategories, useCategoryActions } from '../hooks/useFinance'
 import { translateKind } from '../i18n'
+import { GoalBadge } from '@features/goals/components/GoalBadge'
 import { parseAmountInput } from '../services'
 import { displayToCents, centsToDisplay } from '@services/ai/aiLanguage'
 import type { CategoryKind } from '../types'
@@ -142,7 +143,7 @@ export function CategoryFormScreen() {
                 },
               ]}
             >
-              <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '600' }}>
+              <Text style={{ color: active ? theme.brand.onPrimary : theme.text.secondary, fontSize: 12, fontWeight: '600' }}>
                 {translateKind(k, t)}
               </Text>
             </Pressable>
@@ -153,10 +154,13 @@ export function CategoryFormScreen() {
       {/* Color */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.category_color}</Text>
       <View style={styles.colorGrid}>
-        {COLOR_PALETTE.map((c) => (
+        {COLOR_PALETTE.map((c, index) => (
           <Pressable
             key={c}
             onPress={() => setColor(c)}
+            accessibilityRole="button"
+            accessibilityLabel={`${t.category_color} ${index + 1}`}
+            accessibilityState={{ selected: color === c }}
             style={[
               styles.colorDot,
               { backgroundColor: c },
@@ -178,6 +182,10 @@ export function CategoryFormScreen() {
       />
       <Text style={[styles.hint, { color: theme.text.muted }]}>{t.budget_optional} ({currency})</Text>
 
+      {isEditing ? (
+        <GoalBadge variant="button" module="finance" id={editingId} title={name.trim()} />
+      ) : null}
+
       {/* Save */}
       <Pressable
         onPress={onSave}
@@ -185,8 +193,8 @@ export function CategoryFormScreen() {
         style={[styles.saveBtn, { backgroundColor: submitting ? theme.text.muted : theme.brand.primary }]}
       >
         {submitting
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
+          ? <ActivityIndicator color={theme.brand.onPrimary} />
+          : <Text style={[styles.saveBtnText, { color: theme.brand.onPrimary }]}>{isEditing ? t.update : t.save}</Text>}
       </Pressable>
 
       {isEditing && (

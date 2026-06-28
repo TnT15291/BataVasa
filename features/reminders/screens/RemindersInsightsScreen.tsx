@@ -4,8 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
-import { useSettingsStore } from '@store/settingsStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { generateReminderInsight, type ReminderInsight } from '@services/ai/reminderInsight'
 import { useRemindersBootstrap, useReminders } from '../hooks/useReminders'
 import { track } from '@services/analytics'
@@ -18,14 +17,12 @@ export function RemindersInsightsScreen() {
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const reminders = useReminders()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
 
   const [insight, setInsight] = useState<ReminderInsight | null>(null)
   const [loading, setLoading] = useState(false)
 
   const handleGenerate = async () => {
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (!isAiAvailable()) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
     if (reminders.length < 5) { Alert.alert(t.reminder_insight_title, t.reminder_insight_min_data); return }
     setLoading(true)
     setInsight(null)
@@ -82,8 +79,8 @@ export function RemindersInsightsScreen() {
           style={[styles.btn, { backgroundColor: loading ? theme.text.muted : theme.brand.primary }]}
         >
           {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>{insight ? t.refresh : t.reminder_insight_generate}</Text>}
+            ? <ActivityIndicator color={theme.brand.onPrimary} />
+            : <Text style={[styles.btnText, { color: theme.brand.onPrimary }]}>{insight ? t.refresh : t.reminder_insight_generate}</Text>}
         </Pressable>
       </View>
     </View>

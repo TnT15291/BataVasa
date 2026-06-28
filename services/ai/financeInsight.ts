@@ -1,9 +1,8 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
 import { withUserContext } from './userContextPrompt'
+import { aiCategoryName, isDebtCategory, localizedShortWeekdays } from './financeFormat'
 import type { Transaction, Category } from '@features/finance/types'
-
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 function weekKey(date: Date): string {
   const d = new Date(date)
@@ -20,26 +19,33 @@ function buildSummary(txs: Transaction[], catMap: Map<string, Category>, currenc
   const weekSpend = new Map<string, number>()
   const moodData = new Map<string, { total: number; count: number }>()
   const topExpenses: { amount: number; cat: string; merchant: string; date: string }[] = []
+  const DAY_NAMES = localizedShortWeekdays()
 
   for (const tx of txs) {
     const abs = Math.abs(tx.amount_cents)
     const cat = catMap.get(tx.category_id)
-    const catName = cat?.name ?? 'Other'
     const date = new Date(tx.occurred_at)
 
     if (tx.amount_cents > 0) {
       income += abs
-    } else {
-      expense += abs
-      daySpend[date.getDay()] += abs
-      weekSpend.set(weekKey(date), (weekSpend.get(weekKey(date)) ?? 0) + abs)
-      if (tx.merchant?.trim()) {
-        const m = tx.merchant.trim()
-        const prev = merchantData.get(m) ?? { total: 0, count: 0 }
-        merchantData.set(m, { total: prev.total + abs, count: prev.count + 1 })
-      }
-      topExpenses.push({ amount: abs, cat: catName, merchant: tx.merchant ?? '', date: date.toISOString().split('T')[0]! })
+      continue
     }
+    expense += abs
+
+    // Debt-book movement (lending out / repaying a loan) is recorded as expense
+    // but is not consumption — exclude it from every spending-behavior breakdown
+    // so a loan counterparty never surfaces as a "top merchant"/spending category.
+    if (isDebtCategory(cat)) continue
+
+    const catName = aiCategoryName(cat)
+    daySpend[date.getDay()] += abs
+    weekSpend.set(weekKey(date), (weekSpend.get(weekKey(date)) ?? 0) + abs)
+    if (tx.merchant?.trim()) {
+      const m = tx.merchant.trim()
+      const prev = merchantData.get(m) ?? { total: 0, count: 0 }
+      merchantData.set(m, { total: prev.total + abs, count: prev.count + 1 })
+    }
+    topExpenses.push({ amount: abs, cat: catName, merchant: tx.merchant ?? '', date: date.toISOString().split('T')[0]! })
 
     const prevCat = catData.get(catName) ?? { total: 0, count: 0, budget: cat?.monthly_budget_cents ?? 0 }
     catData.set(catName, { total: prevCat.total + abs, count: prevCat.count + 1, budget: prevCat.budget })
@@ -134,7 +140,11 @@ export async function generateFinanceInsights(
   return chatCompletion([
     {
       role: 'system',
-      content: withUserContext(`You are a personal finance assistant. CRITICAL: Reply in ${language} ONLY. ALL headings and content MUST be in ${language}. Be concise, specific, and non-judgmental. Use short markdown sections (## heading).`),
+      content: withUserContext(`You are a personal finance assistant. CRITICAL: Reply in ${language} ONLY. ALL headings and content MUST be in ${language}; translate any English labels in the data (category names, weekday names, section labels) — never echo them. Do NOT use emojis. Be concise, specific, and non-judgmental. Use short markdown sections (## heading).`, {
+        query: `${period}\n${summary}\n${budgetHint}`,
+        domains: ['finance', 'goals', 'profile'],
+        maxEntries: 8,
+      }),
     },
     {
       role: 'user',
@@ -144,12 +154,12 @@ ${summary}
 
 Note: ${budgetHint}
 
-Write exactly 4-5 ## sections in ${language}. Cover:
-1. Tổng quan kỳ này (overview with key numbers)
-2. Pattern chi tiêu đáng chú ý (specific patterns — merchants, days, categories)
-3. Xu hướng & cảnh báo (weekly trend, budget alerts if any exceeded)
-4. Mối liên hệ cảm xúc & tiền (mood-money if data available, skip if not)
-5. 2-3 hành động cụ thể cho kỳ tới (concrete next actions referencing the actual data)`,
+Write exactly 4-5 ## sections, each heading in ${language}. Cover:
+1. Overview of the period (key numbers)
+2. Notable spending patterns (specific merchants, days, categories)
+3. Trends and alerts (weekly trend, budget alerts if any exceeded)
+4. Emotion and money link (mood-money if data available, skip if not)
+5. 2-3 concrete next actions (referencing the actual data)`,
     },
   ])
 }

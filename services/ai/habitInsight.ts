@@ -37,9 +37,11 @@ function buildHabitStats(habits: Habit[], logs: HabitLog[], periodDays: number):
     const completedLogs = habitLogs.filter((l) => !l.skipped)
     const skippedLogs = habitLogs.filter((l) => l.skipped)
 
-    // Date sets
-    const completedDates = new Set(completedLogs.map((l) => l.occurred_at.split('T')[0]))
-    const skippedDates = new Set(skippedLogs.map((l) => l.occurred_at.split('T')[0]))
+    // Date sets — keyed by LOCAL calendar day (occurred_at is stored UTC, so
+    // splitting the UTC string would mis-bucket early/late logs for non-UTC users
+    // and break the streak/day-pattern math below that iterates local dates).
+    const completedDates = new Set(completedLogs.map((l) => localDateStr(new Date(l.occurred_at))))
+    const skippedDates = new Set(skippedLogs.map((l) => localDateStr(new Date(l.occurred_at))))
 
     // Count days due in the period
     let dueCount = 0
@@ -110,8 +112,9 @@ function buildHabitStats(habits: Habit[], logs: HabitLog[], periodDays: number):
       : secondHalfDone < firstHalfDone ? '↓ declining'
       : '→ steady'
 
+    const identityNote = habit.identity?.trim() ? ` | identity:"${habit.identity.trim()}"` : ''
     lines.push(
-      `[${habit.icon} ${habit.name}] cadence:${habit.cadence} | completion:${completedDates.size}/${effectiveDue} (${completionPct}%) | streak:${streak}d | skipped:${skippedDates.size} | trend:${trend}`,
+      `[${habit.icon} ${habit.name}] cadence:${habit.cadence} | completion:${completedDates.size}/${effectiveDue} (${completionPct}%) | streak:${streak}d | skipped:${skippedDates.size} | trend:${trend}${identityNote}`,
       `  Last 14 days (oldest→newest): ${last14.join(' ')}`,
       dowPattern ? `  Day pattern: ${dowPattern}` : '',
     )
@@ -154,6 +157,7 @@ Return ONLY valid JSON:
 Rules:
 - Respond in ${language}
 - Be specific: quote completion percentages and day names
+- If a habit has an identity ("identity:..."), frame the encouragement and tip around becoming that person — each completion is a vote for that identity — not just numbers
 - Never leave a field empty or null`
 
   try {
@@ -161,7 +165,11 @@ Rules:
       [
         {
           role: 'system',
-          content: withUserContext(`You are a supportive habit coach. Reply in ${language} ONLY. Return ONLY valid JSON, no explanation outside the JSON.`),
+          content: withUserContext(`You are a supportive habit coach. Reply in ${language} ONLY. Return ONLY valid JSON, no explanation outside the JSON.`, {
+            query: prompt,
+            domains: ['habits', 'goals', 'profile'],
+            maxEntries: 8,
+          }),
         },
         { role: 'user', content: prompt },
       ],

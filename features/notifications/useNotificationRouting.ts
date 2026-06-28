@@ -1,31 +1,53 @@
 import { Platform } from 'react-native'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type MutableRefObject } from 'react'
 import { useRouter } from 'expo-router'
-import * as Notifications from 'expo-notifications'
 import { WEEKLY_REVIEW_NOTIFICATION_TYPE } from '@services/proactiveNotifications'
+import { ANNIVERSARY_NOTIFICATION_TYPE } from '@services/anniversaryNotifications'
 
-/**
- * Route the app when the user taps a notification. Uses
- * `useLastNotificationResponse` so it handles both cold-start launches (app
- * opened from a notification) and taps while running. A per-identifier guard
- * stops the same response from re-navigating on re-render.
- */
+const shouldUseNotificationRouting = Platform.OS !== 'web' && !(Platform.OS === 'android' && __DEV__)
+
+function handleNotificationResponse(response: any, router: ReturnType<typeof useRouter>, handledId: MutableRefObject<string | null>) {
+  if (!response) return
+  const request = response.notification.request
+  if (handledId.current === request.identifier) return
+  const data = request.content.data as { type?: string; journalId?: string } | undefined
+  if (data?.type === WEEKLY_REVIEW_NOTIFICATION_TYPE) {
+    handledId.current = request.identifier
+    router.push('/weekly-review')
+  } else if (data?.type === ANNIVERSARY_NOTIFICATION_TYPE) {
+    handledId.current = request.identifier
+    router.push(data.journalId ? { pathname: '/journal', params: { id: data.journalId } } : '/journals')
+  }
+}
+
 export function useNotificationRouting(): void {
-  if ((Platform.OS as string) === 'web') return
-
   const router = useRouter()
-  const lastResponse = Notifications.useLastNotificationResponse()
   const handledId = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!lastResponse) return
-    const request = lastResponse.notification.request
-    if (handledId.current === request.identifier) return
+    if (!shouldUseNotificationRouting) return
 
-    const data = request.content.data as { type?: string } | undefined
-    if (data?.type === WEEKLY_REVIEW_NOTIFICATION_TYPE) {
-      handledId.current = request.identifier
-      router.push('/weekly-review')
+    let subscription: { remove: () => void } | null = null
+    let mounted = true
+
+    const setup = async () => {
+      try {
+        const Notifications = await import('expo-notifications')
+        if (!mounted) return
+        subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+          handleNotificationResponse(response, router, handledId)
+        })
+        const lastResponse = await Notifications.getLastNotificationResponseAsync()
+        if (mounted) handleNotificationResponse(lastResponse, router, handledId)
+      } catch {
+        // Notifications are not available in this runtime.
+      }
     }
-  }, [lastResponse, router])
+
+    void setup()
+    return () => {
+      mounted = false
+      subscription?.remove()
+    }
+  }, [router])
 }

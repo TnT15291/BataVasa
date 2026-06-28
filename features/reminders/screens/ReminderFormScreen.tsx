@@ -14,7 +14,7 @@ import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved, toast } from '@store/toastStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { parseReminderEntry } from '../aiParser'
 import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
 import { useRemindersBootstrap, useReminders, useReminderActions } from '../hooks/useReminders'
@@ -53,7 +53,6 @@ export function ReminderFormScreen() {
   const language = useSettingsStore((s) => s.language)
   const reminders = useReminders()
   const { createReminder, updateReminder, deleteReminder, restoreReminder } = useReminderActions()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
 
   const params = useLocalSearchParams<{ id?: string; prefill?: string; date?: string }>()
@@ -188,8 +187,7 @@ export function ReminderFormScreen() {
   const handleSmartParse = async (override?: string) => {
     const input = (override ?? smartText).trim()
     if (!input || parsing) return
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (!isAiAvailable()) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
     if (override) setSmartText(override)
     setParsing(true)
     try {
@@ -452,8 +450,8 @@ export function ReminderFormScreen() {
           style={[styles.saveBtn, { backgroundColor: submitting ? theme.text.muted : theme.brand.primary }]}
         >
           {submitting
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
+            ? <ActivityIndicator color={theme.brand.onPrimary} />
+            : <Text style={[styles.saveBtnText, { color: theme.brand.onPrimary }]}>{isEditing ? t.update : t.save}</Text>}
         </Pressable>
       </View>
       {confirmSheet && (

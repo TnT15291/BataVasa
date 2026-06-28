@@ -4,8 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
-import { useSettingsStore } from '@store/settingsStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { generateHabitInsight, type HabitInsight } from '@services/ai/habitInsight'
 import { exportAllHabits } from '../services'
 import { useHabitsBootstrap, useHabits } from '../hooks/useHabits'
@@ -20,7 +19,6 @@ export function HabitsInsightsScreen() {
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const habits = useHabits()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
 
   const [insight, setInsight] = useState<HabitInsight | null>(null)
   const [loading, setLoading] = useState(false)
@@ -38,8 +36,7 @@ export function HabitsInsightsScreen() {
   }, [])
 
   const handleGenerate = async () => {
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (!isAiAvailable()) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
     if (allLogs.length < 3) { Alert.alert(t.habit_insight_title, t.habit_insight_min_data); return }
     setLoading(true)
     setInsight(null)
@@ -102,8 +99,8 @@ export function HabitsInsightsScreen() {
           style={[styles.btn, { backgroundColor: loading ? theme.text.muted : theme.brand.primary }]}
         >
           {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>{insight ? t.refresh : t.habit_insight_generate}</Text>}
+            ? <ActivityIndicator color={theme.brand.onPrimary} />
+            : <Text style={[styles.btnText, { color: theme.brand.onPrimary }]}>{insight ? t.refresh : t.habit_insight_generate}</Text>}
         </Pressable>
       </View>
     </View>

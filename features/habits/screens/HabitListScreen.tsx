@@ -11,6 +11,7 @@ import { useSettingsStore } from '@store/settingsStore'
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
 import { useHabitsStore } from '@store/habitsStore'
+import { GoalBadge } from '@features/goals/components/GoalBadge'
 import { rescheduleAllHabitNotifications } from '../services'
 import { MODULE_COLORS } from '@design/moduleColors'
 import { FAB } from '@components/FAB'
@@ -27,27 +28,6 @@ const GROUP_COLORS = {
 }
 
 const capitalizeFirst = (text: string) => text ? text.charAt(0).toUpperCase() + text.slice(1) : text
-type IconName = keyof typeof Feather.glyphMap
-
-function habitIconName(icon?: string): IconName {
-  const map: Record<string, IconName> = {
-    '💧': 'droplet',
-    '🏃': 'activity',
-    '🏃‍♂️': 'activity',
-    '📚': 'book-open',
-    '🧘': 'sun',
-    '💊': 'plus-circle',
-    '🥗': 'heart',
-    '😴': 'moon',
-    '✍️': 'edit-3',
-    '🎯': 'target',
-    '🔥': 'zap',
-    '☕': 'coffee',
-  }
-  if (icon && map[icon]) return map[icon]
-  if (icon && icon in Feather.glyphMap) return icon as IconName
-  return 'check-circle'
-}
 
 function HabitRow({
   habit,
@@ -68,7 +48,12 @@ function HabitRow({
   const { t } = useTranslation()
   const done = habit.todayCount >= habit.target_per_period
   const dueToday = habit.dueToday !== false
-  const color = accent || habit.color || MODULE_COLORS.habits
+  // The habit's own colour wins; the group accent is only a fallback for habits
+  // without one. (Previously `accent` came first, so every row took its group's colour.)
+  const color = habit.color || accent || MODULE_COLORS.habits
+  // Atomic Habits "never miss twice": gentle nudge when due today, not yet done,
+  // and yesterday was left undone — keep a one-day slip from becoming two.
+  const showNudge = dueToday && !done && habit.missedYesterday === true
 
   return (
     <Pressable
@@ -84,7 +69,7 @@ function HabitRow({
       ]}
     >
       <View style={[styles.rowIconWrap, { backgroundColor: color + '16', borderColor: color + '33' }]}>
-        <Feather name={habitIconName(habit.icon)} size={17} color={color} />
+        <Text style={styles.rowEmoji}>{habit.icon}</Text>
       </View>
       <View style={styles.rowBody}>
         <View style={styles.rowNameRow}>
@@ -107,7 +92,14 @@ function HabitRow({
               ? `${t.habit_done_today} · ${habit.streak}d`
               : `${habit.todayCount}/${habit.target_per_period} · ${habit.streak}d`}
           </Text>
+          <GoalBadge variant="chip" module="habits" id={habit.id} />
         </View>
+        {showNudge ? (
+          <View style={[styles.nudgePill, { backgroundColor: color + '18' }]}>
+            <Feather name="rotate-ccw" size={10} color={color} />
+            <Text style={[styles.nudgeText, { color }]} numberOfLines={1}>{t.habit_dont_miss_twice}</Text>
+          </View>
+        ) : null}
       </View>
       <View style={[styles.checkCircle, {
         backgroundColor: done ? color : 'transparent',
@@ -125,7 +117,11 @@ function HabitRow({
         <Feather name="edit-2" size={14} color={theme.text.secondary} />
       </Pressable>
       {dueToday && !done ? (
-        <Pressable onPress={onSkip} hitSlop={8} style={[styles.skipBtn, { borderColor: theme.border.subtle }]}>
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); onSkip() }}
+          hitSlop={8}
+          style={[styles.skipBtn, { borderColor: theme.border.subtle }]}
+        >
           <Text style={[styles.skipText, { color: theme.text.muted }]}>{t.reminder_skip}</Text>
         </Pressable>
       ) : null}
@@ -157,7 +153,13 @@ export function HabitListScreen() {
     const newStreak = useHabitsStore.getState().habits.find((h) => h.id === habitId)?.streak ?? 0
     if (newStreak > oldStreak && STREAK_MILESTONES.includes(newStreak)) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      Alert.alert(t.habit_streak_milestone.replace('{{n}}', String(newStreak)))
+      // Atomic Habits: each milestone is a "vote" for the identity the user chose.
+      const habit = useHabitsStore.getState().habits.find((h) => h.id === habitId)
+      const identityValue = habit?.identity?.trim()
+      Alert.alert(
+        t.habit_streak_milestone.replace('{{n}}', String(newStreak)),
+        identityValue ? t.habit_identity_vote.replace('{{identity}}', identityValue) : undefined
+      )
     } else {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     }
@@ -263,7 +265,7 @@ export function HabitListScreen() {
             onPress={() => router.push('/habit')}
             style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
           >
-            <Text style={styles.emptyBtnText}>{t.new_habit}</Text>
+            <Text style={[styles.emptyBtnText, { color: theme.brand.onPrimary }]}>{t.new_habit}</Text>
           </Pressable>
         </View>
       ) : (
@@ -321,7 +323,7 @@ export function HabitListScreen() {
         accessibilityLabel={t.new_habit}
         style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
       >
-        <Feather name="plus" size={28} color="#fff" />
+        <Feather name="plus" size={28} color={theme.brand.onPrimary} />
       </FAB>
 
     </ScreenTransition>
@@ -392,6 +394,8 @@ const styles = StyleSheet.create({
   rowNameCompact: { fontSize: 13, fontWeight: '500' },
   rowMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   rowMeta: { fontSize: 11, fontWeight: '500' },
+  nudgePill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.full, paddingHorizontal: spacing[2], paddingVertical: 2, marginTop: 3 },
+  nudgeText: { fontSize: 11, fontWeight: '700' },
   checkCircle: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: spacing[3] },
   editBtn: {
     width: 36,

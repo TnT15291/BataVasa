@@ -1,18 +1,18 @@
 import { getDb } from '@db/core/db'
 import type { Habit, HabitLog } from '@features/habits/types'
 
-// ── Habits ────────────────────────────────────────────────────────────────────
+// Habits
 
 export async function insertHabit(h: Habit): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO habit
-      (id,user_id,name,icon,color,cadence,target_per_period,schedule_days,notification_times,
+      (id,user_id,name,icon,color,cadence,target_per_period,schedule_days,notification_times,identity,
        location_lat,location_lng,location_label,
        created_at,updated_at,deleted_at,synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [h.id, h.user_id, h.name, h.icon, h.color, h.cadence, h.target_per_period, h.schedule_days ?? null,
-     h.notification_times ?? null,
+     h.notification_times ?? null, h.identity ?? null,
      h.location_lat ?? null, h.location_lng ?? null, h.location_label ?? null,
      h.created_at, h.updated_at, null, null]
   )
@@ -66,9 +66,15 @@ export async function listHabits(userId: string | null): Promise<Habit[]> {
 
 export async function wipeHabits(userId: string | null): Promise<number> {
   const db = await getDb()
-  await db.runAsync(`DELETE FROM habit_log WHERE user_id = ?`, [userId])
-  const r = await db.runAsync(`DELETE FROM habit WHERE user_id = ?`, [userId])
-  return r.changes
+  // Logs + habits must vanish together; wrap both DELETEs so a mid-wipe failure
+  // can't leave orphaned habit_log rows behind.
+  let changes = 0
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM habit_log WHERE user_id = ?`, [userId])
+    const r = await db.runAsync(`DELETE FROM habit WHERE user_id = ?`, [userId])
+    changes = r.changes
+  })
+  return changes
 }
 
 export async function exportHabitsData(userId: string | null): Promise<{ habits: Habit[]; logs: HabitLog[] }> {
@@ -78,7 +84,7 @@ export async function exportHabitsData(userId: string | null): Promise<{ habits:
   return { habits, logs }
 }
 
-// ── Habit Logs ────────────────────────────────────────────────────────────────
+// Habit Logs
 
 export async function insertHabitLog(log: HabitLog): Promise<void> {
   const db = await getDb()
@@ -106,8 +112,8 @@ export async function listLogsForHabit(habitId: string): Promise<HabitLog[]> {
   )
 }
 
-// All of the user's habit logs since `fromIso`, across habits — feeds the
-// cross-module habit↔mood↔spending correlation analysis.
+// All of the user's habit logs since `fromIso`, across habits. Feeds the
+// cross-module habit/mood/spending correlation analysis.
 export async function listLogsSince(userId: string | null, fromIso: string): Promise<HabitLog[]> {
   const db = await getDb()
   return db.getAllAsync<HabitLog>(
@@ -118,17 +124,26 @@ export async function listLogsSince(userId: string | null, fromIso: string): Pro
     [userId, fromIso]
   )
 }
-
-export async function countLogsForDate(habitId: string, dateStr: string): Promise<number> {
+// Raw logs (occurred_at + skipped) within an instant range, for timezone-correct
+// per-local-day bucketing in the service layer. Filtering by the stored UTC
+// instant is correct; deriving the *calendar day* must happen in JS using the
+// device timezone, never via substr() on the UTC string (that mis-buckets
+// early-morning / late-evening logs by a day for non-UTC users).
+export async function listLogRowsInRange(
+  habitId: string,
+  fromIso: string,
+  toIso: string
+): Promise<{ occurred_at: string; skipped: number }[]> {
   const db = await getDb()
-  const row = await db.getFirstAsync<{ cnt: number }>(
-    `SELECT COUNT(*) as cnt FROM habit_log
+  return db.getAllAsync<{ occurred_at: string; skipped: number }>(
+    `SELECT occurred_at, COALESCE(skipped, 0) AS skipped
+     FROM habit_log
      WHERE habit_id = ? AND deleted_at IS NULL
-       AND COALESCE(skipped, 0) = 0
-       AND substr(occurred_at, 1, 10) = ?`,
-    [habitId, dateStr]
+       AND occurred_at >= ?
+       AND occurred_at < ?
+     ORDER BY occurred_at ASC`,
+    [habitId, fromIso, toIso]
   )
-  return row?.cnt ?? 0
 }
 
 export async function countLogsInRange(
@@ -148,17 +163,6 @@ export async function countLogsInRange(
   return row?.cnt ?? 0
 }
 
-export async function getLogForDate(habitId: string, dateStr: string): Promise<HabitLog | null> {
-  const db = await getDb()
-  return db.getFirstAsync<HabitLog>(
-    `SELECT * FROM habit_log
-     WHERE habit_id = ? AND deleted_at IS NULL
-       AND substr(occurred_at, 1, 10) = ?
-     LIMIT 1`,
-    [habitId, dateStr]
-  )
-}
-
 export async function getLatestLogInRange(
   habitId: string,
   fromIso: string,
@@ -173,24 +177,5 @@ export async function getLatestLogInRange(
      ORDER BY occurred_at DESC
      LIMIT 1`,
     [habitId, fromIso, toIso]
-  )
-}
-
-// Returns count of logs per date for last N days (for streak calculation)
-export async function listLogCountsByDate(
-  habitId: string,
-  fromDate: string,
-  toDate: string
-): Promise<{ date: string; count: number }[]> {
-  const db = await getDb()
-  return db.getAllAsync<{ date: string; count: number }>(
-    `SELECT substr(occurred_at, 1, 10) as date, COUNT(*) as count
-     FROM habit_log
-     WHERE habit_id = ? AND deleted_at IS NULL
-       AND COALESCE(skipped, 0) = 0
-       AND substr(occurred_at, 1, 10) >= ?
-       AND substr(occurred_at, 1, 10) <= ?
-     GROUP BY substr(occurred_at, 1, 10)`,
-    [habitId, fromDate, toDate]
   )
 }

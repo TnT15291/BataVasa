@@ -125,7 +125,7 @@ export function DebtListScreen() {
                     accessibilityState={{ selected: active }}
                     style={[styles.segment, { backgroundColor: active ? theme.brand.primary : 'transparent' }]}
                   >
-                    <Text style={[styles.segmentText, { color: active ? '#fff' : theme.text.secondary }]}>
+                    <Text style={[styles.segmentText, { color: active ? theme.brand.onPrimary : theme.text.secondary }]}>
                       {row.label}
                     </Text>
                   </Pressable>
@@ -224,7 +224,7 @@ export function DebtListScreen() {
         accessibilityLabel={t.debt_new}
         style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
       >
-        <Feather name="plus" size={28} color="#fff" />
+        <Feather name="plus" size={28} color={theme.brand.onPrimary} />
       </FAB>
     </ScreenTransition>
   )

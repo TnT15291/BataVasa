@@ -5,11 +5,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@design/useTheme'
 import { spacing } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
+import { useSettingsStore } from '@store/settingsStore'
+import { getDateFnsLocale } from '@services/locale'
 import { AppHeader, ListRow } from '@components/ui'
 import { useTransactions } from '@features/finance/hooks/useFinance'
 import { useReminders } from '@features/reminders/hooks/useReminders'
 import { useJournals } from '@features/journals/hooks/useJournals'
+import { useHabits, useHabitsBootstrap } from '@features/habits/hooks/useHabits'
 import { listRecentLogs } from '@features/habits/services'
+import type { HabitLog } from '@features/habits/types'
 import type { DailyTimelineItem } from '../hooks/useDailyDigest'
 import { format } from 'date-fns'
 import { MODULE_COLORS } from '@design/moduleColors'
@@ -19,11 +23,16 @@ export function AllTimelineScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
+  const language = useSettingsStore((s) => s.language)
+  const locale = getDateFnsLocale(language)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
 
+  useHabitsBootstrap()
   const txs = useTransactions()
   const reminders = useReminders()
   const journals = useJournals()
-  const [habitLogs, setHabitLogs] = useState<any[]>([])
+  const habits = useHabits()
+  const [habitLogs, setHabitLogs] = useState<HabitLog[]>([])
 
   useEffect(() => {
     void (async () => {
@@ -60,23 +69,40 @@ export function AllTimelineScreen() {
       } as DailyTimelineItem)
     }
 
-    for (const j of journals) {
-      out.push({
-        id: `journal-${j.id}`,
-        kind: 'journal',
-        occurredAt: new Date(j.occurred_at),
-        title: (j.content || '').slice(0, 120).replace(/\n/g, ' '),
-        subtitle: j.mood ? `${t.report_avg_mood} ${j.mood}/5` : undefined,
-        route: '/journals',
-      } as DailyTimelineItem)
+    if (hideJournals) {
+      const latestJournal = journals
+        .slice()
+        .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))[0]
+      if (latestJournal) {
+        out.push({
+          id: 'journal-hidden',
+          kind: 'journal',
+          occurredAt: new Date(latestJournal.occurred_at),
+          title: t.hide_journals_locked_count.replace('{{count}}', String(journals.length)),
+          subtitle: t.hide_journals_locked,
+          route: '/journals',
+        } as DailyTimelineItem)
+      }
+    } else {
+      for (const j of journals) {
+        out.push({
+          id: `journal-${j.id}`,
+          kind: 'journal',
+          occurredAt: new Date(j.occurred_at),
+          title: (j.content || '').slice(0, 120).replace(/\n/g, ' '),
+          subtitle: j.mood ? `${t.report_avg_mood} ${j.mood}/5` : undefined,
+          route: '/journals',
+        } as DailyTimelineItem)
+      }
     }
 
+    const habitName = new Map(habits.map((h) => [h.id, h.name]))
     for (const log of habitLogs) {
       out.push({
         id: `habitlog-${log.id}`,
         kind: 'habit',
         occurredAt: new Date(log.occurred_at),
-        title: log.note ?? 'Habit log',
+        title: habitName.get(log.habit_id) ?? log.note ?? t.habits,
         subtitle: undefined,
         route: '/habits',
       } as DailyTimelineItem)
@@ -86,7 +112,7 @@ export function AllTimelineScreen() {
       .filter((i) => i.occurredAt && !Number.isNaN(i.occurredAt.getTime()))
       .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
       .slice(0, 40)
-  }, [txs, reminders, journals, habitLogs, t])
+  }, [txs, reminders, journals, habits, habitLogs, t, hideJournals])
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary, paddingTop: insets.top }}>
@@ -99,7 +125,7 @@ export function AllTimelineScreen() {
             color={item.kind === 'finance' ? MODULE_COLORS.finance : item.kind === 'task' ? MODULE_COLORS.tasks : item.kind === 'habit' ? MODULE_COLORS.habits : MODULE_COLORS.journal}
             title={item.title}
             subtitle={item.subtitle}
-            meta={format(item.occurredAt, 'PP pp')}
+            meta={format(item.occurredAt, 'PP pp', { locale })}
             onPress={() => router.push(item.route as any)}
           />
         ))}

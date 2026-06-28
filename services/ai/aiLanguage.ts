@@ -7,7 +7,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
 }
 
 const SYMBOLS: Record<string, string> = {
-  USD: '$', EUR: 'EUR ', GBP: 'GBP ', JPY: 'JPY ', CNY: 'CNY ', KRW: 'KRW ', THB: 'THB ', SGD: 'S$',
+  USD: '$', EUR: '€', GBP: '£', JPY: '¥', CNY: 'CN¥', KRW: '₩', THB: '฿', SGD: 'S$',
 }
 
 const NO_MINOR_UNIT = new Set(['VND', 'JPY', 'KRW'])
@@ -24,7 +24,9 @@ export function getAICurrency(): string {
 export function fmtAI(cents: number, currency: string): string {
   const abs = Math.abs(cents)
   if (currency === 'VND') {
-    if (abs >= 1_000_000) return `${(abs / 1_000_000).toFixed(1)}M ₫`
+    // Vietnamese reads "triệu" (tr), not the English "M" abbreviation.
+    const millionSuffix = useSettingsStore.getState().language === 'vi' ? 'tr' : 'M'
+    if (abs >= 1_000_000) return `${(abs / 1_000_000).toFixed(1)}${millionSuffix} ₫`
     return `${Math.round(abs / 1_000)}k ₫`
   }
 

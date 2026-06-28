@@ -10,58 +10,48 @@ import { validateAuth, validateSync, validateBoth } from '@services/b1b2-validat
 describe('B1: Supabase Auth Validation', () => {
   it('should detect Supabase configuration', async () => {
     const result = await validateAuth()
-    console.log('Auth config:', result.configured)
-    console.log('Auth msg:', result.configured_msg)
+    expect(typeof result.configured).toBe('boolean')
+    expect(typeof result.configured_msg).toBe('string')
     // Note: Will fail if EXPO_PUBLIC_SUPABASE_URL/KEY not set, which is expected
-    // for test env — this is informational.
+    // for test env; this is informational.
   })
 
   it('should report session state', async () => {
     const result = await validateAuth()
-    console.log('Has session:', result.has_session)
-    console.log('Initialized:', result.initialized)
+    expect(typeof result.has_session).toBe('boolean')
+    expect(typeof result.initialized).toBe('boolean')
     // Expect: initialized = true (after app boot)
     // Expect: has_session = true or false depending on user login state
   })
 
   it('should show errors if auth fails', async () => {
     const result = await validateAuth()
-    if (result.error) {
-      console.warn('Auth error detected:', result.error)
-    }
+    expect(result.error === undefined || typeof result.error === 'string').toBe(true)
   })
 })
 
 describe('B2: Cloud Sync Validation', () => {
   it('should report sync queue status', async () => {
     const result = await validateSync()
-    console.log('User authenticated:', result.user_authenticated)
-    console.log('Sync queue pending:', result.sync_queue_pending_count)
-    console.log('Sync toggles:', {
-      finance: result.sync_finance_enabled,
-      habits: result.sync_habits_enabled,
-      journals: result.sync_journals_enabled,
-      reminders: result.sync_reminders_enabled,
-    })
+    expect(typeof result.user_authenticated).toBe('boolean')
+    expect(typeof result.sync_queue_pending_count).toBe('number')
+    expect(typeof result.sync_finance_enabled).toBe('boolean')
+    expect(typeof result.sync_habits_enabled).toBe('boolean')
+    expect(typeof result.sync_journals_enabled).toBe('boolean')
+    expect(typeof result.sync_reminders_enabled).toBe('boolean')
   })
 
   it('should list pending items', async () => {
     const result = await validateSync()
-    if (result.pending_items && result.pending_items.length > 0) {
-      console.log('Pending items:')
-      result.pending_items.forEach((item) => {
-        console.log(`  - ${item.table_name}/${item.row_id} [${item.operation}]`)
-      })
-    } else {
-      console.log('No pending items')
-    }
+    expect(result.pending_items === undefined || Array.isArray(result.pending_items)).toBe(true)
   })
 })
 
 describe('B1 & B2: Combined Status', () => {
   it('should provide overall status', async () => {
     const result = await validateBoth()
-    console.log('Summary:', result.summary)
-    console.log('Full result:', result)
+    expect(typeof result.summary).toBe('string')
+    expect(result.b1).toBeDefined()
+    expect(result.b2).toBeDefined()
   })
 })

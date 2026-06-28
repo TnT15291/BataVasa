@@ -1,12 +1,15 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, fmtAI } from './aiLanguage'
 import { withUserContext } from './userContextPrompt'
+import { getTranslations } from '@services/i18n'
+import { isDebtCategoryName, translateCategoryNameByName } from '@features/finance/i18n'
 import { subWeeks, startOfWeek, endOfWeek } from 'date-fns'
 import type { Transaction, Category } from '@features/finance/types'
 import type { Habit, HabitLog } from '@features/habits/types'
 import type { Journal } from '@features/journals/types'
 import type { Reminder } from '@features/reminders/types'
 import type { GoalWithProgress } from '@features/goals/types'
+import { useSettingsStore } from '@store/settingsStore'
 
 type AmountConverter = (amount: number, currency: string) => number | null
 
@@ -29,9 +32,13 @@ export type WeeklyLifeReviewSnapshot = {
   weekEnd: string
   goals: {
     active: number
+    done: number
+    paused: number
     onTrack: number
     needsAttention: number
-    top: Array<{ title: string; percent: number; label: string; sourceLabel: string }>
+    top: Array<{ title: string; percent: number; label: string; sourceLabel: string; note?: string }>
+    completed: Array<{ title: string; percent: number; label: string; sourceLabel: string; note?: string }>
+    pausedList: Array<{ title: string; percent: number; label: string; sourceLabel: string; note?: string }>
   }
   finance: {
     income: number
@@ -94,6 +101,7 @@ export function buildWeeklyLifeReviewSnapshot(input: WeeklyLifeReviewInput): Wee
   const previousEnd = subWeeks(weekEndDate, 1)
   const convert: AmountConverter = input.amountInCurrency ?? ((amount, currency) => currency === input.currency ? amount : null)
   const catMap = new Map(input.categories.map((c) => [c.id, c]))
+  const hideJournals = useSettingsStore.getState().hideJournals
 
   let income = 0
   let expense = 0
@@ -112,7 +120,9 @@ export function buildWeeklyLifeReviewSnapshot(input: WeeklyLifeReviewInput): Wee
         const abs = Math.abs(amount)
         expense += abs
         const cat = catMap.get(tx.category_id)
-        if (cat?.kind !== 'income') {
+        // Skip income categories and debt-book movement (lending/borrowing) so
+        // top "spending" categories reflect real consumption only.
+        if (cat?.kind !== 'income' && !isDebtCategoryName(cat?.name)) {
           const name = cat?.name ?? 'Other'
           catTotals.set(name, (catTotals.get(name) ?? 0) + abs)
         }
@@ -135,12 +145,14 @@ export function buildWeeklyLifeReviewSnapshot(input: WeeklyLifeReviewInput): Wee
   }
 
   const weekJournals = input.journals.filter((j) => !j.deleted_at && inRange(j.occurred_at, weekStartDate, weekEndDate))
-  const moods = weekJournals.map((j) => j.mood).filter((m): m is number => m !== null)
+  const moods = hideJournals ? [] : weekJournals.map((j) => j.mood).filter((m): m is number => m !== null)
   const tagCounts = new Map<string, number>()
-  for (const journal of weekJournals) {
-    for (const raw of (journal.tags ?? '').split(',')) {
-      const tag = raw.trim()
-      if (tag) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+  if (!hideJournals) {
+    for (const journal of weekJournals) {
+      for (const raw of (journal.tags ?? '').split(',')) {
+        const tag = raw.trim()
+        if (tag) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+      }
     }
   }
 
@@ -151,9 +163,12 @@ export function buildWeeklyLifeReviewSnapshot(input: WeeklyLifeReviewInput): Wee
   })
   const reminderDone = weekReminders.filter((r) => r.completed === 1).length
 
+  const summarizeGoal = (g: GoalWithProgress) => ({ title: g.title, percent: g.progress.percent, label: g.progress.label, sourceLabel: g.progress.sourceLabel, note: g.progress.note })
   const activeGoals = input.goals.filter((g) => g.status === 'active' && !g.deleted_at)
+  const doneGoals = input.goals.filter((g) => g.status === 'done' && !g.deleted_at)
+  const pausedGoals = input.goals.filter((g) => g.status === 'paused' && !g.deleted_at)
   const goalTop = activeGoals
-    .map((g) => ({ title: g.title, percent: g.progress.percent, label: g.progress.label, sourceLabel: g.progress.sourceLabel }))
+    .map(summarizeGoal)
     .sort((a, b) => a.percent - b.percent)
     .slice(0, 4)
 
@@ -163,9 +178,13 @@ export function buildWeeklyLifeReviewSnapshot(input: WeeklyLifeReviewInput): Wee
     weekEnd: isoDate(weekEndDate),
     goals: {
       active: activeGoals.length,
+      done: doneGoals.length,
+      paused: pausedGoals.length,
       onTrack: activeGoals.filter((g) => g.progress.percent >= 70).length,
       needsAttention: activeGoals.filter((g) => g.progress.percent < 40).length,
       top: goalTop,
+      completed: doneGoals.map(summarizeGoal).sort((a, b) => b.percent - a.percent).slice(0, 4),
+      pausedList: pausedGoals.map(summarizeGoal).sort((a, b) => a.percent - b.percent).slice(0, 4),
     },
     finance: {
       income,
@@ -188,7 +207,7 @@ export function buildWeeklyLifeReviewSnapshot(input: WeeklyLifeReviewInput): Wee
     },
     journals: {
       entries: weekJournals.length,
-      important: weekJournals.filter((j) => j.is_important === 1).length,
+      important: hideJournals ? 0 : weekJournals.filter((j) => j.is_important === 1).length,
       avgMood: moods.length > 0 ? moods.reduce((s, m) => s + m, 0) / moods.length : null,
       tags: Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([tag, count]) => ({ tag, count })),
     },
@@ -203,22 +222,40 @@ export function buildWeeklyLifeReviewSnapshot(input: WeeklyLifeReviewInput): Wee
 }
 
 export function weeklyLifeReviewSummary(snapshot: WeeklyLifeReviewSnapshot, currency: string): string {
+  const hideJournals = useSettingsStore.getState().hideJournals
   const goals = snapshot.goals.top.length > 0
-    ? snapshot.goals.top.map((g) => `  ${g.title}: ${g.percent}% (${g.label}) via ${g.sourceLabel || 'source'}`).join('\n')
+    ? snapshot.goals.top.map((g) => `  ${g.title}: ${g.percent}% (${g.label}) via ${g.sourceLabel || 'source'}${g.note ? `; note: ${g.note}` : ''}`).join('\n')
     : '  No active goals'
+  const completedGoals = snapshot.goals.completed.length > 0
+    ? snapshot.goals.completed.map((g) => `  ${g.title}: ${g.percent}% (${g.label}) via ${g.sourceLabel || 'source'}${g.note ? `; note: ${g.note}` : ''}`).join('\n')
+    : '  No completed goals'
+  const pausedGoals = snapshot.goals.pausedList.length > 0
+    ? snapshot.goals.pausedList.map((g) => `  ${g.title}: ${g.percent}% (${g.label}) via ${g.sourceLabel || 'source'}${g.note ? `; note: ${g.note}` : ''}`).join('\n')
+    : '  No paused goals'
+  const t = getTranslations()
   const cats = snapshot.finance.topCategories.length > 0
-    ? snapshot.finance.topCategories.map((c) => `  ${c.name}: ${fmtAI(c.amount, currency)}`).join('\n')
+    ? snapshot.finance.topCategories.map((c) => `  ${translateCategoryNameByName(c.name, t)}: ${fmtAI(c.amount, currency)}`).join('\n')
     : '  No spending categories'
   const habits = snapshot.habits.topHabits.length > 0
     ? snapshot.habits.topHabits.map((h) => `  ${h.name}: ${h.count} completions`).join('\n')
     : '  No habit completions'
-  const tags = snapshot.journals.tags.length > 0
+  const tags = !hideJournals && snapshot.journals.tags.length > 0
     ? snapshot.journals.tags.map((t) => `  ${t.tag}: ${t.count}`).join('\n')
     : '  No journal tags'
+  const journalSummary = hideJournals
+    ? `JOURNALS: ${snapshot.journals.entries} entries. Journal privacy is enabled; content, mood, tags, and important flags are hidden.`
+    : `JOURNALS: ${snapshot.journals.entries} entries, avg mood ${snapshot.journals.avgMood === null ? 'n/a' : snapshot.journals.avgMood.toFixed(1)}, important ${snapshot.journals.important}
+Tags:
+${tags}`
 
   return `WEEK: ${snapshot.rangeLabel}
-GOALS: ${snapshot.goals.active} active, ${snapshot.goals.onTrack} on track, ${snapshot.goals.needsAttention} need attention
+GOALS: ${snapshot.goals.active} active, ${snapshot.goals.done} completed, ${snapshot.goals.paused} paused, ${snapshot.goals.onTrack} on track, ${snapshot.goals.needsAttention} need attention
+Active focus:
 ${goals}
+Completed:
+${completedGoals}
+Paused:
+${pausedGoals}
 
 FINANCE: income ${fmtAI(snapshot.finance.income, currency)}, expense ${fmtAI(snapshot.finance.expense, currency)}, net ${fmtAI(snapshot.finance.net, currency)}, expense vs previous week ${fmtPercent(snapshot.finance.expenseDeltaPercent)}, review items ${snapshot.finance.reviewCount}
 Top categories:
@@ -227,9 +264,7 @@ ${cats}
 HABITS: ${snapshot.habits.completions} completions, ${snapshot.habits.skips} skips, best streak ${snapshot.habits.bestStreak}d
 ${habits}
 
-JOURNALS: ${snapshot.journals.entries} entries, avg mood ${snapshot.journals.avgMood === null ? 'n/a' : snapshot.journals.avgMood.toFixed(1)}, important ${snapshot.journals.important}
-Tags:
-${tags}
+${journalSummary}
 
 TASKS: ${snapshot.reminders.due} due, ${snapshot.reminders.completed} completed, completion rate ${snapshot.reminders.completionRate === null ? 'n/a' : `${snapshot.reminders.completionRate}%`}, overdue ${snapshot.reminders.overdue}, high-priority open ${snapshot.reminders.highPriorityOpen}`
 }
@@ -237,11 +272,16 @@ TASKS: ${snapshot.reminders.due} due, ${snapshot.reminders.completed} completed,
 export async function generateWeeklyLifeReview(snapshot: WeeklyLifeReviewSnapshot, currency: string): Promise<string> {
   const language = getAILanguage()
   const summary = weeklyLifeReviewSummary(snapshot, currency)
+  const hideJournals = useSettingsStore.getState().hideJournals
 
   return chatCompletion([
     {
       role: 'system',
-      content: withUserContext(`You are BataVasa's weekly life review assistant. Reply in ${language} only. Be calm, practical, specific, and non-judgmental. Use concise markdown sections with ## headings.`),
+      content: withUserContext(`You are BataVasa's weekly life review assistant. Reply in ${language} only. Be calm, practical, specific, and non-judgmental. Use concise markdown sections with ## headings. If a goal line includes a note about skipped foreign-currency groups, mention that its progress may be incomplete.`, {
+        query: summary,
+        domains: hideJournals ? ['finance', 'habits', 'tasks', 'goals', 'profile'] : ['finance', 'habits', 'journals', 'tasks', 'goals', 'profile'],
+        maxEntries: 10,
+      }),
     },
     {
       role: 'user',
@@ -251,7 +291,7 @@ ${summary}
 
 Use 5 sections:
 1. Week at a glance
-2. Goals and direction
+2. Goals and direction, including what was completed and what was paused
 3. Money, habits, mood, and tasks
 4. What deserves attention next week
 5. 2-3 concrete actions for next week`,

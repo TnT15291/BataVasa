@@ -14,12 +14,11 @@ jest.mock('../database/habits/queries', () => ({
   wipeHabits: jest.fn(),
   exportHabitsData: jest.fn(),
   insertHabitLog: jest.fn(),
-  getLogForDate: jest.fn(),
   softDeleteHabitLog: jest.fn(),
-  countLogsForDate: jest.fn(),
   countLogsInRange: jest.fn(),
   getLatestLogInRange: jest.fn(),
-  listLogCountsByDate: jest.fn(),
+  listLogRowsInRange: jest.fn(),
+  listLogsSince: jest.fn(),
 }))
 
 jest.mock('../database/core/db', () => ({
@@ -53,7 +52,13 @@ import {
   getCurrentPeriodLogCount,
   getHabitPeriodRange,
   getLocalDateString,
+  localDayBoundsIso,
+  bucketLogsByLocalDate,
   isHabitDueOnDate,
+  wasHabitMissedYesterday,
+  buildImplementationIntention,
+  computeHabitStats,
+  loadHabitsWithStats,
 } from '../features/habits/services'
 import type { Habit } from '../features/habits/types'
 
@@ -69,6 +74,7 @@ const baseHabit: Habit = {
   target_per_period: 1,
   schedule_days: null,
   notification_times: null,
+  identity: null,
   location_lat: null,
   location_lng: null,
   location_label: null,
@@ -101,6 +107,13 @@ describe('createHabit', () => {
     const result = await createHabit({ name: '', icon: '✅', color: '#000', cadence: 'daily', target_per_period: 1 })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED')
+  })
+
+  it('stores the identity field (Atomic Habits)', async () => {
+    mockQ.insertHabit.mockResolvedValue(undefined as any)
+    const result = await createHabit({ name: 'Run', icon: '🏃', color: '#22C55E', cadence: 'daily', target_per_period: 1, identity: 'a runner' })
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.identity).toBe('a runner')
   })
 
   it('returns VALIDATION_FAILED for invalid cadence', async () => {
@@ -192,6 +205,14 @@ describe('updateHabit', () => {
     if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED')
   })
 
+  it('updates the identity field', async () => {
+    mockQ.getHabit.mockResolvedValueOnce(baseHabit).mockResolvedValueOnce({ ...baseHabit, identity: 'a reader' })
+    mockQ.updateHabit.mockResolvedValue(undefined as any)
+    const result = await updateHabit({ id: baseHabit.id, identity: 'a reader' })
+    expect(result.ok).toBe(true)
+    expect(mockQ.updateHabit).toHaveBeenCalledWith(baseHabit.id, expect.objectContaining({ identity: 'a reader' }))
+  })
+
   it('returns NOT_FOUND when habit missing', async () => {
     mockQ.getHabit.mockResolvedValue(null)
     const result = await updateHabit({ id: baseHabit.id, name: 'X' })
@@ -265,7 +286,7 @@ describe('exportAllHabits', () => {
 
 describe('skipHabit', () => {
   it('creates a skip log when none exists', async () => {
-    mockQ.getLogForDate.mockResolvedValue(null)
+    mockQ.getLatestLogInRange.mockResolvedValue(null)
     mockQ.insertHabitLog.mockResolvedValue(undefined as any)
     const result = await skipHabit(baseHabit.id, '2026-01-05')
     expect(result.ok).toBe(true)
@@ -282,14 +303,14 @@ describe('skipHabit', () => {
       created_at: '2026-01-05T00:00:00.000Z', updated_at: '2026-01-05T00:00:00.000Z',
       deleted_at: null, synced_at: null,
     }
-    mockQ.getLogForDate.mockResolvedValue(existingLog)
+    mockQ.getLatestLogInRange.mockResolvedValue(existingLog)
     const result = await skipHabit(baseHabit.id, '2026-01-05')
     expect(result.ok).toBe(true)
     expect(mockQ.insertHabitLog).not.toHaveBeenCalled()
   })
 
   it('returns DB_ERROR when insert throws', async () => {
-    mockQ.getLogForDate.mockResolvedValue(null)
+    mockQ.getLatestLogInRange.mockResolvedValue(null)
     mockQ.insertHabitLog.mockRejectedValue(new Error('disk full'))
     const result = await skipHabit(baseHabit.id, '2026-01-05')
     expect(result.ok).toBe(false)
@@ -306,7 +327,7 @@ describe('unlogHabit', () => {
   }
 
   it('soft-deletes log found by date string', async () => {
-    mockQ.getLogForDate.mockResolvedValue(log)
+    mockQ.getLatestLogInRange.mockResolvedValue(log)
     mockQ.softDeleteHabitLog.mockResolvedValue(undefined as any)
     const result = await unlogHabit(baseHabit.id, '2026-01-05')
     expect(result.ok).toBe(true)
@@ -322,14 +343,14 @@ describe('unlogHabit', () => {
   })
 
   it('returns ok when no log found (nothing to unlog)', async () => {
-    mockQ.getLogForDate.mockResolvedValue(null)
+    mockQ.getLatestLogInRange.mockResolvedValue(null)
     const result = await unlogHabit(baseHabit.id, '2026-01-05')
     expect(result.ok).toBe(true)
     expect(mockQ.softDeleteHabitLog).not.toHaveBeenCalled()
   })
 
   it('returns DB_ERROR when delete throws', async () => {
-    mockQ.getLogForDate.mockResolvedValue(log)
+    mockQ.getLatestLogInRange.mockResolvedValue(log)
     mockQ.softDeleteHabitLog.mockRejectedValue(new Error('fail'))
     const result = await unlogHabit(baseHabit.id, '2026-01-05')
     expect(result.ok).toBe(false)
@@ -339,7 +360,7 @@ describe('unlogHabit', () => {
 
 describe('getHabitStreak', () => {
   it('returns 0 when habit not found', async () => {
-    mockQ.listLogCountsByDate.mockResolvedValue([])
+    mockQ.listLogRowsInRange.mockResolvedValue([])
     mockQ.getHabit.mockResolvedValue(null)
     const streak = await getHabitStreak(baseHabit.id)
     expect(streak).toBe(0)
@@ -349,18 +370,33 @@ describe('getHabitStreak', () => {
     const today = new Date()
     const d0 = new Date(today); d0.setHours(12, 0, 0, 0)
     const d1 = new Date(today); d1.setDate(d1.getDate() - 1); d1.setHours(12, 0, 0, 0)
-    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    mockQ.listLogCountsByDate.mockResolvedValue([
-      { date: fmt(d0), count: 1 },
-      { date: fmt(d1), count: 1 },
+    mockQ.listLogRowsInRange.mockResolvedValue([
+      { occurred_at: d0.toISOString(), skipped: 0 },
+      { occurred_at: d1.toISOString(), skipped: 0 },
     ])
     mockQ.getHabit.mockResolvedValue(baseHabit)
     const streak = await getHabitStreak(baseHabit.id)
     expect(streak).toBeGreaterThanOrEqual(2)
   })
 
+  it('a skipped rest day bridges the streak instead of breaking it', async () => {
+    const today = new Date()
+    const at = (offset: number) => {
+      const d = new Date(today); d.setDate(d.getDate() - offset); d.setHours(12, 0, 0, 0)
+      return d.toISOString()
+    }
+    mockQ.listLogRowsInRange.mockResolvedValue([
+      { occurred_at: at(0), skipped: 0 }, // today: done
+      { occurred_at: at(1), skipped: 1 }, // yesterday: rest/skip
+      { occurred_at: at(2), skipped: 0 }, // 2 days ago: done
+    ])
+    mockQ.getHabit.mockResolvedValue(baseHabit)
+    // Two kept days, the skip in between bridges rather than breaks.
+    expect(await getHabitStreak(baseHabit.id)).toBe(2)
+  })
+
   it('returns 0 on query error', async () => {
-    mockQ.listLogCountsByDate.mockRejectedValue(new Error('db fail'))
+    mockQ.listLogRowsInRange.mockRejectedValue(new Error('db fail'))
     const streak = await getHabitStreak(baseHabit.id)
     expect(streak).toBe(0)
   })
@@ -368,13 +404,13 @@ describe('getHabitStreak', () => {
 
 describe('getTodayLogCount', () => {
   it('returns count from DB', async () => {
-    mockQ.countLogsForDate.mockResolvedValue(3)
+    mockQ.countLogsInRange.mockResolvedValue(3)
     const count = await getTodayLogCount(baseHabit.id)
     expect(count).toBe(3)
   })
 
   it('returns 0 on error', async () => {
-    mockQ.countLogsForDate.mockRejectedValue(new Error('fail'))
+    mockQ.countLogsInRange.mockRejectedValue(new Error('fail'))
     const count = await getTodayLogCount(baseHabit.id)
     expect(count).toBe(0)
   })
@@ -401,6 +437,56 @@ describe('loadHabits error path', () => {
     const result = await loadHabits()
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('DB_ERROR')
+  })
+})
+
+describe('computeHabitStats (batched, no DB)', () => {
+  const at = (offset: number, skipped = 0) => {
+    const d = new Date()
+    d.setDate(d.getDate() - offset)
+    d.setHours(12, 0, 0, 0)
+    return { occurred_at: d.toISOString(), skipped }
+  }
+
+  it('mirrors per-habit math: skip bridges streak, counts today, no false miss', () => {
+    const stats = computeHabitStats(baseHabit, [at(0, 0), at(1, 1), at(2, 0)])
+    expect(stats.streak).toBe(2) // matches getHabitStreak's "skip bridges" case
+    expect(stats.todayCount).toBe(1)
+    expect(stats.dueToday).toBe(true)
+    expect(stats.missedYesterday).toBe(false) // yesterday was a skip, not a miss
+  })
+
+  it('excludes skipped logs from todayCount', () => {
+    expect(computeHabitStats(baseHabit, [at(0, 1)]).todayCount).toBe(0)
+  })
+
+  it('flags missedYesterday when due yesterday with no log at all', () => {
+    expect(computeHabitStats(baseHabit, [at(0, 0)]).missedYesterday).toBe(true)
+  })
+})
+
+describe('loadHabitsWithStats (batched query)', () => {
+  it('uses ONE log query for the whole list and groups per habit', async () => {
+    const h2: Habit = { ...baseHabit, id: 'aa11bb22-58cc-4372-a567-0e02b2c3d479', name: 'Read' }
+    const now = new Date()
+    now.setHours(12, 0, 0, 0)
+    const log = (habit_id: string) => ({
+      id: 'l', habit_id, user_id: null, occurred_at: now.toISOString(), note: null,
+      skipped: 0, created_at: now.toISOString(), updated_at: now.toISOString(), deleted_at: null, synced_at: null,
+    })
+    mockQ.listHabits.mockResolvedValue([baseHabit, h2])
+    mockQ.listLogsSince.mockResolvedValue([log(baseHabit.id), log(h2.id)])
+
+    const r = await loadHabitsWithStats()
+
+    expect(mockQ.listLogsSince).toHaveBeenCalledTimes(1)
+    expect(mockQ.listLogRowsInRange).not.toHaveBeenCalled() // no per-habit fan-out
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value).toHaveLength(2)
+      expect(r.value.find((h) => h.id === baseHabit.id)?.todayCount).toBe(1)
+      expect(r.value.find((h) => h.id === h2.id)?.todayCount).toBe(1)
+    }
   })
 })
 
@@ -481,5 +567,112 @@ describe('habit period helpers', () => {
     const range = getHabitPeriodRange({ cadence: 'monthly' }, new Date(2026, 0, 20, 6, 0, 0))
     expect(range.from).toEqual(new Date(2026, 0, 1, 0, 0, 0, 0))
     expect(range.to).toEqual(new Date(2026, 1, 1, 0, 0, 0, 0))
+  })
+})
+
+describe('local-date bucketing (timezone correctness, H1)', () => {
+  it('localDayBoundsIso spans exactly one local calendar day', () => {
+    const { fromIso, toIso } = localDayBoundsIso('2026-01-05')
+    expect(new Date(fromIso)).toEqual(new Date(2026, 0, 5, 0, 0, 0, 0))
+    expect(new Date(toIso)).toEqual(new Date(2026, 0, 6, 0, 0, 0, 0))
+  })
+
+  it('buckets a log onto its LOCAL calendar day (not the UTC substring)', () => {
+    // 06:00 and 23:30 local on Jan 5. East of UTC the ISO string can carry a
+    // different (UTC) date — bucketing must still resolve to the local day.
+    const localMorning = new Date(2026, 0, 5, 6, 0, 0)
+    const { doneByDate, skippedDates } = bucketLogsByLocalDate([
+      { occurred_at: localMorning.toISOString(), skipped: 0 },
+      { occurred_at: new Date(2026, 0, 5, 23, 30, 0).toISOString(), skipped: 1 },
+    ])
+    expect(doneByDate.get(getLocalDateString(localMorning))).toBe(1)
+    expect(doneByDate.get('2026-01-05')).toBe(1)
+    expect(skippedDates.has('2026-01-05')).toBe(true)
+  })
+})
+
+describe('wasHabitMissedYesterday', () => {
+  const skipLog = {
+    id: 'log-skip', habit_id: baseHabit.id, user_id: null,
+    occurred_at: '2026-01-04T12:00:00.000Z', note: 'Skipped', skipped: 1,
+    created_at: '2026-01-04T00:00:00.000Z', updated_at: '2026-01-04T00:00:00.000Z',
+    deleted_at: null, synced_at: null,
+  }
+  const doneLog = { ...skipLog, id: 'log-done', note: null, skipped: 0 }
+
+  it('is a miss when scheduled yesterday and there is no log', async () => {
+    mockQ.getLatestLogInRange.mockResolvedValue(null)
+    expect(await wasHabitMissedYesterday(baseHabit)).toBe(true)
+  })
+
+  it('is NOT a miss when yesterday was completed', async () => {
+    mockQ.getLatestLogInRange.mockResolvedValue(doneLog)
+    expect(await wasHabitMissedYesterday(baseHabit)).toBe(false)
+  })
+
+  it('is NOT a miss when yesterday was intentionally skipped', async () => {
+    mockQ.getLatestLogInRange.mockResolvedValue(skipLog)
+    expect(await wasHabitMissedYesterday(baseHabit)).toBe(false)
+  })
+
+  it('is NOT a miss when the habit was not scheduled yesterday', async () => {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    // Schedule only a weekday that is NOT yesterday → not due yesterday.
+    const otherWeekday = String((yesterday.getDay() + 1) % 7)
+    const habit = { ...baseHabit, cadence: 'custom' as const, schedule_days: otherWeekday }
+    expect(await wasHabitMissedYesterday(habit)).toBe(false)
+    expect(mockQ.getLatestLogInRange).not.toHaveBeenCalled()
+  })
+
+  it('returns false on query error', async () => {
+    mockQ.getLatestLogInRange.mockRejectedValue(new Error('db fail'))
+    expect(await wasHabitMissedYesterday(baseHabit)).toBe(false)
+  })
+})
+
+describe('buildImplementationIntention', () => {
+  const t = {
+    impl_intention_full: 'At {{time}}, at {{place}}, I will {{habit}}.',
+    impl_intention_time: 'I will {{habit}} at {{time}}.',
+    impl_intention_place: 'I will {{habit}} in {{place}}.',
+  }
+
+  it('uses the full template when both time and place exist', () => {
+    const r = buildImplementationIntention(
+      { name: 'Run', notification_times: '["06:30","21:00"]', location_label: 'the park' },
+      t
+    )
+    expect(r).toBe('At 06:30, at the park, I will Run.')
+  })
+
+  it('uses the time-only template when there is no place', () => {
+    const r = buildImplementationIntention(
+      { name: 'Run', notification_times: '["06:30"]', location_label: null },
+      t
+    )
+    expect(r).toBe('I will Run at 06:30.')
+  })
+
+  it('uses the place-only template when there is no time', () => {
+    const r = buildImplementationIntention(
+      { name: 'Run', notification_times: null, location_label: 'the park' },
+      t
+    )
+    expect(r).toBe('I will Run in the park.')
+  })
+
+  it('returns null when neither time nor place is set', () => {
+    expect(buildImplementationIntention({ name: 'Run', notification_times: null, location_label: null }, t)).toBeNull()
+    expect(buildImplementationIntention({ name: 'Run', notification_times: '[]', location_label: '' }, t)).toBeNull()
+  })
+
+  it('returns null for an empty name', () => {
+    expect(buildImplementationIntention({ name: '  ', notification_times: '["06:30"]', location_label: null }, t)).toBeNull()
+  })
+
+  it('tolerates malformed notification_times JSON', () => {
+    const r = buildImplementationIntention({ name: 'Run', notification_times: 'not-json', location_label: 'gym' }, t)
+    expect(r).toBe('I will Run in gym.')
   })
 })

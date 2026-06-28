@@ -83,6 +83,7 @@ export function JournalListScreen() {
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
   const journals = useJournals()
   const locale = getDateFnsLocale(language)
   const { deleteJournal, restoreJournal } = useJournalActions()
@@ -148,6 +149,8 @@ export function JournalListScreen() {
     return { todayCount, weekCount, avgMood, latest, importantCount }
   }, [journals])
 
+  const hiddenJournalCount = t.hide_journals_locked_count.replace('{{count}}', String(journals.length))
+
   if (journals.length === 0) {
     return (
       <View style={[styles.empty, { backgroundColor: theme.bg.primary }]}>
@@ -163,7 +166,7 @@ export function JournalListScreen() {
           onPress={() => router.push('/journal')}
           style={[styles.emptyBtn, { backgroundColor: theme.brand.primary }]}
         >
-          <Text style={styles.emptyBtnText}>{t.new_journal}</Text>
+          <Text style={[styles.emptyBtnText, { color: theme.brand.onPrimary }]}>{t.new_journal}</Text>
         </Pressable>
       </View>
     )
@@ -174,18 +177,26 @@ export function JournalListScreen() {
       <ScrollView contentContainerStyle={[styles.list, { paddingTop: insets.top + spacing[2] }]}>
         <AppHeader subtitle={t.nav_journal} onSettings={() => router.push('/settings')} />
         <ModuleOverview
-          eyebrow={t.report_avg_mood}
-          value={journalStats.avgMood > 0 ? `${journalStats.avgMood.toFixed(1)}/5` : String(journals.length)}
-          subtitle={journalStats.latest
-            ? journalStats.latest.content.replace(/^#+\s?/gm, '').replace(/[*_`]/g, '').replace(/\n+/g, ' ').trim().slice(0, 60)
-            : t.journal_empty_prompt}
+          eyebrow={hideJournals ? t.hide_journals : t.report_avg_mood}
+          value={hideJournals ? String(journals.length) : journalStats.avgMood > 0 ? `${journalStats.avgMood.toFixed(1)}/5` : String(journals.length)}
+          subtitle={hideJournals
+            ? hiddenJournalCount
+            : journalStats.latest
+              ? journalStats.latest.content.replace(/^#+\s?/gm, '').replace(/[*_`]/g, '').replace(/\n+/g, ' ').trim().slice(0, 60)
+              : t.journal_empty_prompt}
           icon="book-open"
           accent={MODULE_COLORS.journal}
-          stats={[
-            { key: 'today', label: t.today, value: String(journalStats.todayCount), color: MODULE_COLORS.journal },
-            { key: 'week', label: t.weekly, value: String(journalStats.weekCount) },
-            { key: 'important', label: t.report_important, value: String(journalStats.importantCount), color: MODULE_COLORS.journal },
-          ]}
+          stats={hideJournals
+            ? [
+                { key: 'today', label: t.today, value: String(journalStats.todayCount), color: MODULE_COLORS.journal },
+                { key: 'week', label: t.weekly, value: String(journalStats.weekCount) },
+                { key: 'total', label: t.report_entries, value: String(journals.length), color: MODULE_COLORS.journal },
+              ]
+            : [
+                { key: 'today', label: t.today, value: String(journalStats.todayCount), color: MODULE_COLORS.journal },
+                { key: 'week', label: t.weekly, value: String(journalStats.weekCount) },
+                { key: 'important', label: t.report_important, value: String(journalStats.importantCount), color: MODULE_COLORS.journal },
+              ]}
         />
 
         <View style={styles.analysisRow}>
@@ -210,42 +221,52 @@ export function JournalListScreen() {
           ))}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tagScroll}
-        >
-          <Pressable
-            onPress={() => setActiveTag(null)}
-            style={[styles.tagChip, {
-              backgroundColor: activeTag === null ? MODULE_COLORS.journal + '18' : theme.bg.elevated,
-              borderColor: activeTag === null ? MODULE_COLORS.journal + '66' : theme.border.subtle,
-            }]}
+        {!hideJournals ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tagScroll}
           >
-            <Text style={[styles.tagChipText, { color: activeTag === null ? MODULE_COLORS.journal : theme.text.secondary }]}>
-              {t.tag_all}
-            </Text>
-          </Pressable>
-          {ACTIVITY_TAGS.map((tag) => {
-            const active = activeTag === tag
-            return (
-              <Pressable
-                key={tag}
-                onPress={() => setActiveTag(active ? null : tag)}
-                style={[styles.tagChip, {
-                  backgroundColor: active ? MODULE_COLORS.journal + '18' : theme.bg.elevated,
-                  borderColor: active ? MODULE_COLORS.journal + '66' : theme.border.subtle,
-                }]}
-              >
-                <Text style={[styles.tagChipText, { color: active ? MODULE_COLORS.journal : theme.text.secondary }]}>
-                  {tagLabels[tag]}
-                </Text>
-              </Pressable>
-            )
-          })}
-        </ScrollView>
+            <Pressable
+              onPress={() => setActiveTag(null)}
+              style={[styles.tagChip, {
+                backgroundColor: activeTag === null ? MODULE_COLORS.journal + '18' : theme.bg.elevated,
+                borderColor: activeTag === null ? MODULE_COLORS.journal + '66' : theme.border.subtle,
+              }]}
+            >
+              <Text style={[styles.tagChipText, { color: activeTag === null ? MODULE_COLORS.journal : theme.text.secondary }]}>
+                {t.tag_all}
+              </Text>
+            </Pressable>
+            {ACTIVITY_TAGS.map((tag) => {
+              const active = activeTag === tag
+              return (
+                <Pressable
+                  key={tag}
+                  onPress={() => setActiveTag(active ? null : tag)}
+                  style={[styles.tagChip, {
+                    backgroundColor: active ? MODULE_COLORS.journal + '18' : theme.bg.elevated,
+                    borderColor: active ? MODULE_COLORS.journal + '66' : theme.border.subtle,
+                  }]}
+                >
+                  <Text style={[styles.tagChipText, { color: active ? MODULE_COLORS.journal : theme.text.secondary }]}>
+                    {tagLabels[tag]}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </ScrollView>
+        ) : null}
 
-        {groups.map((group) => (
+        {hideJournals ? (
+          <View style={[styles.lockedCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+            <View style={[styles.lockedIcon, { backgroundColor: MODULE_COLORS.journal + '1F' }]}>
+              <Feather name="lock" size={20} color={MODULE_COLORS.journal} />
+            </View>
+            <Text style={[styles.lockedTitle, { color: theme.text.primary }]}>{t.hide_journals_locked}</Text>
+            <Text style={[styles.lockedBody, { color: theme.text.muted }]}>{hiddenJournalCount}</Text>
+          </View>
+        ) : groups.map((group) => (
           <View key={group.dateLabel} style={styles.group}>
             <Text style={[styles.dateLabel, { color: theme.text.muted }]}>{group.dateLabel}</Text>
             {group.entries.map((j) => (
@@ -298,9 +319,9 @@ export function JournalListScreen() {
       <FAB
         onPress={() => router.push('/journal')}
         accessibilityLabel={t.new_journal}
-        style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
+        style={[styles.fab, { backgroundColor: theme.brand.primary, borderColor: theme.bg.elevated, bottom: spacing[5] }]}
       >
-        <Feather name="plus" size={28} color="#fff" />
+        <Feather name="plus" size={28} color={theme.brand.onPrimary} />
       </FAB>
     </ScreenTransition>
   )
@@ -383,7 +404,7 @@ const styles = StyleSheet.create({
   emptyBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   fab: {
     position: 'absolute', right: spacing[6],
-    width: 56, height: 56, borderRadius: radius.lg, borderWidth: 2, borderColor: '#fff',
+    width: 56, height: 56, borderRadius: radius.lg, borderWidth: 2,
     alignItems: 'center', justifyContent: 'center',
     elevation: 5, shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
@@ -394,4 +415,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     marginBottom: spacing[2],
   },
+  lockedCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing[5],
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  lockedIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockedTitle: { fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  lockedBody: { fontSize: 13, textAlign: 'center' },
 })

@@ -315,7 +315,7 @@ export function DebtFormScreen() {
                         borderColor: active ? theme.brand.primary : theme.border.subtle,
                       }]}
                     >
-                      <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 12, fontWeight: '700' }}>
+                      <Text style={{ color: active ? theme.brand.onPrimary : theme.text.secondary, fontSize: 12, fontWeight: '700' }}>
                         {days === 0 ? t.debt_remind_same_day : t.debt_remind_days.replace('{{count}}', String(days))}
                       </Text>
                     </Pressable>
@@ -376,8 +376,8 @@ export function DebtFormScreen() {
           style={[styles.footerBtn, { backgroundColor: submitting ? theme.text.muted : theme.brand.primary, flex: 1.4 }]}
         >
           {submitting
-            ? <ActivityIndicator color="#fff" size="small" />
-            : <Text style={[styles.footerBtnText, { color: '#fff' }]}>{isEditing ? t.update : t.save}</Text>}
+            ? <ActivityIndicator color={theme.brand.onPrimary} size="small" />
+            : <Text style={[styles.footerBtnText, { color: theme.brand.onPrimary }]}>{isEditing ? t.update : t.save}</Text>}
         </Pressable>
       </View>
     </KeyboardAvoidingView>

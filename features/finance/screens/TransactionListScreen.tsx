@@ -41,7 +41,7 @@ import { SkeletonTransactionList } from '@components/SkeletonBox'
 import { FAB } from '@components/FAB'
 import { ScreenTransition } from '@components/ScreenTransition'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { AppHeader, Button, SegmentedControl } from '@components/ui'
+import { AppHeader, Button, SegmentedControl, EmptyState } from '@components/ui'
 import { toast } from '@store/toastStore'
 
 type Period = 'today' | 'week' | 'month' | 'all'
@@ -256,6 +256,15 @@ export function TransactionListScreen() {
   const overviewIncome = activeConverted?.income ?? activeSummary.income
   const overviewExpense = activeConverted?.expense ?? activeSummary.expense
   const overviewCurrency = activeConverted ? displayCurrency : currency
+  const todayConverted = displayTotals.today
+  const todayEntries = Array.from(totals.today.entries())
+  const todayBaseCurrency = totals.today.has(currency) ? currency : todayEntries[0]?.[0] ?? currency
+  const todayBase = totals.today.get(todayBaseCurrency) ?? { income: 0, expense: 0 }
+  const todayIncome = todayConverted?.income ?? todayBase.income
+  const todayExpense = todayConverted?.expense ?? todayBase.expense
+  const todayCurrency = todayConverted ? displayCurrency : todayBaseCurrency
+  const todayNet = todayIncome - todayExpense
+  const todayAccent = todayNet < 0 ? theme.finance.expense : todayNet > 0 ? theme.finance.income : MODULE_COLORS.finance
   const reviewCount = periodReviewCount
   const chartMax = Math.max(overviewIncome, overviewExpense, 1)
   const incomePct = Math.max(6, (overviewIncome / chartMax) * 100)
@@ -332,7 +341,7 @@ export function TransactionListScreen() {
       })
       .sort((a, b) => b.count - a.count || b.lastDate.getTime() - a.lastDate.getTime())
       .slice(0, 3)
-  }, [txs, catById])
+  }, [txs, catById, t])
 
   const activePlanItems = useMemo(
     () => planItems.filter((item) => item.active === 1 && !item.deleted_at && planItemAppliesToDate(item, new Date(), cycleStartDay)),
@@ -562,6 +571,7 @@ export function TransactionListScreen() {
       <FlashList
         data={activityItems}
         keyExtractor={(item) => item.id}
+        getItemType={(item) => item.type}
         contentContainerStyle={[styles.listContent, { paddingTop: insets.top + spacing[2] }]}
         refreshControl={
           <RefreshControl
@@ -579,14 +589,33 @@ export function TransactionListScreen() {
               <View style={styles.overviewTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.eyebrow, { color: theme.text.muted }]}>
-                    {t.safe_to_spend}
+                    {t.today_income_expense}
                   </Text>
-                  <Text
-                    style={[styles.netAmount, { color: safeToSpend.safeToSpend < 0 ? theme.finance.expense : MODULE_COLORS.finance }]}
-                    numberOfLines={1}
-                  >
-                    {formatAmount(safeToSpend.safeToSpend, safeCurrency, language)}
-                  </Text>
+                  <View style={styles.todayFlowRow}>
+                    <View style={styles.todayFlowMetric}>
+                      <Text style={[styles.todayFlowLabel, { color: theme.text.muted }]} numberOfLines={1}>{t.income}</Text>
+                      <Text
+                        style={[styles.todayFlowValue, { color: theme.finance.income }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.72}
+                      >
+                        {formatAmount(todayIncome, todayCurrency, language)}
+                      </Text>
+                    </View>
+                    <View style={[styles.todayFlowDivider, { backgroundColor: theme.border.subtle }]} />
+                    <View style={styles.todayFlowMetric}>
+                      <Text style={[styles.todayFlowLabel, { color: theme.text.muted }]} numberOfLines={1}>{t.expense}</Text>
+                      <Text
+                        style={[styles.todayFlowValue, { color: theme.finance.expense }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.72}
+                      >
+                        {formatAmount(todayExpense, todayCurrency, language)}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={[styles.insightLine, { color: theme.text.muted }]} numberOfLines={1}>
                     {reviewCount > 0
                       ? t.review_queue_count.replace('{{count}}', String(reviewCount))
@@ -595,11 +624,11 @@ export function TransactionListScreen() {
                         : t.no_transactions}
                   </Text>
                 </View>
-                <View style={[styles.netBadge, { backgroundColor: (safeToSpend.safeToSpend < 0 ? theme.finance.expense : MODULE_COLORS.finance) + '1A' }]}>
+                <View style={[styles.netBadge, { backgroundColor: todayAccent + '1A' }]}>
                   <Feather
-                    name={safeToSpend.safeToSpend < 0 ? 'alert-triangle' : 'shield'}
+                    name={todayNet < 0 ? 'trending-down' : todayNet > 0 ? 'trending-up' : 'activity'}
                     size={20}
-                    color={safeToSpend.safeToSpend < 0 ? theme.finance.expense : MODULE_COLORS.finance}
+                    color={todayAccent}
                   />
                 </View>
               </View>
@@ -1023,38 +1052,23 @@ export function TransactionListScreen() {
           isLoading ? (
             <SkeletonTransactionList />
           ) : reviewOnly ? (
-            <View style={styles.empty}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.finance + '1F' }]}>
-                <Feather name="check-circle" size={34} color={MODULE_COLORS.finance} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_review_items}</Text>
-            </View>
+            <EmptyState icon="check-circle" accent={MODULE_COLORS.finance} title={t.no_review_items} />
           ) : search.trim() ? (
-            <View style={styles.empty}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.finance + '1F' }]}>
-                <Feather name="search" size={34} color={MODULE_COLORS.finance} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_matching_transactions}</Text>
-              <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{search.trim()}</Text>
-              <Button
-                label={t.clear_search}
-                onPress={() => setSearch('')}
-                style={styles.emptyButton}
-              />
-            </View>
+            <EmptyState
+              icon="search"
+              accent={MODULE_COLORS.finance}
+              title={t.no_matching_transactions}
+              body={search.trim()}
+              cta={{ label: t.clear_search, onPress: () => setSearch('') }}
+            />
           ) : (
-            <View style={styles.empty}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: MODULE_COLORS.finance + '1F' }]}>
-                <Feather name="trending-up" size={34} color={MODULE_COLORS.finance} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.text.primary }]}>{t.no_transactions}</Text>
-              <Text style={[styles.emptyBody, { color: theme.text.muted }]}>{t.tap_to_add}</Text>
-              <Button
-                label={t.nav_new_transaction}
-                onPress={() => router.push('/new')}
-                style={styles.emptyButton}
-              />
-            </View>
+            <EmptyState
+              icon="trending-up"
+              accent={MODULE_COLORS.finance}
+              title={t.no_transactions}
+              body={t.tap_to_add}
+              cta={{ label: t.nav_new_transaction, onPress: () => router.push('/new') }}
+            />
           )
         }
       />
@@ -1062,9 +1076,9 @@ export function TransactionListScreen() {
       <FAB
         onPress={() => router.push('/new')}
         accessibilityLabel={t.nav_new_transaction}
-        style={[styles.fab, { backgroundColor: theme.brand.primary, bottom: spacing[5] }]}
+        style={[styles.fab, { backgroundColor: theme.brand.primary, borderColor: theme.bg.elevated, bottom: spacing[5] }]}
       >
-        <Feather name="plus" size={28} color="#fff" />
+        <Feather name="plus" size={28} color={theme.brand.onPrimary} />
       </FAB>
 
       <PlanItemSheet
@@ -1092,7 +1106,11 @@ const styles = StyleSheet.create({
   overviewTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3] },
   netBadge: { width: 48, height: 48, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { fontSize: 12, fontWeight: '500', marginBottom: spacing[1] },
-  netAmount: { fontSize: 32, fontWeight: '700', lineHeight: 38 },
+  todayFlowRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginBottom: spacing[1] },
+  todayFlowMetric: { flex: 1, minWidth: 0, gap: spacing[1] },
+  todayFlowDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
+  todayFlowLabel: { fontSize: 11, fontWeight: '600' },
+  todayFlowValue: { fontSize: 22, fontWeight: '700', lineHeight: 28, fontVariant: ['tabular-nums'] },
   converted: { fontSize: 12, fontWeight: '600' },
   metricRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   metric: { flex: 1, gap: spacing[1] },
@@ -1241,18 +1259,6 @@ const styles = StyleSheet.create({
   dayTitle: { fontSize: 12, fontWeight: '600' },
   dayTotals: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   dayAmount: { fontSize: 12, fontWeight: '700' },
-  empty: { alignItems: 'center', marginTop: spacing[12], gap: spacing[2] },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[1],
-  },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: spacing[2] },
-  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing[8] },
-  emptyButton: { marginTop: spacing[2], borderRadius: radius.full },
   footer: { alignItems: 'center', paddingVertical: spacing[4] },
   loadMoreButton: {
     paddingHorizontal: spacing[6],
@@ -1272,7 +1278,6 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: radius.full,
     borderWidth: 2,
-    borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 5,

@@ -14,7 +14,7 @@ import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved, toast } from '@store/toastStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { parseJournalEntry } from '../aiParser'
 import { SmartEntryCard } from '@components/ui/SmartEntryCard'
 import { SelectableChip } from '@components/ui/ChipGroup'
@@ -23,14 +23,6 @@ import { JOURNAL_MOOD_OPTIONS, MOOD_EMOJI_BY_SCORE } from '@design/moods'
 import { Feather } from '@expo/vector-icons'
 import { useJournalsBootstrap, useJournals, useJournalActions } from '../hooks/useJournals'
 import { useReminderActions } from '@features/reminders/hooks/useReminders'
-
-const MOODS = [
-  { value: 1, emoji: '😢' },
-  { value: 2, emoji: '😕' },
-  { value: 3, emoji: '😐' },
-  { value: 4, emoji: '🙂' },
-  { value: 5, emoji: '😊' },
-] as const
 
 const ACTIVITY_TAGS = [
   'work', 'family', 'health', 'money', 'sleep',
@@ -55,10 +47,10 @@ export function JournalFormScreen() {
   const router = useRouter()
   const { t } = useTranslation()
   const language = useSettingsStore((s) => s.language)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
   const journals = useJournals()
   const { createJournal, updateJournal, deleteJournal, restoreJournal } = useJournalActions()
   const { createReminder } = useReminderActions()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
 
   const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
@@ -68,6 +60,7 @@ export function JournalFormScreen() {
     [editingId, journals]
   )
   const isEditing = !!editingId
+  const editingHiddenJournal = hideJournals && isEditing
 
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<number | null>(null)
@@ -88,7 +81,7 @@ export function JournalFormScreen() {
   const [confirmBusy, setConfirmBusy] = useState(false)
 
   useEffect(() => {
-    if (!editingJournal || prefilled) return
+    if (!editingJournal || prefilled || editingHiddenJournal) return
     setContent(editingJournal.content)
     setMood(editingJournal.mood ?? null)
     setIsImportant((editingJournal.is_important ?? 0) === 1)
@@ -101,7 +94,7 @@ export function JournalFormScreen() {
     setRemindAfterYear(false)
     setOccurredAt(new Date(editingJournal.occurred_at))
     setPrefilled(true)
-  }, [editingJournal, prefilled])
+  }, [editingJournal, prefilled, editingHiddenJournal])
 
   useEffect(() => {
     if (editingId || prefilled || !params.prefill) return
@@ -189,13 +182,10 @@ export function JournalFormScreen() {
     ])
   }
 
-  const MOOD_EMOJIS: Record<number, string> = { 1: '😢', 2: '😕', 3: '😐', 4: '🙂', 5: '😊' }
-
   const handleSmartParse = async (override?: string) => {
     const input = (override ?? smartText).trim()
     if (!input || parsing) return
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (!isAiAvailable()) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
     if (override) setSmartText(override)
     setParsing(true)
     try {
@@ -307,6 +297,25 @@ export function JournalFormScreen() {
     const body = templateContents[template.key]!
     setContent((current) => current.trim() ? `${current.trim()}\n\n${body}` : body)
     setMood((current) => current ?? template.mood)
+  }
+
+  if (editingHiddenJournal) {
+    return (
+      <View style={[styles.lockedScreen, { backgroundColor: theme.bg.primary, paddingTop: insets.top + spacing[6], paddingBottom: insets.bottom + spacing[6] }]}>
+        <View style={[styles.lockedCard, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <View style={[styles.lockedIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
+            <Feather name="lock" size={22} color={theme.brand.primary} />
+          </View>
+          <Text style={[styles.lockedTitle, { color: theme.text.primary }]}>{t.hide_journals_locked}</Text>
+          <Text style={[styles.lockedBody, { color: theme.text.muted }]}>
+            {t.hide_journals_locked_count.replace('{{count}}', String(journals.length))}
+          </Text>
+          <Pressable onPress={() => router.back()} style={[styles.lockedBtn, { backgroundColor: theme.brand.primary }]}>
+            <Text style={[styles.lockedBtnText, { color: theme.brand.onPrimary }]}>{t.back}</Text>
+          </Pressable>
+        </View>
+      </View>
+    )
   }
 
   return (
@@ -474,8 +483,8 @@ export function JournalFormScreen() {
         style={[styles.saveBtn, { backgroundColor: submitting ? theme.text.muted : theme.brand.primary }]}
       >
         {submitting
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.saveBtnText}>{isEditing ? t.update : t.save}</Text>}
+          ? <ActivityIndicator color={theme.brand.onPrimary} />
+          : <Text style={[styles.saveBtnText, { color: theme.brand.onPrimary }]}>{isEditing ? t.update : t.save}</Text>}
       </Pressable>
     </View>
 
@@ -536,4 +545,11 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], paddingVertical: spacing[2] },
   deleteBtnText: { fontSize: 15 },
+  lockedScreen: { flex: 1, justifyContent: 'center', padding: spacing[5] },
+  lockedCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing[5], alignItems: 'center', gap: spacing[3] },
+  lockedIcon: { width: 52, height: 52, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  lockedTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
+  lockedBody: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  lockedBtn: { marginTop: spacing[2], paddingHorizontal: spacing[5], paddingVertical: spacing[3], borderRadius: radius.md },
+  lockedBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 })

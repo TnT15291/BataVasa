@@ -5,7 +5,10 @@ export type { ThemeName, ColorMode }
 export type ThemeColors = {
   bg: { primary: string; secondary: string; elevated: string }
   text: { primary: string; secondary: string; muted: string; danger: string }
-  brand: { primary: string; accent: string }
+  // `onPrimary` is the foreground (text/icon) that sits ON a brand.primary fill.
+  // Light themes have a dark/saturated primary → white reads; dark themes have a
+  // pale primary → white fails WCAG, so onPrimary is a deep tinted ink instead.
+  brand: { primary: string; accent: string; onPrimary: string }
   semantic: { success: string; warning: string; danger: string; info: string }
   finance: { expense: string; income: string }
   border: { subtle: string; strong: string; card: string }
@@ -63,12 +66,12 @@ export const themes: Record<ThemeName, ThemeDef> = {
     light: {
       ...baseLight,
       bg: { primary: '#FBFBFC', secondary: '#F1F3F6', elevated: '#FFFFFF' },
-      brand: { primary: '#197C92', accent: '#7B5BB3' },
+      brand: { primary: '#197C92', accent: '#7B5BB3', onPrimary: '#FFFFFF' },
     },
     dark: {
       ...baseDark,
       bg: { primary: '#123942', secondary: '#1A444C', elevated: '#22505A' },
-      brand: { primary: '#88B8B1', accent: '#B5A36F' },
+      brand: { primary: '#88B8B1', accent: '#B5A36F', onPrimary: '#0E2A2E' },
     },
   },
 
@@ -76,12 +79,12 @@ export const themes: Record<ThemeName, ThemeDef> = {
     light: {
       ...baseLight,
       bg: { primary: '#FAFBFA', secondary: '#EEF3EF', elevated: '#FFFFFF' },
-      brand: { primary: '#2F735B', accent: '#7A6E2F' },
+      brand: { primary: '#2F735B', accent: '#7A6E2F', onPrimary: '#FFFFFF' },
     },
     dark: {
       ...baseDark,
       bg: { primary: '#1A332D', secondary: '#243E37', elevated: '#2D4A42' },
-      brand: { primary: '#9ABAA3', accent: '#B9A575' },
+      brand: { primary: '#9ABAA3', accent: '#B9A575', onPrimary: '#13261F' },
       border: { subtle: '#38564D', strong: '#496A5F', card: '#415F56' },
     },
   },
@@ -90,12 +93,12 @@ export const themes: Record<ThemeName, ThemeDef> = {
     light: {
       ...baseLight,
       bg: { primary: '#FAFCFD', secondary: '#EDF3F7', elevated: '#FFFFFF' },
-      brand: { primary: '#176B87', accent: '#2D7C72' },
+      brand: { primary: '#176B87', accent: '#2D7C72', onPrimary: '#FFFFFF' },
     },
     dark: {
       ...baseDark,
       bg: { primary: '#153944', secondary: '#204650', elevated: '#2A535E' },
-      brand: { primary: '#95C0C9', accent: '#8CB9B0' },
+      brand: { primary: '#95C0C9', accent: '#8CB9B0', onPrimary: '#102A30' },
       border: { subtle: '#385964', strong: '#4B6D78', card: '#43656F' },
     },
   },
@@ -104,12 +107,12 @@ export const themes: Record<ThemeName, ThemeDef> = {
     light: {
       ...baseLight,
       bg: { primary: '#FCFBFA', secondary: '#F4EFEB', elevated: '#FFFFFF' },
-      brand: { primary: '#B85C38', accent: '#8B6A2A' },
+      brand: { primary: '#B85C38', accent: '#8B6A2A', onPrimary: '#FFFFFF' },
     },
     dark: {
       ...baseDark,
       bg: { primary: '#342A23', secondary: '#40342B', elevated: '#4C4035' },
-      brand: { primary: '#D09D7F', accent: '#C7B175' },
+      brand: { primary: '#D09D7F', accent: '#C7B175', onPrimary: '#2C1D12' },
       border: { subtle: '#5C4C3E', strong: '#705D4B', card: '#665545' },
     },
   },
@@ -118,12 +121,12 @@ export const themes: Record<ThemeName, ThemeDef> = {
     light: {
       ...baseLight,
       bg: { primary: '#FBFAFD', secondary: '#F1EEF7', elevated: '#FFFFFF' },
-      brand: { primary: '#6653A6', accent: '#A84870' },
+      brand: { primary: '#6653A6', accent: '#A84870', onPrimary: '#FFFFFF' },
     },
     dark: {
       ...baseDark,
       bg: { primary: '#2A2735', secondary: '#343044', elevated: '#403B51' },
-      brand: { primary: '#B9A9D0', accent: '#D0A2B6' },
+      brand: { primary: '#B9A9D0', accent: '#D0A2B6', onPrimary: '#221C2E' },
       border: { subtle: '#514B63', strong: '#665F78', card: '#5C566D' },
     },
   },

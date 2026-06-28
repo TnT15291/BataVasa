@@ -85,8 +85,8 @@ export function UpdatePasswordScreen() {
           style={[styles.cta, { backgroundColor: canSubmit ? theme.brand.primary : theme.text.muted }]}
         >
           {busy
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.ctaText}>{t.auth_update_password_cta}</Text>}
+            ? <ActivityIndicator color={theme.brand.onPrimary} />
+            : <Text style={[styles.ctaText, { color: theme.brand.onPrimary }]}>{t.auth_update_password_cta}</Text>}
         </Pressable>
 
         <Pressable onPress={() => { void exitRecovery() }} disabled={busy} style={styles.cancel} hitSlop={8}>

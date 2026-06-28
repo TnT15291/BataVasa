@@ -38,7 +38,7 @@ export function Button({
   const isDisabled = disabled || loading
   const fg =
     color && variant !== 'primary' ? color
-    : variant === 'primary' ? '#fff'
+    : variant === 'primary' ? theme.brand.onPrimary
     : variant === 'danger' ? theme.semantic.danger
     : variant === 'ghost' ? theme.brand.primary
     : theme.text.primary

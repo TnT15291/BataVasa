@@ -3,13 +3,15 @@ import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Alert
 import { Feather } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { format, parseISO } from 'date-fns'
+import { getDateFnsLocale } from '@services/locale'
 import { useTheme, getCardStyle, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { MODULE_COLORS, MODULE_ICONS } from '@design/moduleColors'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { useGoalsStore } from '@store/goalsStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { buildWeeklyLifeReviewSnapshot, generateWeeklyLifeReview } from '@services/ai/weeklyLifeReview'
 import { formatAmount } from '@features/finance/services'
 import { convertMinorAmount, getRates } from '@services/fx'
@@ -33,9 +35,9 @@ export function WeeklyLifeReviewScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { t, language } = useTranslation()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
   const currency = useSettingsStore((s) => s.currency)
   const displayCurrency = useSettingsStore((s) => s.displayCurrency)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
 
   const transactions = useTransactions()
   const categories = useCategories()
@@ -78,13 +80,14 @@ export function WeeklyLifeReviewScreen() {
 
   const hasData = transactions.length > 0 || habits.length > 0 || journals.length > 0 || reminders.length > 0 || goals.length > 0
 
+  // Short, locale-aware week range for the hero (the ISO "2026-06-22 - 2026-06-28"
+  // overflowed and truncated). The full ISO range still feeds the AI summary.
+  const dfLocale = getDateFnsLocale(language)
+  const rangeLabel = `${format(parseISO(snapshot.weekStart), 'd MMM', { locale: dfLocale })} – ${format(parseISO(snapshot.weekEnd), 'd MMM yyyy', { locale: dfLocale })}`
+
   const run = useCallback(async () => {
-    const key = await getProviderKey(aiProvider)
-    if (!key) {
-      Alert.alert(t.no_api_key, t.no_api_key_msg, [
-        { text: t.go_to_settings, onPress: () => router.push('/ai-settings') },
-        { text: t.cancel, style: 'cancel' },
-      ])
+    if (!isAiAvailable()) {
+      Alert.alert(t.no_api_key, t.no_api_key_msg)
       return
     }
     setLoading(true)
@@ -96,7 +99,7 @@ export function WeeklyLifeReviewScreen() {
     } finally {
       setLoading(false)
     }
-  }, [aiProvider, t, router, snapshot, reportCurrency])
+  }, [t, snapshot, reportCurrency])
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
@@ -104,14 +107,14 @@ export function WeeklyLifeReviewScreen() {
         <AppHeader subtitle={t.weekly_life_review} onBack={router.canGoBack() ? () => router.back() : undefined} onSettings={() => router.push('/settings')} />
         <ModuleOverview
           eyebrow={t.this_week}
-          value={snapshot.rangeLabel}
+          value={rangeLabel}
           subtitle={t.weekly_life_review_subtitle}
           icon="compass"
           accent={MODULE_COLORS.analysis}
           stats={[
             { key: 'goals', label: t.nav_goals, value: `${snapshot.goals.onTrack}/${Math.max(snapshot.goals.active, 1)}`, color: MODULE_COLORS.analysis },
-            { key: 'money', label: t.expense, value: formatAmount(snapshot.finance.expense, reportCurrency, language), color: MODULE_COLORS.finance },
-            { key: 'tasks', label: t.nav_reminders, value: snapshot.reminders.completionRate === null ? '-' : `${snapshot.reminders.completionRate}%`, color: MODULE_COLORS.tasks },
+            { key: 'completed', label: t.goal_done, value: String(snapshot.goals.done), color: theme.semantic.success },
+            { key: 'paused', label: t.goal_paused, value: String(snapshot.goals.paused), color: MODULE_COLORS.analysis },
           ]}
         />
 
@@ -121,7 +124,7 @@ export function WeeklyLifeReviewScreen() {
           <>
             <SectionHeader label={t.weekly_review_snapshot} />
             <View style={styles.grid}>
-              <MetricCard icon={MODULE_ICONS.goals} label={t.nav_goals} value={`${snapshot.goals.onTrack}/${snapshot.goals.active}`} hint={t.weekly_review_on_track} color={MODULE_COLORS.analysis} theme={theme} />
+              <MetricCard icon={MODULE_ICONS.goals} label={t.nav_goals} value={`${snapshot.goals.onTrack}/${snapshot.goals.active}`} hint={`${snapshot.goals.done} ${t.goal_done} · ${snapshot.goals.paused} ${t.goal_paused}`} color={MODULE_COLORS.analysis} theme={theme} />
               <MetricCard icon={MODULE_ICONS.finance} label={t.expense} value={formatAmount(snapshot.finance.expense, reportCurrency, language)} hint={
                 // No spending logged this week → "—" rather than a misleading
                 // "-100%" (a 100% drop only because the period is still empty).
@@ -132,7 +135,7 @@ export function WeeklyLifeReviewScreen() {
                     : `${snapshot.finance.expenseDeltaPercent > 0 ? '+' : ''}${snapshot.finance.expenseDeltaPercent}%`
               } color={MODULE_COLORS.finance} theme={theme} />
               <MetricCard icon={MODULE_ICONS.habits} label={t.nav_habits} value={String(snapshot.habits.completions)} hint={`${snapshot.habits.skips} ${t.report_skipped}`} color={MODULE_COLORS.habits} theme={theme} />
-              <MetricCard icon={MODULE_ICONS.journal} label={t.nav_journal} value={String(snapshot.journals.entries)} hint={snapshot.journals.avgMood === null ? t.report_avg_mood : `${snapshot.journals.avgMood.toFixed(1)}/5`} color={MODULE_COLORS.journal} theme={theme} />
+              <MetricCard icon={MODULE_ICONS.journal} label={t.nav_journal} value={String(snapshot.journals.entries)} hint={hideJournals ? t.hide_journals_locked : snapshot.journals.avgMood === null ? t.report_avg_mood : `${snapshot.journals.avgMood.toFixed(1)}/5`} color={MODULE_COLORS.journal} theme={theme} />
             </View>
 
             <View style={[styles.card, cardStyle, { backgroundColor: theme.bg.elevated }]}>
@@ -152,7 +155,7 @@ export function WeeklyLifeReviewScreen() {
                 const lanes = [
                   snapshot.finance.topCategories.length > 0 && { icon: MODULE_ICONS.finance, color: MODULE_COLORS.finance, text: snapshot.finance.topCategories.map((c) => c.name).join(', ') },
                   snapshot.habits.topHabits.length > 0 && { icon: MODULE_ICONS.habits, color: MODULE_COLORS.habits, text: snapshot.habits.topHabits.map((h) => `${h.name} ${h.count}`).join(', ') },
-                  snapshot.journals.tags.length > 0 && { icon: MODULE_ICONS.journal, color: MODULE_COLORS.journal, text: snapshot.journals.tags.map((tag) => tag.tag).join(', ') },
+                  !hideJournals && snapshot.journals.tags.length > 0 && { icon: MODULE_ICONS.journal, color: MODULE_COLORS.journal, text: snapshot.journals.tags.map((tag) => tag.tag).join(', ') },
                   snapshot.reminders.due > 0 && { icon: MODULE_ICONS.tasks, color: MODULE_COLORS.tasks, text: `${snapshot.reminders.completed}/${snapshot.reminders.due} ${t.reminder_completed}` },
                 ].filter(Boolean) as { icon: keyof typeof Feather.glyphMap; color: string; text: string }[]
                 return lanes.length > 0

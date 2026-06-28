@@ -5,7 +5,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { generateJournalReflection, type JournalReflection } from '@services/ai/journalInsight'
 import { useJournalsBootstrap, useJournals } from '../hooks/useJournals'
 import { track } from '@services/analytics'
@@ -18,14 +18,17 @@ export function JournalsInsightsScreen() {
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
   const journals = useJournals()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
 
   const [reflection, setReflection] = useState<JournalReflection | null>(null)
   const [loading, setLoading] = useState(false)
 
   const handleGenerate = async () => {
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (hideJournals) {
+      Alert.alert(t.hide_journals_locked, t.hide_journals_insights_blocked)
+      return
+    }
+    if (!isAiAvailable()) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
     if (journals.length < 3) { Alert.alert(t.journal_reflection_title, t.journal_reflection_min_data); return }
     setLoading(true)
     setReflection(null)
@@ -47,7 +50,14 @@ export function JournalsInsightsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg.primary }}>
       <ScrollView contentContainerStyle={styles.content}>
-        {reflection ? (
+        {hideJournals ? (
+          <EmptyState
+            icon="lock"
+            accent={MODULE_COLORS.journal}
+            title={t.hide_journals_locked}
+            body={t.hide_journals_locked_count.replace('{{count}}', String(journals.length))}
+          />
+        ) : reflection ? (
           <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
             <View style={styles.aiHeader}>
               <Sparkle size={11} color={theme.brand.primary} />
@@ -91,12 +101,12 @@ export function JournalsInsightsScreen() {
       <View style={[styles.footer, { borderColor: theme.border.subtle, backgroundColor: theme.bg.elevated, paddingBottom: spacing[4] + insets.bottom }]}>
         <Pressable
           onPress={handleGenerate}
-          disabled={loading}
-          style={[styles.btn, { backgroundColor: loading ? theme.text.muted : theme.brand.primary }]}
+          disabled={loading || hideJournals}
+          style={[styles.btn, { backgroundColor: loading || hideJournals ? theme.text.muted : theme.brand.primary }]}
         >
           {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>{reflection ? t.refresh : t.journal_reflection_generate}</Text>}
+            ? <ActivityIndicator color={theme.brand.onPrimary} />
+            : <Text style={[styles.btnText, { color: theme.brand.onPrimary }]}>{reflection ? t.refresh : t.journal_reflection_generate}</Text>}
         </Pressable>
       </View>
     </View>

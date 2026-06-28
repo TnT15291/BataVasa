@@ -205,8 +205,8 @@ export function AuthScreen() {
           style={[styles.cta, { backgroundColor: canSubmit ? theme.brand.primary : theme.bg.secondary, borderColor: canSubmit ? theme.brand.primary : theme.border.strong }]}
         >
           {busy
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.ctaText}>{mode === 'signin' ? t.auth_signin_cta : t.auth_signup_cta}</Text>}
+            ? <ActivityIndicator color={theme.brand.onPrimary} />
+            : <Text style={[styles.ctaText, { color: theme.brand.onPrimary }]}>{mode === 'signin' ? t.auth_signin_cta : t.auth_signup_cta}</Text>}
         </Pressable>
 
         <View style={styles.divider}>

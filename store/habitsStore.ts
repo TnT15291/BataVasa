@@ -9,6 +9,10 @@ type HabitWithStats = Habit & {
   streak: number
   strengthScore: number
   dueToday: boolean
+  /** Scheduled yesterday but left undone (not skipped) — drives the "never miss twice" nudge. */
+  missedYesterday: boolean
+  /** Skipped (rested) for today — resolves the entry without counting as done. */
+  skippedToday: boolean
 }
 
 type HabitsState = {
@@ -26,13 +30,11 @@ type HabitsState = {
   wipeAll: () => Promise<{ ok: boolean; deleted?: number; error?: string }>
 }
 
+// One DB query → all five stats (was 4–5 queries via Promise.all). The batched
+// loadHabits path uses loadHabitsWithStats; this is the single-habit refresh.
 async function hydrateStats(habit: Habit): Promise<HabitWithStats> {
-  const [todayCount, streak, strengthScore] = await Promise.all([
-    svc.getCurrentPeriodLogCount(habit),
-    svc.getHabitStreak(habit.id),
-    svc.getHabit30DayScore(habit),
-  ])
-  return { ...habit, todayCount, streak, strengthScore, dueToday: svc.isHabitDueOnDate(habit, new Date()) }
+  const stats = await svc.getHabitStats(habit)
+  return { ...habit, ...stats }
 }
 
 export const useHabitsStore = create<HabitsState>((set, get) => ({
@@ -43,13 +45,19 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
   async loadHabits() {
     if (get().loadState === 'loading') return
     set({ loadState: 'loading' })
-    const r = await svc.loadHabits()
+    const r = await svc.loadHabitsWithStats()
     if (!r.ok) {
       set({ loadState: 'error', lastError: r.error.message })
       return
     }
-    const withStats = await Promise.all(r.value.map(hydrateStats))
-    set({ habits: withStats, loadState: 'ready', lastError: null })
+    // Keep habits created locally while this load was in flight: the DB snapshot
+    // can pre-date their insert, so a plain overwrite would drop a just-created
+    // habit (e.g. one added from the goal screen's metric picker). Limited to
+    // recently-created rows so a habit deleted elsewhere (sync) isn't resurrected.
+    const fetchedIds = new Set(r.value.map((h) => h.id))
+    const cutoff = Date.now() - 60_000
+    const localOnly = get().habits.filter((h) => !fetchedIds.has(h.id) && new Date(h.created_at).getTime() > cutoff)
+    set({ habits: [...r.value, ...localOnly], loadState: 'ready', lastError: null })
   },
 
   async createHabit(input) {

@@ -17,7 +17,7 @@ import { useTranslation } from '@services/i18n'
 import { percentDelta } from '@services/stats'
 import { useSettingsStore } from '@store/settingsStore'
 import { getDateFnsLocale } from '@services/locale'
-import { exportAllHabits } from '../services'
+import { exportAllHabits, getLocalDateString } from '../services'
 import { track } from '@services/analytics'
 import { useHabitsBootstrap, useHabits } from '../hooks/useHabits'
 import { EmptyState } from '@components/ui'
@@ -209,7 +209,7 @@ export function HabitsReportScreen() {
     const map = new Map<string, Set<string>>()
     for (const log of allLogs) {
       if ((log.skipped ?? 0) === 1) continue
-      const date = log.occurred_at.split('T')[0]
+      const date = getLocalDateString(new Date(log.occurred_at))
       if (!map.has(log.habit_id)) map.set(log.habit_id, new Set())
       map.get(log.habit_id)!.add(date!)
     }
@@ -220,7 +220,7 @@ export function HabitsReportScreen() {
     const map = new Map<string, Set<string>>()
     for (const log of allLogs) {
       if ((log.skipped ?? 0) !== 1) continue
-      const date = log.occurred_at.split('T')[0]
+      const date = getLocalDateString(new Date(log.occurred_at))
       if (!map.has(log.habit_id)) map.set(log.habit_id, new Set())
       map.get(log.habit_id)!.add(date!)
     }

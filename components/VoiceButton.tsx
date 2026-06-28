@@ -209,7 +209,7 @@ export function VoiceButton({ onResult, disabled, size = 36, module = 'unknown' 
 
   const isRecording = state === 'recording'
   const bgColor = isRecording ? theme.brand.primary : theme.bg.elevated
-  const iconColor = isRecording ? '#fff' : theme.brand.primary
+  const iconColor = isRecording ? theme.brand.onPrimary : theme.brand.primary
   const borderColor = isRecording ? theme.brand.primary : theme.border.strong
 
   return (

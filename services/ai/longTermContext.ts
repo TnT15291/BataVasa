@@ -1,6 +1,7 @@
 import { getDb } from '@db/core/db'
 import { getCurrentUserId } from '@services/identity'
 import { getAICurrency, fmtAI } from './aiLanguage'
+import { useSettingsStore } from '@store/settingsStore'
 
 // Deterministic full-year rollups across every module, so the assistant can
 // compare the user across years ("how have I changed since 2024?") — the core
@@ -62,6 +63,7 @@ export function formatLongTermSummary(rollups: YearRollup[], currency: string, n
   if (withData.length === 0) return ''
 
   const currentYear = (now ?? new Date()).getFullYear()
+  const hideJournals = useSettingsStore.getState().hideJournals
   const lines = withData.map((r) => {
     const ytd = r.year === currentYear ? ' (YTD)' : ''
     const net = r.income - r.expense
@@ -70,7 +72,9 @@ export function formatLongTermSummary(rollups: YearRollup[], currency: string, n
       ? `habits ${r.habitDone} done${r.habitSkipped > 0 ? `/${r.habitSkipped} skip` : ''} across ${r.habitCount} habits`
       : 'habits none'
     const journals = r.journalEntries > 0
-      ? `journals ${r.journalEntries} entries${r.journalAvgMood !== null ? `, avg mood ${r.journalAvgMood.toFixed(1)}/5` : ''}${r.journalImportant > 0 ? `, ${r.journalImportant} important` : ''}`
+      ? hideJournals
+        ? `journals ${r.journalEntries} entries (privacy enabled)`
+        : `journals ${r.journalEntries} entries${r.journalAvgMood !== null ? `, avg mood ${r.journalAvgMood.toFixed(1)}/5` : ''}${r.journalImportant > 0 ? `, ${r.journalImportant} important` : ''}`
       : 'journals none'
     const tasks = r.tasksTotal > 0
       ? `tasks ${r.tasksCompleted}/${r.tasksTotal} done (${Math.round((r.tasksCompleted / r.tasksTotal) * 100)}%)`

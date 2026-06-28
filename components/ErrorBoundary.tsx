@@ -48,7 +48,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             style={[styles.btn, { backgroundColor: theme.brand.primary }]}
             onPress={() => this.setState({ hasError: false, message: '', stack: '' })}
           >
-            <Text style={[styles.btnText, { color: '#fff' }]}>{t.error_button_try_again}</Text>
+            <Text style={[styles.btnText, { color: theme.brand.onPrimary }]}>{t.error_button_try_again}</Text>
           </Pressable>
         </View>
       )

@@ -22,7 +22,7 @@ const NOW = new Date('2026-06-20T12:00:00.000Z')
 
 describe('long-term summary formatter', () => {
   beforeEach(() => {
-    useSettingsStore.setState({ language: 'en', currency: 'USD' })
+    useSettingsStore.setState({ language: 'en', currency: 'USD', hideJournals: false })
   })
 
   it('returns empty string when there are no years with data', () => {
@@ -83,5 +83,19 @@ describe('long-term summary formatter', () => {
     expect(out).not.toContain('skip')
     expect(out).toContain('journals none')
     expect(out).toContain('tasks none')
+  })
+
+  it('masks long-term journal mood details when journals are hidden', () => {
+    useSettingsStore.setState({ hideJournals: true })
+
+    const out = formatLongTermSummary(
+      [rollup({ year: 2026, journalEntries: 80, journalAvgMood: 3.9, journalImportant: 4 })],
+      'USD',
+      NOW
+    )
+
+    expect(out).toContain('journals 80 entries (privacy enabled)')
+    expect(out).not.toContain('avg mood')
+    expect(out).not.toContain('important')
   })
 })

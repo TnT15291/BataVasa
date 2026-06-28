@@ -11,6 +11,7 @@ import { useFinanceBootstrap, useCategories, useTransactions } from '../hooks/us
 import { FAB } from '@components/FAB'
 import { translateCategoryName, translateKind } from '../i18n'
 import { formatAmount } from '../services'
+import { GoalBadge } from '@features/goals/components/GoalBadge'
 import type { Category, CategoryKind } from '../types'
 
 const KIND_ORDER: CategoryKind[] = ['essential', 'discretionary', 'income', 'savings']
@@ -98,6 +99,7 @@ export function CategoryListScreen() {
                               <Text style={[styles.badgeText, { color: theme.text.muted }]}>{t.system_category}</Text>
                             </View>
                           )}
+                          <GoalBadge variant="chip" module="finance" id={cat.id} />
                         </View>
                         {hasBudget && (
                           <>
@@ -125,7 +127,7 @@ export function CategoryListScreen() {
         accessibilityLabel={t.new_category}
         style={[styles.fab, { backgroundColor: theme.brand.primary }]}
       >
-        <Feather name="plus" size={28} color="#fff" />
+        <Feather name="plus" size={28} color={theme.brand.onPrimary} />
       </FAB>
     </View>
   )

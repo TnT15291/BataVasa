@@ -1,6 +1,6 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-06-20.
+> Single source of truth for project status. Last updated: 2026-06-25.
 
 ## Overall
 
@@ -575,10 +575,15 @@ Current status: Global Search and Goals MVP are now DONE at MVP scope. Continue 
 - Category names use canonical DB values and translate at display time.
 - Locale-aware formatting must use `getDateFnsLocale(language)` and `getIntlLocale(language)`.
 - Create and edit screens are shared via route params.
-- Latest local migration is v23: `user_context` (AI memory). v22 added finance plan recurrence; v21 added the `goal` table. v19 added `finance_debt` + Lending/Borrowing system categories; v20 deduplicated system categories.
+- Latest local migration is v26: `direction` on `goal` ('reach' vs 'cap'). v25 added `reminder_id` on `finance_plan_item` (bills emit a due-date reminder); v24 added habit `identity`; v23 added `user_context` (AI memory); v22 added finance plan recurrence; v21 added the `goal` table. v19 added `finance_debt` + Lending/Borrowing system categories; v20 deduplicated system categories.
 - `enqueue()` is try/catch wrapped for test compatibility.
 - Cross-module timeline/life stream is a presentation/read-model layer over domain tables, not a unified `life_events` source-of-truth table.
-- Reminders/notifications are treated as a capability attached to tasks/habits where appropriate; the current Reminders UI is task-oriented.
+- **Reminders = action layer, not a co-equal tracked domain (decided 2026-06-25; execution deferred to post-beta).**
+  - **Decision:** Keep the Reminders/Tasks module exactly as-is for closed beta. Long-term, Reminders is the shared *action/notification layer* plus a thin generic-task primitive — not a fifth data domain. Each obligation's source of truth lives in its richest home (habit / `finance_plan_item` bill / `finance_debt` / generic task), surfaced together by a future "Today/Agenda" read-model (same read-model-over-domain-tables pattern as the life stream above).
+  - **Rationale:** (1) Tasks contribute the least to the Personal-OS correlation thesis — the only data they generate is `completed_count`, which doesn't correlate with mood/spending/habits. (2) A task is structurally just a reminder (`title` + `remind_at` + `recurrence` + notification), no richer model. (3) "Reminding" is a capability the other modules already need.
+  - **The codebase is already drifting here (not a from-scratch build):** a `finance_debt` due date already creates a backing Reminders row via `createReminderSvc(...)` and links it (`reminder_id`) — `features/finance/services.ts`. The shared engine is `services/notifications.ts`.
+  - **Inconsistencies to resolve when executed:** Habits schedule their own notifications via a *parallel* path (`scheduleHabitNotifications`) instead of the shared layer; there is no unified "Today/Agenda" view; Reminders still ships co-equal-domain UI (Insights + Report screens) that is over-built for a task list. (Bills now emit a reminder via `createReminderSvc` — done 2026-06-26, mirroring debt.)
+  - **Order of operations (do NOT remove before replacing):** build/unify the agenda read-model + route bills/habits through the shared layer + make completion act in the source module (tick bill → log transaction, tick debt → record repayment) FIRST; only then retire the standalone-domain framing. All existing reminder data must stay reachable (Cross-Module Rule 1). Cheapest pre-beta-eligible trim, if any: delete the Reminders Insights + Report screens — optional, low value either way.
 
 ## Test Commands
 
@@ -592,6 +597,19 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
 
 ## Recent Changes To Remember
 
+- 2026-06-28 Goals positioning tightened:
+  - Goals are now explicitly scoped to metrics BataVasa already measures: Finance amount/cap goals, Habit session counts, Journal entry counts, and completed Task counts.
+  - Goal Smart Entry rejects unsupported goals before/after AI parsing (weight, sleep duration, average mood, overdue caps, debt by person, net worth, true streak) instead of forcing them into misleading bindings.
+  - Finance Goal copy now explains the current signed-transaction model: income entries count for income categories; expense/set-aside entries count for other categories; opposite-sign entries are ignored.
+- 2026-06-26 Goals refinements (pre-beta-close, three bounded fixes):
+  - **Direction (reach vs cap).** `goal.direction` (migration v26, default 'reach'). `goalProgress` now returns `direction` + `status` ('on_track' | 'reached' | 'over'): a 'cap' goal (e.g. dining < 2M) is `over` when it exceeds its ceiling instead of looking like progress. Detail screen shows the bar red + "over/within limit"; the form exposes a Reach/Stay-under toggle for finance goals only.
+  - **Auto-complete + celebrate.** A 'reach' goal that hits its target is persisted `done` once (in `hydrateGoal` → `autoCompleteIfReached`), so lists/detail/reports/AI all see it. `goalsStore` fires a 🎉 toast when a goal transitions active→done between snapshots (first load has empty `prev`, so old completions don't re-toast).
+  - **Habit goals: completion_count + hack cleanup.** Habit binding now supports `completion_count` (a raw number of sessions, e.g. "meditate 30×") alongside `completion_rate` (% of scheduled days). Form has a Consistency-%/Sessions toggle; the parser detects "30 buổi/sessions" → count and "90%" → rate deterministically. The scattered `<20 → 100` clamps collapsed into one `normalizeHabitRateTarget` keyed on the binding aggregation.
+  - Verification: `npx tsc --noEmit` clean; `npm test` 586 passed across 46 suites (+5 goal-progress tests for direction/status/count binding).
+- 2026-06-26 Bill reminders + journal anniversaries (two reminder gaps closed):
+  - **Bills now notify.** `finance_plan_item` gets a `reminder_id` (migration v25); `createPlanItem`/`updatePlanItem`/`deletePlanItem`/`restorePlanItem` create/reconcile/cancel a backing reminder for **expense** bills, mirroring the debt→reminder pattern. Pure `planItemReminderSchedule()` maps `due_day` + recurrence → next 09:00 fire time (monthly recurs, once fires for its `applies_month`, day clamps to month length). Synced (dynamic-column sync), Supabase RLS + ALTER added.
+  - **Journal "on this day".** New `services/anniversaryNotifications.ts`: opt-in yearly nudge on the anniversary of `is_important` journal entries. Pure `computeAnniversaryPlan()` (next anniversary ≥1yr, within a 35-day horizon, capped, sorted). Privacy-safe: gated on `hideJournals`, body carries **no journal content** (only the year count). Reconciled on app start/foreground in `_layout.tsx`; tap routes to `/journal?id=`. Settings toggle `anniversaryReminders` (default off) + 5 i18n keys × 6 languages.
+  - Verification: `npx tsc --noEmit` clean; `npm test` 581 passed across 46 suites. New `__tests__/reminderScheduling.test.ts` covers both pure functions.
 - 2026-06-20 Auth deep-link hardening:
   - Added `services/authDeepLinks.ts` as the single place for auth redirect URLs and query/hash token parsing. Native Google OAuth uses `batavasa://auth/callback`; native password recovery uses `batavasa://reset-password`; web still uses Expo-generated web URLs.
   - `store/authStore.ts`, `useGoogleAuthCallback`, and `usePasswordRecoveryLink` now share the same parser, so PKCE `?code=...`, implicit `#access_token=...`, and mixed query/hash URLs are handled consistently.

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import { useRouter } from 'expo-router'
 import { subDays } from 'date-fns'
@@ -6,7 +6,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { useFinanceBootstrap, useTransactions, useCategories } from '../hooks/useFinance'
 import { generateFinanceInsights } from '@services/ai/financeInsight'
 import { InsightText } from '@/components/InsightText'
@@ -22,19 +22,11 @@ export function InsightsScreen() {
   const { t } = useTranslation()
   const allTxs = useTransactions()
   const cats = useCategories()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
 
-  const [hasApiKey, setHasApiKey] = useState(false)
-  const [keyChecked, setKeyChecked] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState(isAiAvailable())
+  const [keyChecked] = useState(true)
   const [result, setResult] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    getProviderKey(aiProvider).then((k) => {
-      setHasApiKey(!!k)
-      setKeyChecked(true)
-    })
-  }, [aiProvider])
 
   const run = useCallback(async () => {
     const cutoff = subDays(new Date(), 30).toISOString()
@@ -45,7 +37,7 @@ export function InsightsScreen() {
       const text = await generateFinanceInsights(recent, cats, t.last_30_days)
       setResult(text)
     } catch (e: any) {
-      if (e?.message === 'NO_API_KEY') {
+      if (e?.message === 'NO_BACKEND') {
         setHasApiKey(false)
       } else if (e?.message === 'NO_DATA') {
         Alert.alert(t.no_insights, t.no_insights_msg)
@@ -72,7 +64,7 @@ export function InsightsScreen() {
           <EmptyState
             icon={keyChecked && !hasApiKey ? 'key' : 'cpu'}
             accent={MODULE_COLORS.finance}
-            title={keyChecked && !hasApiKey ? t.setup_ai_first : t.ai_insights}
+            title={keyChecked && !hasApiKey ? t.no_api_key : t.ai_insights}
             body={keyChecked && !hasApiKey ? t.no_api_key_msg : t.no_insights_msg}
           />
         ) : null}
@@ -93,9 +85,9 @@ export function InsightsScreen() {
             style={[styles.btn, { backgroundColor: loading || !keyChecked ? theme.text.muted : theme.brand.primary }]}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={theme.brand.onPrimary} />
             ) : (
-              <Text style={styles.btnText}>{result ? t.refresh : t.generate}</Text>
+              <Text style={[styles.btnText, { color: theme.brand.onPrimary }]}>{result ? t.refresh : t.generate}</Text>
             )}
           </Pressable>
         )}

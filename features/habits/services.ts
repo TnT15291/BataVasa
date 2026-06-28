@@ -28,6 +28,33 @@ export function getLocalDateString(date = new Date()): string {
   return `${year}-${month}-${day}`
 }
 
+// The [start, nextStart) instant bounds of a local calendar day, as ISO. SQLite
+// stores occurred_at in UTC, so "which day did this happen" must be resolved in
+// the device timezone here — never via substr() on the UTC string, which buckets
+// early-morning / late-evening logs onto the wrong day for non-UTC users.
+export function localDayBoundsIso(dateStr: string): { fromIso: string; toIso: string } {
+  const from = new Date(`${dateStr}T00:00:00`) // parsed in local time
+  const to = new Date(from)
+  to.setDate(to.getDate() + 1)
+  return { fromIso: from.toISOString(), toIso: to.toISOString() }
+}
+
+// Bucket raw habit-log rows onto local calendar days: completion counts per date
+// and the set of intentionally-skipped dates. The single place a stored UTC
+// instant is mapped to a local day, so every caller stays timezone-correct.
+export function bucketLogsByLocalDate(
+  rows: { occurred_at: string; skipped?: number | null }[]
+): { doneByDate: Map<string, number>; skippedDates: Set<string> } {
+  const doneByDate = new Map<string, number>()
+  const skippedDates = new Set<string>()
+  for (const row of rows) {
+    const date = getLocalDateString(new Date(row.occurred_at))
+    if ((row.skipped ?? 0) === 1) skippedDates.add(date)
+    else doneByDate.set(date, (doneByDate.get(date) ?? 0) + 1)
+  }
+  return { doneByDate, skippedDates }
+}
+
 export function getHabitPeriodRange(
   habit: Pick<Habit, 'cadence'>,
   date = new Date()
@@ -68,6 +95,117 @@ export function isHabitDueOnDate(habit: Pick<Habit, 'cadence' | 'schedule_days'>
   return true
 }
 
+// ── Pure stat math ────────────────────────────────────────────────────────────
+// Operate on already-bucketed logs (no DB). Shared by the per-habit query
+// functions below AND the batched computeHabitStats, so the two paths can never
+// drift apart.
+
+export type HabitStats = {
+  todayCount: number
+  streak: number
+  strengthScore: number
+  dueToday: boolean
+  /** Scheduled yesterday but left undone (not skipped) — drives "never miss twice". */
+  missedYesterday: boolean
+  /** Skipped (rested) for today — resolves the entry without counting as done. */
+  skippedToday: boolean
+}
+
+function computeStreakFromBuckets(
+  habit: Pick<Habit, 'cadence' | 'schedule_days'>,
+  doneByDate: Map<string, number>,
+  skippedDates: Set<string>,
+  now: Date
+): number {
+  let streak = 0
+  const cur = new Date(now)
+  // Self-terminates at the first due day with no log; bucket data only spans the
+  // ~365d fetch window, so the cap is purely defensive (never reached in practice).
+  for (let guard = 0; guard < 800; guard++) {
+    const dateStr = getLocalDateString(cur)
+    if (!isHabitDueOnDate(habit, cur)) {
+      cur.setDate(cur.getDate() - 1)
+    } else if ((doneByDate.get(dateStr) ?? 0) >= 1) {
+      streak++
+      cur.setDate(cur.getDate() - 1)
+    } else if (skippedDates.has(dateStr)) {
+      // Rest/skip day bridges the streak (CLAUDE: skip must not break it).
+      cur.setDate(cur.getDate() - 1)
+    } else {
+      break
+    }
+  }
+  return streak
+}
+
+function compute30DayScoreFromBuckets(
+  habit: Pick<Habit, 'cadence' | 'schedule_days' | 'target_per_period'>,
+  doneByDate: Map<string, number>,
+  skippedDates: Set<string>,
+  now: Date
+): number {
+  let expectedDays = 0
+  let completedDays = 0
+  const cur = new Date(now)
+  cur.setDate(cur.getDate() - 29)
+  while (cur <= now) {
+    if (isHabitDueOnDate(habit, cur)) {
+      const dateStr = getLocalDateString(cur)
+      if ((doneByDate.get(dateStr) ?? 0) >= habit.target_per_period) {
+        expectedDays++
+        completedDays++
+      } else if (!skippedDates.has(dateStr)) {
+        // Skipped (rest) days are excluded from the rate entirely (skip is neutral).
+        expectedDays++
+      }
+    }
+    cur.setDate(cur.getDate() + 1)
+  }
+  return expectedDays > 0 ? Math.round((completedDays / expectedDays) * 100) : 0
+}
+
+/**
+ * All five per-habit stats from this habit's pre-fetched log rows (last ~365d),
+ * with zero DB access. Lets the store hydrate N habits from ONE log query.
+ * Faithful to getCurrentPeriodLogCount / getHabitStreak / getHabit30DayScore /
+ * wasHabitMissedYesterday (which share the same pure helpers).
+ */
+export function computeHabitStats(
+  habit: Habit,
+  rows: { occurred_at: string; skipped?: number | null }[],
+  now: Date = new Date()
+): HabitStats {
+  const { doneByDate, skippedDates } = bucketLogsByLocalDate(rows)
+
+  // todayCount — non-skipped logs within the current period (instant range,
+  // exactly matching countLogsInRange which filters skipped=0).
+  const period = getHabitPeriodRange(habit, now)
+  const fromIso = period.from.toISOString()
+  const toIso = period.to.toISOString()
+  let todayCount = 0
+  for (const r of rows) {
+    if ((r.skipped ?? 0) === 0 && r.occurred_at >= fromIso && r.occurred_at < toIso) todayCount++
+  }
+
+  // missedYesterday — due yesterday but no log at all (neither done nor skipped),
+  // mirroring wasHabitMissedYesterday (getLatestLogInRange === null).
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yIso = getLocalDateString(yesterday)
+  const missedYesterday = isHabitDueOnDate(habit, yesterday)
+    && (doneByDate.get(yIso) ?? 0) === 0
+    && !skippedDates.has(yIso)
+
+  return {
+    todayCount,
+    streak: computeStreakFromBuckets(habit, doneByDate, skippedDates, now),
+    strengthScore: compute30DayScoreFromBuckets(habit, doneByDate, skippedDates, now),
+    dueToday: isHabitDueOnDate(habit, now),
+    missedYesterday,
+    skippedToday: skippedDates.has(getLocalDateString(now)),
+  }
+}
+
 export async function createHabit(
   input: CreateHabitInput
 ): Promise<Result<Habit, AppError>> {
@@ -87,6 +225,7 @@ export async function createHabit(
       target_per_period: data.target_per_period,
       schedule_days: data.cadence === 'custom' ? data.schedule_days ?? null : null,
       notification_times: data.notification_times ?? null,
+      identity: data.identity ?? null,
       location_lat: data.location_lat ?? null,
       location_lng: data.location_lng ?? null,
       location_label: data.location_label ?? null,
@@ -132,6 +271,7 @@ export async function updateHabit(
       patch.schedule_days = (data.cadence ?? existing.cadence) === 'custom' ? data.schedule_days ?? existing.schedule_days ?? null : null
     }
     if (data.notification_times !== undefined) patch.notification_times = data.notification_times ?? null
+    if (data.identity !== undefined) patch.identity = data.identity ?? null
 
     await q.updateHabit(data.id, patch)
 
@@ -201,6 +341,49 @@ export async function loadHabits(): Promise<Result<Habit[], AppError>> {
   }
 }
 
+// Logs far enough back to cover the longest streak we display (365d).
+function statsWindowFromIso(now: Date): string {
+  const from = new Date(now)
+  from.setDate(from.getDate() - 365)
+  return localDayBoundsIso(getLocalDateString(from)).fromIso
+}
+
+/**
+ * Load all habits with their stats using ONE log query for the whole list (was
+ * 4–5 queries per habit → N×5). Fetches every habit's logs since the stats
+ * window once, groups them in memory, then computes stats per habit.
+ */
+export async function loadHabitsWithStats(): Promise<Result<(Habit & HabitStats)[], AppError>> {
+  try {
+    const userId = getCurrentUserId()
+    const habits = await q.listHabits(userId)
+    const now = new Date()
+    const logs = await q.listLogsSince(userId, statsWindowFromIso(now))
+    const byHabit = new Map<string, { occurred_at: string; skipped: number }[]>()
+    for (const log of logs) {
+      const list = byHabit.get(log.habit_id) ?? []
+      list.push({ occurred_at: log.occurred_at, skipped: log.skipped ?? 0 })
+      byHabit.set(log.habit_id, list)
+    }
+    return ok(habits.map((h) => ({ ...h, ...computeHabitStats(h, byHabit.get(h.id) ?? [], now) })))
+  } catch (e) {
+    logger.error(MODULE, 'loadHabitsWithStats failed', { error: String(e) })
+    return appErr('DB_ERROR', 'Failed to load habits', e)
+  }
+}
+
+/** Single-habit stats in ONE query (was 4–5) — for create/update/toggle/skip refresh. */
+export async function getHabitStats(habit: Habit): Promise<HabitStats> {
+  try {
+    const now = new Date()
+    const { toIso } = localDayBoundsIso(getLocalDateString(now))
+    const rows = await q.listLogRowsInRange(habit.id, statsWindowFromIso(now), toIso)
+    return computeHabitStats(habit, rows, now)
+  } catch {
+    return { todayCount: 0, streak: 0, strengthScore: 0, dueToday: isHabitDueOnDate(habit, new Date()), missedYesterday: false, skippedToday: false }
+  }
+}
+
 export async function wipeAllHabits(): Promise<Result<{ deleted: number }, AppError>> {
   try {
     const habits = await q.listHabits(getCurrentUserId())
@@ -267,7 +450,8 @@ export async function skipHabit(
   dateStr: string
 ): Promise<Result<HabitLog, AppError>> {
   try {
-    const existing = await q.getLogForDate(habitId, dateStr)
+    const { fromIso, toIso } = localDayBoundsIso(dateStr)
+    const existing = await q.getLatestLogInRange(habitId, fromIso, toIso)
     if (existing) return ok(existing)
     const log: HabitLog = {
       id: uuid(),
@@ -296,9 +480,10 @@ export async function unlogHabit(
   dateStrOrRange: string | { fromIso: string; toIso: string }
 ): Promise<Result<void, AppError>> {
   try {
-    const log = typeof dateStrOrRange === 'string'
-      ? await q.getLogForDate(habitId, dateStrOrRange)
-      : await q.getLatestLogInRange(habitId, dateStrOrRange.fromIso, dateStrOrRange.toIso)
+    const { fromIso, toIso } = typeof dateStrOrRange === 'string'
+      ? localDayBoundsIso(dateStrOrRange)
+      : dateStrOrRange
+    const log = await q.getLatestLogInRange(habitId, fromIso, toIso)
     if (!log) return ok(undefined)
     await q.softDeleteHabitLog(log.id, nowIso())
     void enqueue('habit_log', log.id, 'upsert')
@@ -325,31 +510,19 @@ export async function listRecentLogs(days = 30): Promise<Result<HabitLog[], AppE
 export async function getHabitStreak(habitId: string): Promise<number> {
   try {
     const today = new Date()
-    const toDate = getLocalDateString(today)
-    // Look back up to 365 days
+    // Look back up to 365 days, comparing on stored UTC instants…
     const from = new Date(today)
     from.setDate(from.getDate() - 365)
-    const fromDate = getLocalDateString(from)
+    const { fromIso } = localDayBoundsIso(getLocalDateString(from))
+    const { toIso } = localDayBoundsIso(getLocalDateString(today))
 
-    const logsByDate = await q.listLogCountsByDate(habitId, fromDate, toDate)
+    const rows = await q.listLogRowsInRange(habitId, fromIso, toIso)
     const habit = await q.getHabit(habitId, getCurrentUserId())
     if (!habit) return 0
-    const logMap = new Map(logsByDate.map((r) => [r.date, r.count]))
-
-    let streak = 0
-    const cur = new Date(today)
-    while (true) {
-      const dateStr = getLocalDateString(cur)
-      if (!isHabitDueOnDate(habit, cur)) {
-        cur.setDate(cur.getDate() - 1)
-      } else if ((logMap.get(dateStr) ?? 0) >= 1) {
-        streak++
-        cur.setDate(cur.getDate() - 1)
-      } else {
-        break
-      }
-    }
-    return streak
+    // …but bucket onto local calendar days here so the streak matches what the
+    // user actually sees on their device.
+    const { doneByDate, skippedDates } = bucketLogsByLocalDate(rows)
+    return computeStreakFromBuckets(habit, doneByDate, skippedDates, today)
   } catch {
     return 0
   }
@@ -357,11 +530,66 @@ export async function getHabitStreak(habitId: string): Promise<number> {
 
 export async function getTodayLogCount(habitId: string): Promise<number> {
   try {
-    const dateStr = getLocalDateString()
-    return await q.countLogsForDate(habitId, dateStr)
+    const { fromIso, toIso } = localDayBoundsIso(getLocalDateString())
+    return await q.countLogsInRange(habitId, fromIso, toIso)
   } catch {
     return 0
   }
+}
+
+/**
+ * Atomic Habits "never miss twice": was this habit scheduled yesterday but left
+ * with no log at all (neither done nor skipped)? Used to surface a gentle nudge
+ * today so a one-day slip doesn't become two. Derived from habit_log — no schema
+ * change. An intentional skip yesterday is NOT a miss.
+ */
+export async function wasHabitMissedYesterday(
+  habit: Pick<Habit, 'id' | 'cadence' | 'schedule_days'>
+): Promise<boolean> {
+  try {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    if (!isHabitDueOnDate(habit, yesterday)) return false
+    const { fromIso, toIso } = localDayBoundsIso(getLocalDateString(yesterday))
+    const log = await q.getLatestLogInRange(habit.id, fromIso, toIso)
+    return log === null
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Atomic Habits "implementation intention": compose a concrete
+ * "When [time], at [place], I will [habit]" statement from data the habit already
+ * has (first notification time + location label + name). No schema change.
+ * Returns null when there is neither a time nor a place — a bare "I will X" adds
+ * nothing, so we don't show it.
+ */
+export function buildImplementationIntention(
+  habit: Pick<Habit, 'name' | 'notification_times' | 'location_label'>,
+  t: { impl_intention_full: string; impl_intention_time: string; impl_intention_place: string }
+): string | null {
+  const name = habit.name?.trim()
+  if (!name) return null
+
+  let time: string | null = null
+  if (habit.notification_times) {
+    try {
+      const arr = JSON.parse(habit.notification_times) as string[]
+      time = Array.isArray(arr) && arr.length > 0 ? String(arr[0]) : null
+    } catch {
+      time = null
+    }
+  }
+  const place = habit.location_label?.trim() || null
+
+  const fill = (tpl: string) =>
+    tpl.replace('{{habit}}', name).replace('{{time}}', time ?? '').replace('{{place}}', place ?? '')
+
+  if (time && place) return fill(t.impl_intention_full)
+  if (time) return fill(t.impl_intention_time)
+  if (place) return fill(t.impl_intention_place)
+  return null
 }
 
 export async function rescheduleAllHabitNotifications(): Promise<void> {
@@ -393,26 +621,14 @@ export async function getHabit30DayScore(
 ): Promise<number> {
   try {
     const today = new Date()
-    const toDate = getLocalDateString(today)
     const from = new Date(today)
     from.setDate(from.getDate() - 29)
-    const fromDate = getLocalDateString(from)
+    const { fromIso } = localDayBoundsIso(getLocalDateString(from))
+    const { toIso } = localDayBoundsIso(getLocalDateString(today))
 
-    const logsByDate = await q.listLogCountsByDate(habit.id, fromDate, toDate)
-    const logMap = new Map(logsByDate.map((r) => [r.date, r.count]))
-
-    let expectedDays = 0
-    let completedDays = 0
-    const cur = new Date(from)
-    while (cur <= today) {
-      if (isHabitDueOnDate(habit, cur)) {
-        expectedDays++
-        const dateStr = getLocalDateString(cur)
-        if ((logMap.get(dateStr) ?? 0) >= habit.target_per_period) completedDays++
-      }
-      cur.setDate(cur.getDate() + 1)
-    }
-    return expectedDays > 0 ? Math.round((completedDays / expectedDays) * 100) : 0
+    const rows = await q.listLogRowsInRange(habit.id, fromIso, toIso)
+    const { doneByDate, skippedDates } = bucketLogsByLocalDate(rows)
+    return compute30DayScoreFromBuckets(habit, doneByDate, skippedDates, today)
   } catch {
     return 0
   }

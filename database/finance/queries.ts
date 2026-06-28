@@ -184,8 +184,8 @@ export async function upsertPlanItem(row: PlanItemRow): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO finance_plan_item
-     (id, user_id, name, kind, amount_cents, currency, category_id, due_day, recurrence, applies_month, status, active, created_at, updated_at, deleted_at, synced_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     (id, user_id, name, kind, amount_cents, currency, category_id, due_day, recurrence, applies_month, reminder_id, status, active, created_at, updated_at, deleted_at, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        user_id = excluded.user_id,
        name = excluded.name,
@@ -196,6 +196,7 @@ export async function upsertPlanItem(row: PlanItemRow): Promise<void> {
        due_day = excluded.due_day,
        recurrence = excluded.recurrence,
        applies_month = excluded.applies_month,
+       reminder_id = excluded.reminder_id,
        status = excluded.status,
        active = excluded.active,
        updated_at = excluded.updated_at,
@@ -212,6 +213,7 @@ export async function upsertPlanItem(row: PlanItemRow): Promise<void> {
       row.due_day,
       row.recurrence ?? 'monthly',
       row.applies_month ?? null,
+      row.reminder_id ?? null,
       row.status,
       row.active,
       row.created_at,

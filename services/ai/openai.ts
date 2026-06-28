@@ -1,6 +1,4 @@
 import { supabase, isSupabaseConfigured } from '@services/supabase'
-import { useSettingsStore } from '@store/settingsStore'
-import type { AIProvider } from './providers'
 
 // AI keys are NOT stored on the device anymore. They live as Supabase secrets and
 // are used only inside the `ai-chat` / `ai-transcribe` Edge Functions, which the
@@ -15,16 +13,6 @@ export function isAiAvailable(): boolean {
   return isSupabaseConfigured
 }
 
-/**
- * @deprecated Provider API keys are now held server-side by the Edge Function
- * proxy; the app never sees them. This shim only reports availability so the
- * legacy pre-flight `if (!key)` gates across feature screens keep working.
- * New code should call {@link isAiAvailable} instead.
- */
-export async function getProviderKey(_provider?: AIProvider): Promise<string | null> {
-  return isAiAvailable() ? 'server' : null
-}
-
 // ── Chat completion (via Edge Function proxy) ───────────────────────────────
 
 export type ChatMessage = {
@@ -37,11 +25,11 @@ export async function chatCompletion(
   opts?: { model?: string; temperature?: number; max_tokens?: number }
 ): Promise<string> {
   if (!supabase) throw new Error('NO_BACKEND')
-  const provider = useSettingsStore.getState().aiProvider
 
+  // The provider is decided server-side (AI_PROVIDER secret / user plan); the
+  // Edge Function ignores any client-sent provider, so we don't send one.
   const { data, error } = await supabase.functions.invoke('ai-chat', {
     body: {
-      provider,
       messages,
       model: opts?.model,
       temperature: opts?.temperature ?? 0.7,

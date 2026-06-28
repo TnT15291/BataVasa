@@ -2,6 +2,7 @@ import { chatCompletion } from './openai'
 import { getAILanguage } from './aiLanguage'
 import { withUserContext } from './userContextPrompt'
 import type { Journal } from '@features/journals/types'
+import { useSettingsStore } from '@store/settingsStore'
 
 export type JournalReflection = {
   mood_summary: string
@@ -84,6 +85,7 @@ function buildSummary(journals: Journal[]): string {
 export async function generateJournalReflection(
   journals: Journal[],
 ): Promise<JournalReflection | null> {
+  if (useSettingsStore.getState().hideJournals) return null
   if (journals.length < 3) return null
 
   const language = getAILanguage()
@@ -116,7 +118,11 @@ Rules:
       [
         {
           role: 'system',
-          content: withUserContext(`You are a thoughtful reflection partner. Reply in ${language} ONLY. Return ONLY valid JSON. Never add explanation outside the JSON.`),
+          content: withUserContext(`You are a thoughtful reflection partner. Reply in ${language} ONLY. Return ONLY valid JSON. Never add explanation outside the JSON.`, {
+            query: prompt,
+            domains: ['journals', 'goals', 'profile'],
+            maxEntries: 8,
+          }),
         },
         { role: 'user', content: prompt },
       ],

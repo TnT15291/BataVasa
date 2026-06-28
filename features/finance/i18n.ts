@@ -29,14 +29,28 @@ const KIND_KEY: Record<CategoryKind, keyof Translations> = {
   savings: 'kind_savings',
 }
 
+// Debt-book categories (sổ nợ): money lent out / borrowed. These track loan
+// movement, not consumption — exclude them from spending behavior analysis so
+// debt counterparties never show up as "top merchants" / spending categories.
+export const DEBT_CATEGORY_NAMES: ReadonlySet<string> = new Set(['Lending', 'Borrowing'])
+
+export function isDebtCategoryName(name: string | null | undefined): boolean {
+  return name != null && DEBT_CATEGORY_NAMES.has(name)
+}
+
+// Translate by the canonical English seed name (for callers that only have the
+// name string, e.g. precomputed report snapshots). Custom names pass through.
+export function translateCategoryNameByName(name: string, t: Translations): string {
+  const key = SYSTEM_CATEGORY_KEY[name]
+  return key ? t[key] : name
+}
+
 // System rows (user_id === null, canonical sys_* id) translate via lookup.
 // We translate ANY row whose name matches a known seed — including residual
 // pre-v20 duplicates not yet cleaned — so the UI never shows the English name.
 // User-custom rows (no seed-name match) return their name as-is.
 export function translateCategoryName(category: Category, t: Translations): string {
-  const key = SYSTEM_CATEGORY_KEY[category.name]
-  if (key) return t[key]
-  return category.name
+  return translateCategoryNameByName(category.name, t)
 }
 
 export function translateKind(kind: CategoryKind, t: Translations): string {

@@ -7,11 +7,12 @@ export async function createHabitSchema(db: SQLiteDatabase): Promise<void> {
       user_id         TEXT,
       name            TEXT NOT NULL,
       icon            TEXT NOT NULL DEFAULT '✅',
-      color           TEXT NOT NULL DEFAULT '#4CAF50',
+      color           TEXT NOT NULL DEFAULT '#28B985', -- keep in sync with MODULE_COLORS.habits (used only if no color supplied; CreateHabitInputSchema already defaults it)
       cadence         TEXT NOT NULL DEFAULT 'daily',
       target_per_period INTEGER NOT NULL DEFAULT 1,
       schedule_days   TEXT,
       notification_times TEXT,
+      identity        TEXT,
       location_lat    REAL,
       location_lng    REAL,
       location_label  TEXT,

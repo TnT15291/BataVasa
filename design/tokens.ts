@@ -21,18 +21,25 @@ export const typography = {
   family: { sans: 'System', mono: 'Courier' },
   // Floor: 12px. Never use values below xs in user-facing text.
   size: { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '3xl': 32 },
-  // Ceiling: bold (700). Never hardcode '800' — use bold for primary metric values only.
-  weight: { regular: '400', medium: '500', semibold: '600', bold: '700' },
+  // Body text tops out at bold (700). `extrabold` (800) is reserved for the
+  // eyebrow/overline preset and hero-metric emphasis — never for body copy.
+  weight: { regular: '400', medium: '500', semibold: '600', bold: '700', extrabold: '800' },
   lineHeight: { tight: 1.2, normal: 1.4, relaxed: 1.6 },
 } as const
 
 /**
  * Composable text style presets. Combine with a color from useTheme().
- * Rules baked in: floor 12px, max weight 700, no uppercase transforms.
+ * Rules: body text floors at 12px, tops out at bold (700), and never uppercases.
+ * The `eyebrow` preset is the sole sanctioned exception — an 11px letter-spaced
+ * all-caps overline for section/card kickers; `extrabold` (800) is otherwise
+ * reserved for hero-metric emphasis.
  *
  * Usage: <Text style={[textStyles.label, { color: theme.text.muted }]}>
  */
 export const textStyles = {
+  // Section/card kicker — the only sanctioned uppercase + sub-12px style
+  eyebrow:       { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' } as const,
+
   // Metadata, timestamps, sub-labels — minimum readable size
   caption:       { fontSize: 12, fontWeight: '400' } as const,
   captionStrong: { fontSize: 12, fontWeight: '600' } as const,

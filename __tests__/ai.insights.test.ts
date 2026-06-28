@@ -13,6 +13,7 @@ import { generateFinanceInsights } from '../services/ai/financeInsight'
 import { generateHabitInsight } from '../services/ai/habitInsight'
 import { generateJournalReflection } from '../services/ai/journalInsight'
 import { generateCrossModuleInsights } from '../services/ai/crossModuleInsight'
+import { useSettingsStore } from '../store/settingsStore'
 
 const mockedChatCompletion = chatCompletion as jest.MockedFunction<typeof chatCompletion>
 
@@ -99,6 +100,7 @@ const baseJournal = {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  useSettingsStore.setState({ hideJournals: false, language: 'vi', currency: 'VND' })
 })
 
 describe('AI insight builders', () => {
@@ -182,6 +184,14 @@ describe('AI insight builders', () => {
     await expect(generateJournalReflection([baseJournal as any, baseJournal as any, baseJournal as any])).resolves.toBeNull()
   })
 
+  it('does not generate journal reflection while journals are hidden', async () => {
+    useSettingsStore.setState({ hideJournals: true })
+
+    await expect(generateJournalReflection([baseJournal as any, baseJournal as any, baseJournal as any])).resolves.toBeNull()
+
+    expect(mockedChatCompletion).not.toHaveBeenCalled()
+  })
+
   it('builds cross-module prompts from recent finance, habit, and journal data', async () => {
     mockedChatCompletion.mockResolvedValueOnce('cross insight')
 
@@ -196,6 +206,30 @@ describe('AI insight builders', () => {
     expect(messages[1].content).toContain('FINANCE (last 30 days)')
     expect(messages[1].content).toContain('HABITS')
     expect(messages[1].content).toContain('JOURNALS')
+  })
+
+  it('masks journal content in cross-module prompts while journals are hidden', async () => {
+    useSettingsStore.setState({ hideJournals: true })
+    mockedChatCompletion.mockResolvedValueOnce('masked insight')
+    const privateJournal = {
+      ...baseJournal,
+      content: 'ULTRA_PRIVATE_CROSS_MODULE_TEXT',
+      tags: 'secret_tag',
+      mood: 5,
+    }
+
+    await generateCrossModuleInsights({
+      transactions: [baseTx as any],
+      categories: [baseCategory as any],
+      habits: [{ ...baseHabit, todayCount: 1, streak: 5 } as any],
+      journals: [privateJournal as any],
+    })
+
+    const prompt = mockedChatCompletion.mock.calls[0][0][1].content
+    expect(prompt).toContain('Journal privacy is enabled')
+    expect(prompt).not.toContain('ULTRA_PRIVATE_CROSS_MODULE_TEXT')
+    expect(prompt).not.toContain('secret_tag')
+    expect(prompt).not.toContain('avg mood:')
   })
 
   it('builds habit-impact, spending-timing, and reminder blocks when richer data is provided', async () => {

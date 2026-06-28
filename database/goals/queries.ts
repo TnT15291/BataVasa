@@ -5,9 +5,9 @@ export async function insertGoal(goal: Goal): Promise<void> {
   const db = await getDb()
   await db.runAsync(
     `INSERT INTO goal
-      (id,user_id,title,description,target_type,target_value,unit,start_date,due_date,
-       metric_binding,status,created_at,updated_at,deleted_at,synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      (id,user_id,title,description,target_type,target_value,unit,direction,start_date,due_date,
+       metric_binding,measures,status,created_at,updated_at,deleted_at,synced_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       goal.id,
       goal.user_id,
@@ -16,9 +16,11 @@ export async function insertGoal(goal: Goal): Promise<void> {
       goal.target_type,
       goal.target_value,
       goal.unit,
+      goal.direction,
       goal.start_date,
       goal.due_date,
       goal.metric_binding,
+      goal.measures,
       goal.status,
       goal.created_at,
       goal.updated_at,

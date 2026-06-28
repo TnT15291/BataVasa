@@ -58,4 +58,30 @@ describe('user context prompt block', () => {
     ])
     expect(userContextPromptBlock()).toBe('')
   })
+
+  it('selects relevant memories for the current question', () => {
+    setUserContextCache([
+      entry({ id: 'g', kind: 'goal', content: 'Save 50M for a laptop' }),
+      entry({ id: 'f', kind: 'fact', content: 'I work night shifts' }),
+      entry({ id: 'p', kind: 'preference', content: 'Reply briefly' }),
+      entry({ id: 'x', kind: 'fact', content: 'I want to practice guitar' }),
+    ])
+
+    const block = userContextPromptBlock({ query: 'How is my spending and budget?', maxEntries: 3 })
+    expect(block).toContain('Save 50M for a laptop')
+    expect(block).toContain('I work night shifts')
+    expect(block).toContain('Reply briefly')
+    expect(block).not.toContain('practice guitar')
+  })
+
+  it('keeps pinned memories even when the question is about another domain', () => {
+    setUserContextCache([
+      entry({ id: 'pinned', kind: 'fact', content: 'Avoid advice after 10pm', pinned: 1 }),
+      entry({ id: 'x', kind: 'fact', content: 'I want to practice guitar' }),
+    ])
+
+    const block = userContextPromptBlock({ query: 'Review my finance budget', maxEntries: 1 })
+    expect(block).toContain('Avoid advice after 10pm')
+    expect(block).not.toContain('practice guitar')
+  })
 })

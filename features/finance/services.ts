@@ -28,6 +28,8 @@ import {
   type TransactionRule,
   type Category,
   type PlanItem,
+  type PlanItemKind,
+  type PlanItemRecurrence,
   type Debt,
   type DebtDirection,
 } from './types'
@@ -951,6 +953,62 @@ export async function listPlanItems(): Promise<Result<PlanItem[], AppError>> {
   }
 }
 
+// ── Bill reminders ───────────────────────────────────────────────────────────
+// Expense bills get a linked reminder that fires on the due day at 9am local,
+// mirroring the debt → reminder pattern. Income plan items don't notify (calm).
+const PLAN_REMIND_HOUR = 9
+
+function planItemShouldRemind(kind: PlanItemKind, active: number): boolean {
+  return active === 1 && kind === 'expense'
+}
+
+/**
+ * Deterministic: when a bill's due_day next comes due, at 9am local. Monthly
+ * bills recur ('monthly'); one-time bills fire once for their applies_month
+ * ('none'). due_day is clamped to the month's last day (e.g. 31 → Feb 28).
+ */
+export function planItemReminderSchedule(
+  dueDay: number,
+  recurrence: PlanItemRecurrence | null | undefined,
+  appliesMonth: string | null | undefined,
+  now: Date = new Date()
+): { remind_at: string; recurrence: 'none' | 'monthly' } {
+  const dueDateFor = (year: number, month0: number): Date => {
+    const ref = new Date(year, month0, 1)
+    const y = ref.getFullYear()
+    const m = ref.getMonth()
+    const lastDay = new Date(y, m + 1, 0).getDate()
+    return new Date(y, m, Math.min(dueDay, lastDay), PLAN_REMIND_HOUR, 0, 0, 0)
+  }
+  if ((recurrence ?? 'monthly') === 'once') {
+    const base = appliesMonth && /^\d{4}-\d{2}$/.test(appliesMonth)
+      ? appliesMonth
+      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const [y, m] = base.split('-').map(Number)
+    return { remind_at: dueDateFor(y!, m! - 1).toISOString(), recurrence: 'none' }
+  }
+  let due = dueDateFor(now.getFullYear(), now.getMonth())
+  if (due.getTime() <= now.getTime()) due = dueDateFor(now.getFullYear(), now.getMonth() + 1)
+  return { remind_at: due.toISOString(), recurrence: 'monthly' }
+}
+
+async function createPlanItemReminder(
+  name: string,
+  item: { due_day: number; recurrence?: PlanItemRecurrence | null; applies_month?: string | null }
+): Promise<string | null> {
+  const sched = planItemReminderSchedule(item.due_day, item.recurrence, item.applies_month)
+  const r = await createReminderSvc({
+    title: name,
+    remind_at: sched.remind_at,
+    advance_minutes: 0,
+    recurrence: sched.recurrence,
+    priority: 'medium',
+  })
+  if (r.ok) return r.value.id
+  logger.warn(MODULE, 'plan item reminder creation failed', { error: r.error.message })
+  return null
+}
+
 export async function createPlanItem(input: CreatePlanItemInput): Promise<Result<PlanItem, AppError>> {
   const parsed = CreatePlanItemInputSchema.safeParse(input)
   if (!parsed.success) {
@@ -972,12 +1030,16 @@ export async function createPlanItem(input: CreatePlanItemInput): Promise<Result
       applies_month: (data.recurrence ?? 'monthly') === 'once'
         ? data.applies_month ?? getCurrentPlanMonth()
         : null,
+      reminder_id: null,
       status: data.status,
       active: data.active ?? 1,
       created_at: now,
       updated_at: now,
       deleted_at: null,
       synced_at: null,
+    }
+    if (planItemShouldRemind(item.kind, item.active)) {
+      item.reminder_id = await createPlanItemReminder(item.name, item)
     }
     await q.upsertPlanItem(item)
     void enqueue('finance_plan_item', item.id, 'upsert')
@@ -1015,6 +1077,39 @@ export async function updatePlanItem(input: UpdatePlanItemInput): Promise<Result
     }
     if (data.status !== undefined) patch.status = data.status
     if (data.active !== undefined) patch.active = data.active
+
+    // Reconcile the bill's due-date reminder with the new schedule (expense only).
+    const nextKind = data.kind ?? existing.kind
+    const nextActive = data.active ?? existing.active
+    const nextName = patch.name ?? existing.name
+    const nextDueDay = data.due_day ?? existing.due_day
+    const nextRecurrence = (data.recurrence ?? existing.recurrence) ?? 'monthly'
+    const nextAppliesMonth = patch.applies_month !== undefined ? patch.applies_month : existing.applies_month
+    if (!planItemShouldRemind(nextKind, nextActive)) {
+      if (existing.reminder_id) {
+        const r = await deleteReminderSvc(existing.reminder_id)
+        if (!r.ok && r.error.code !== 'NOT_FOUND') logger.warn(MODULE, 'plan item reminder delete failed', { error: r.error.message })
+        patch.reminder_id = null
+      }
+    } else {
+      const sched = planItemReminderSchedule(nextDueDay, nextRecurrence, nextAppliesMonth)
+      if (existing.reminder_id) {
+        const r = await updateReminderSvc({
+          id: existing.reminder_id,
+          title: nextName,
+          remind_at: sched.remind_at,
+          recurrence: sched.recurrence,
+        })
+        if (!r.ok && r.error.code === 'NOT_FOUND') {
+          patch.reminder_id = await createPlanItemReminder(nextName, { due_day: nextDueDay, recurrence: nextRecurrence, applies_month: nextAppliesMonth })
+        } else if (!r.ok) {
+          logger.warn(MODULE, 'plan item reminder update failed', { error: r.error.message })
+        }
+      } else {
+        patch.reminder_id = await createPlanItemReminder(nextName, { due_day: nextDueDay, recurrence: nextRecurrence, applies_month: nextAppliesMonth })
+      }
+    }
+
     await q.updatePlanItem(data.id, patch)
     void enqueue('finance_plan_item', data.id, 'upsert')
     const fresh = await q.getPlanItem(data.id, getCurrentUserId())
@@ -1032,6 +1127,10 @@ export async function deletePlanItem(id: string): Promise<Result<void, AppError>
     if (!existing) return appErr('NOT_FOUND', 'Finance plan item not found')
     await q.softDeletePlanItem(id, nowIso())
     void enqueue('finance_plan_item', id, 'upsert')
+    if (existing.reminder_id) {
+      const r = await deleteReminderSvc(existing.reminder_id)
+      if (!r.ok && r.error.code !== 'NOT_FOUND') logger.warn(MODULE, 'plan item reminder delete failed', { error: r.error.message })
+    }
     return ok(undefined)
   } catch (e) {
     logger.error(MODULE, 'deletePlanItem failed', { id, error: String(e) })
@@ -1044,9 +1143,17 @@ export async function restorePlanItem(id: string): Promise<Result<PlanItem, AppE
     const existing = await q.getPlanItemIncludingDeleted(id, getCurrentUserId())
     if (!existing) return appErr('NOT_FOUND', 'Finance plan item not found')
     await q.restorePlanItem(id, nowIso())
-    void enqueue('finance_plan_item', id, 'upsert')
     const fresh = await q.getPlanItem(id, getCurrentUserId())
     if (!fresh) return appErr('INTERNAL', 'Restored row vanished')
+    // Delete cancelled the linked reminder; re-create it for an expense bill.
+    if (planItemShouldRemind(fresh.kind, fresh.active)) {
+      const reminderId = await createPlanItemReminder(fresh.name, fresh)
+      if (reminderId) {
+        await q.updatePlanItem(id, { reminder_id: reminderId, updated_at: nowIso() })
+        fresh.reminder_id = reminderId
+      }
+    }
+    void enqueue('finance_plan_item', id, 'upsert')
     return ok(fresh)
   } catch (e) {
     logger.error(MODULE, 'restorePlanItem failed', { id, error: String(e) })

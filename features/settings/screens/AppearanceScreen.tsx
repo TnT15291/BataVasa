@@ -49,7 +49,7 @@ export function AppearanceScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.modeBtnText, { color: active ? '#fff' : theme.text.secondary }]}>
+                <Text style={[styles.modeBtnText, { color: active ? theme.brand.onPrimary : theme.text.secondary }]}>
                   {modeLabels[m]}
                 </Text>
               </Pressable>

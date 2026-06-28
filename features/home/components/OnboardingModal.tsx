@@ -67,6 +67,9 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
                     <Pressable
                       key={lang}
                       onPress={() => setLanguage(lang)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t[`lang_${lang}` as keyof typeof t] as string}
+                      accessibilityState={{ selected: language === lang }}
                       style={[
                         styles.languageOption,
                         {
@@ -75,7 +78,7 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
                         },
                       ]}
                     >
-                      <Text style={[styles.languageText, { color: language === lang ? '#fff' : theme.text.primary }]}>
+                      <Text style={[styles.languageText, { color: language === lang ? theme.brand.onPrimary : theme.text.primary }]}>
                         {t[`lang_${lang}` as keyof typeof t]}
                       </Text>
                     </Pressable>
@@ -86,7 +89,7 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
               <View style={styles.section}>
                 <Text style={[styles.title, { color: theme.text.primary }]}>{t.onboarding_intro_title}</Text>
                 <Text style={[styles.description, { color: theme.text.muted }]}>{t.onboarding_value_prop}</Text>
-                <View style={[styles.bulletList, { borderColor: theme.border.subtle }]}>
+                <View style={[styles.bulletList, { backgroundColor: theme.bg.secondary, borderColor: theme.border.subtle }]}>
                   <Text style={[styles.bulletItem, { color: theme.text.primary }]}>• {t.nav_finance}</Text>
                   <Text style={[styles.bulletItem, { color: theme.text.primary }]}>• {t.nav_reminders}</Text>
                   <Text style={[styles.bulletItem, { color: theme.text.primary }]}>• {t.journals}</Text>
@@ -114,7 +117,7 @@ export function OnboardingModal({ visible }: { visible: boolean }) {
               onPress={handleContinue}
               style={[styles.footerButton, { backgroundColor: theme.brand.primary }]}
             >
-              <Text style={[styles.footerText, { color: '#fff' }]}>
+              <Text style={[styles.footerText, { color: theme.brand.onPrimary }]}>
                 {step === 1 ? t.onboarding_start : t.onboarding_next}
               </Text>
             </Pressable>
@@ -150,7 +153,6 @@ const styles = StyleSheet.create({
   step: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#8B96A3',
     marginBottom: spacing[2],
   },
   section: {
@@ -188,7 +190,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: spacing[4],
     gap: spacing[2],
-    backgroundColor: '#F8FAFC',
   },
   bulletItem: {
     fontSize: 16,

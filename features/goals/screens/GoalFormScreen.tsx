@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native'
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Alert, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Feather } from '@expo/vector-icons'
@@ -10,30 +10,66 @@ import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
 import { useGoalsStore } from '@store/goalsStore'
 import { useFinanceStore } from '@store/financeStore'
+import { useGoalLinkInbox } from '@store/goalLinkInbox'
 import { useFinanceBootstrap, useCategories } from '@features/finance/hooks/useFinance'
 import { matchCategory, translateCategoryName } from '@features/finance/i18n'
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
-import { getProviderKey, isAiAvailable } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
+import { parseGoalMeasures } from '@services/goalProgress'
+import { uuid } from '@services/uuid'
 import { VoiceButton } from '@components/VoiceButton'
 import { notifySaved } from '@store/toastStore'
 import { hapticSaveSuccess } from '@services/haptics'
 import { parseGoalEntry, type ParsedGoal } from '../aiParser'
-import { GoalCoachSheet } from '../components/GoalCoachSheet'
-import type { GoalMetricBinding, GoalWithProgress, CreateGoalInput } from '../types'
+import { MetricPickerSheet, type MetricSelection } from '../components/MetricPickerSheet'
+import type { GoalDirection, GoalMetricBinding, CreateGoalInput } from '../types'
 
 type SourceKind = 'finance' | 'habits' | 'journals' | 'reminders'
 
-// Maps a chosen source into the goal's binding + target type/unit. Shared by
-// the manual Save path and the draft goal built for the cross-module coach.
+// One measure as edited in the form. A goal can carry several; progress = lowest.
+type DraftMeasure = {
+  key: string
+  kind: SourceKind
+  sourceId: string
+  targetText: string
+}
+
+// Cap goals ("stay under X", e.g. "không vượt quá 2tr ăn ngoài") are inferred
+// from the goal title's wording instead of a toggle — everything else accumulates
+// toward its target (reach). Diacritic-folded so it works with/without accents.
+const CAP_MARKERS = [
+  'vuot qua', 'khong qua', 'toi da', 'gioi han', 'han che', 'duoi ', 'bot ',
+  'ngan sach', 'under', 'less than', 'no more than', 'budget', 'limit',
+] as const
+function inferFinanceDirection(title: string): GoalDirection {
+  const folded = title
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+  return CAP_MARKERS.some((m) => folded.includes(m)) ? 'cap' : 'reach'
+}
+
+// Maps a measure into its binding + target type/unit. Habits are always tracked
+// by number of completed sessions (count) — the consistency-% mode was dropped
+// because it confusingly hits 100% after a single day.
 function goalMeta(sourceKind: SourceKind, sourceId: string, currency: string) {
   const binding: GoalMetricBinding =
     sourceKind === 'finance' ? { module: 'finance', aggregation: 'sum_amount', category_id: sourceId }
-    : sourceKind === 'habits' ? { module: 'habits', aggregation: 'completion_rate', habit_id: sourceId }
+    : sourceKind === 'habits' ? { module: 'habits', aggregation: 'completion_count', habit_id: sourceId }
     : sourceKind === 'journals' ? { module: 'journals', aggregation: 'entry_count', tag: sourceId }
     : { module: 'reminders', aggregation: 'completed_count' }
-  const targetType = sourceKind === 'finance' ? 'amount' as const : sourceKind === 'habits' ? 'rate' as const : 'count' as const
-  const unit = sourceKind === 'finance' ? currency : sourceKind === 'habits' ? '%' : 'count'
+  const targetType = sourceKind === 'finance' ? 'amount' as const : 'count' as const
+  const unit = sourceKind === 'finance' ? currency : 'count'
   return { binding, targetType, unit }
+}
+
+const MODULE_BY_KIND: Record<SourceKind, keyof typeof MODULE_ICONS> = {
+  finance: 'finance', habits: 'habits', journals: 'journal', reminders: 'tasks',
+}
+const COLOR_BY_KIND: Record<SourceKind, string> = {
+  finance: MODULE_COLORS.finance, habits: MODULE_COLORS.habits, journals: MODULE_COLORS.journal, reminders: MODULE_COLORS.tasks,
 }
 
 const JOURNAL_TAGS = [
@@ -60,7 +96,8 @@ function localDateFromString(value: string): Date {
 }
 
 function displayTargetForParsedGoal(parsed: ParsedGoal): string {
-  if (parsed.source === 'habits' && parsed.target_value < 20) return '100'
+  // The parser already normalizes habit targets deterministically (rate→100 or
+  // an explicit session count), so just echo the value it resolved.
   return String(parsed.target_value)
 }
 
@@ -72,8 +109,7 @@ export function GoalFormScreen() {
   const { t } = useTranslation()
   const currency = useSettingsStore((s) => s.displayCurrency || s.currency)
   const syncGoals = useSettingsStore((s) => s.syncGoals)
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
-  const params = useLocalSearchParams<{ id?: string }>()
+  const params = useLocalSearchParams<{ id?: string; measureModule?: string; measureId?: string; goalTitle?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
   const goals = useGoalsStore((s) => s.goals)
   const createGoal = useGoalsStore((s) => s.createGoal)
@@ -85,115 +121,143 @@ export function GoalFormScreen() {
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [sourceKind, setSourceKind] = useState<SourceKind>('finance')
-  const [sourceId, setSourceId] = useState('')
-  const [targetText, setTargetText] = useState('')
+  const [measures, setMeasures] = useState<DraftMeasure[]>([])
   const [startDate, setStartDate] = useState(todayDate())
   const [dueDate, setDueDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [prefilled, setPrefilled] = useState(false)
+  const [seeded, setSeeded] = useState(false)
   const [smartText, setSmartText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [datePickerTarget, setDatePickerTarget] = useState<'start' | 'due' | null>(null)
   const [hasSmartReview, setHasSmartReview] = useState(false)
-  const [pendingFinanceCategoryName, setPendingFinanceCategoryName] = useState('')
-  // Draft goal pre-save: drives the cross-module suggestion sheet that pops up
-  // right after Smart Entry parsing, before the goal is committed.
-  const [coachGoal, setCoachGoal] = useState<GoalWithProgress | null>(null)
-  const [showCoach, setShowCoach] = useState(false)
+  const [showMetricPicker, setShowMetricPicker] = useState(false)
 
   const financeCategories = categories.filter((c) => c.kind === 'savings' || c.kind === 'income' || c.kind === 'discretionary' || c.kind === 'essential')
+
+  const tagLabels: Record<string, string> = {
+    all: t.tag_all, work: t.tag_work, family: t.tag_family, health: t.tag_health,
+    money: t.tag_money, sleep: t.tag_sleep, exercise: t.tag_exercise,
+    stress: t.tag_stress, food: t.tag_food, travel: t.tag_travel, social: t.tag_social,
+  }
 
   useEffect(() => {
     if (!editing || prefilled) return
     setTitle(editing.title)
     setDescription(editing.description ?? '')
-    setTargetText(String(editing.target_value))
     setStartDate(editing.start_date.slice(0, 10))
     setDueDate(editing.due_date?.slice(0, 10) ?? '')
-    if (editing.binding?.module === 'habits') {
-      setSourceKind('habits')
-      setSourceId(editing.binding.habit_id)
-    } else if (editing.binding?.module === 'finance') {
-      setSourceKind('finance')
-      setSourceId(editing.binding.category_id)
-    } else if (editing.binding?.module === 'journals') {
-      setSourceKind('journals')
-      setSourceId(editing.binding.tag)
-    } else if (editing.binding?.module === 'reminders') {
-      setSourceKind('reminders')
-      setSourceId('')
-    }
+    setMeasures(parseGoalMeasures(editing).map((m) => ({
+      key: uuid(),
+      kind: m.binding.module,
+      sourceId: m.binding.module === 'finance' ? m.binding.category_id
+        : m.binding.module === 'habits' ? m.binding.habit_id
+        : m.binding.module === 'journals' ? m.binding.tag
+        : '',
+      targetText: String(m.target_value),
+    })))
     setPrefilled(true)
   }, [editing, prefilled])
 
+  // Reverse-entry: opened from a habit/category via the 🎯 "set as goal" action —
+  // seed a single measure (and optional title) bound to that source.
   useEffect(() => {
-    if (sourceId) return
-    if (sourceKind === 'finance' && financeCategories[0]) setSourceId(financeCategories[0].id)
-    if (sourceKind === 'habits' && habits[0]) setSourceId(habits[0].id)
-    if (sourceKind === 'journals') setSourceId('all')
-  }, [sourceKind, sourceId, financeCategories, habits])
+    if (editingId || seeded) return
+    const mod = params.measureModule
+    const mid = params.measureId
+    if ((mod !== 'finance' && mod !== 'habits') || typeof mid !== 'string' || !mid) return
+    if (typeof params.goalTitle === 'string' && params.goalTitle) setTitle(params.goalTitle)
+    setMeasures([{ key: uuid(), kind: mod, sourceId: mid, targetText: '' }])
+    setSeeded(true)
+  }, [editingId, seeded, params.measureModule, params.measureId, params.goalTitle])
 
-  // Journals/Reminders track a plain count of entries / completed tasks.
-  const isCount = sourceKind === 'journals' || sourceKind === 'reminders'
+  // A habit/category created via its full editor (opened from the metric picker)
+  // hands its id back through the inbox — attach it here as a measure.
+  const pendingLink = useGoalLinkInbox((s) => s.pending)
+  const clearLink = useGoalLinkInbox((s) => s.clear)
+  useEffect(() => {
+    if (!pendingLink) return
+    const key = `${pendingLink.kind}:${pendingLink.id}`
+    setMeasures((prev) => prev.some((m) => `${m.kind}:${m.sourceId}` === key)
+      ? prev
+      : [...prev, { key: uuid(), kind: pendingLink.kind, sourceId: pendingLink.id, targetText: '' }])
+    clearLink()
+  }, [pendingLink, clearLink])
 
-  // Validate current form state and build the create payload. Reused by the
-  // manual Save button and the coach's "create goal & apply" path.
-  const buildCreateInput = (resolvedSourceId = sourceId): { ok: true; input: CreateGoalInput } | { ok: false; error: string } => {
+  const measureLabel = (m: DraftMeasure): string => {
+    if (m.kind === 'finance') {
+      const c = financeCategories.find((cat) => cat.id === m.sourceId)
+      return c ? translateCategoryName(c, t) : ''
+    }
+    if (m.kind === 'habits') return habits.find((h) => h.id === m.sourceId)?.name ?? ''
+    if (m.kind === 'journals') return tagLabels[m.sourceId] ?? m.sourceId
+    return t.goal_source_reminder
+  }
+  // Everything except finance (an amount) is counted.
+  const measureIsCount = (m: DraftMeasure) => m.kind !== 'finance'
+  const measureUnitLabel = (m: DraftMeasure) => m.kind === 'finance' ? currency : t.goal_count_type
+
+  const updateMeasure = (key: string, patch: Partial<DraftMeasure>) =>
+    setMeasures((prev) => prev.map((m) => m.key === key ? { ...m, ...patch } : m))
+  const removeMeasure = (key: string) => setMeasures((prev) => prev.filter((m) => m.key !== key))
+
+  // Measures picked from the bottom-sheet (multi-select); de-dupe against the
+  // measures already on the goal.
+  const handleMeasuresSelected = (sels: MetricSelection[]) => {
+    setMeasures((prev) => {
+      const existing = new Set(prev.map((m) => `${m.kind}:${m.sourceId}`))
+      const additions: DraftMeasure[] = sels
+        .filter((s) => !existing.has(`${s.kind}:${s.id}`))
+        .map((s) => ({
+          key: uuid(),
+          kind: s.kind,
+          sourceId: s.id,
+          // Habits are counted by sessions, so let the user type the number.
+          targetText: s.kind === 'habits' ? '' : s.defaultTarget,
+        }))
+      return [...prev, ...additions]
+    })
+  }
+
+  // Validate the form and build the create payload. Reused by Save + the coach.
+  const buildCreateInput = (): { ok: true; input: CreateGoalInput } | { ok: false; error: string } => {
     const trimmed = title.trim()
     if (!trimmed) return { ok: false, error: t.goal_title_required }
-    // Reminders track all completed tasks, so they need no sub-source selection.
-    if (sourceKind !== 'reminders' && !resolvedSourceId) return { ok: false, error: t.goal_source_required }
-    const target = Number(targetText.replace(',', '.'))
-    if (!Number.isFinite(target) || target <= 0) return { ok: false, error: t.invalid_amount_msg }
-    const { binding, targetType, unit } = goalMeta(sourceKind, resolvedSourceId, currency)
+    if (measures.length === 0) return { ok: false, error: t.goal_source_required }
+    const built: NonNullable<CreateGoalInput['measures']> = []
+    for (const m of measures) {
+      if (m.kind !== 'reminders' && !m.sourceId) return { ok: false, error: t.goal_source_required }
+      const target = Number(m.targetText.replace(',', '.'))
+      if (!Number.isFinite(target) || target <= 0) return { ok: false, error: t.invalid_amount_msg }
+      const { binding, targetType, unit } = goalMeta(m.kind, m.sourceId, currency)
+      built.push({
+        binding,
+        target_type: targetType,
+        target_value: target,
+        unit,
+        // 'cap' (stay-under) is inferred from the title wording; only finance can cap.
+        direction: m.kind === 'finance' ? inferFinanceDirection(trimmed) : 'reach',
+      })
+    }
     return {
       ok: true,
       input: {
         title: trimmed,
         description: description.trim() || undefined,
-        target_type: targetType,
-        target_value: target,
-        unit,
         start_date: `${startDate}T00:00:00.000Z`,
         due_date: dueDate ? `${dueDate}T23:59:59.999Z` : null,
-        metric_binding: binding,
+        measures: built,
       },
     }
   }
 
-  const resolveSourceIdForSave = async (): Promise<{ ok: true; sourceId: string } | { ok: false; error: string }> => {
-    if (sourceKind === 'reminders' || sourceId) return { ok: true, sourceId }
-    const name = pendingFinanceCategoryName.trim()
-    if (sourceKind !== 'finance' || !name) return { ok: false, error: t.goal_source_required }
-    const res = await createCategory({
-      name,
-      icon: 'target',
-      color: MODULE_COLORS.finance,
-      kind: 'savings',
-    })
-    if (!res.ok) return { ok: false, error: res.error ?? t.goal_source_required }
-    const created = useFinanceStore.getState().categories.find((c) => c.name.trim().toLowerCase() === name.toLowerCase())
-    if (!created) return { ok: false, error: t.goal_source_required }
-    setSourceId(created.id)
-    setPendingFinanceCategoryName('')
-    return { ok: true, sourceId: created.id }
-  }
-
   const onSave = async () => {
-    setSubmitting(true)
-    const resolved = await resolveSourceIdForSave()
-    if (!resolved.ok) {
-      setSubmitting(false)
-      Alert.alert(t.could_not_save, resolved.error)
-      return
-    }
-    const built = buildCreateInput(resolved.sourceId)
+    const built = buildCreateInput()
     if (!built.ok) {
-      setSubmitting(false)
       Alert.alert(t.could_not_save, built.error)
       return
     }
+    setSubmitting(true)
     if (editingId) {
       const r = await updateGoal({ id: editingId, ...built.input })
       setSubmitting(false)
@@ -215,124 +279,62 @@ export function GoalFormScreen() {
     }
     void hapticSaveSuccess()
     notifySaved(t, syncGoals)
-    // New goals route to the detail screen with the AI coach auto-opening.
     if (r.id) {
-      router.replace({ pathname: '/goal-detail', params: { id: r.id, coach: '1' } })
+      router.replace({ pathname: '/goal-detail', params: { id: r.id } })
     } else {
       router.back()
     }
   }
 
-  // Coach draft-apply: persist the goal from the current form, return its id so
-  // the sheet can attach the selected cross-module items and route to detail.
-  const persistGoalFromForm = async (): Promise<{ ok: boolean; goalId?: string; error?: string }> => {
-    const resolved = await resolveSourceIdForSave()
-    if (!resolved.ok) return { ok: false, error: resolved.error }
-    const built = buildCreateInput(resolved.sourceId)
-    if (!built.ok) return { ok: false, error: built.error }
-    const r = await createGoal(built.input)
-    return { ok: r.ok, goalId: r.id, error: r.error }
-  }
-
-  const onCoachApplied = (goalId?: string) => {
-    setShowCoach(false)
-    if (goalId) router.replace({ pathname: '/goal-detail', params: { id: goalId } })
-    else router.replace('/goals')
-  }
-
-  const tagLabels: Record<string, string> = {
-    all: t.tag_all, work: t.tag_work, family: t.tag_family, health: t.tag_health,
-    money: t.tag_money, sleep: t.tag_sleep, exercise: t.tag_exercise,
-    stress: t.tag_stress, food: t.tag_food, travel: t.tag_travel, social: t.tag_social,
-  }
-  const sources = sourceKind === 'finance'
-    ? financeCategories.map((c) => ({ id: c.id, label: translateCategoryName(c, t), color: c.color }))
-    : sourceKind === 'habits'
-    ? habits.map((h) => ({ id: h.id, label: h.name, color: h.color || MODULE_COLORS.habits }))
-    : sourceKind === 'journals'
-    ? JOURNAL_TAGS.map((tag) => ({ id: tag, label: tagLabels[tag] ?? tag, color: MODULE_COLORS.journal }))
-    : []
-
-  const applyParsedGoal = (parsed: ParsedGoal) => {
+  const applyParsedGoal = async (parsed: ParsedGoal) => {
     const targetDisplay = displayTargetForParsedGoal(parsed)
     setTitle(parsed.title)
     setDescription(parsed.description)
-    setSourceKind(parsed.source)
-    setTargetText(targetDisplay)
     setStartDate(parsed.start_date)
     setDueDate(parsed.due_date ?? '')
 
-    // Resolve the concrete source id + a human label for the draft goal.
+    // Resolve the concrete source id for the measure.
     let resolvedId = ''
-    let sourceLabel = ''
     if (parsed.source === 'finance') {
       const matched = matchCategory(financeCategories, parsed.source_hint, t)
-      resolvedId = matched?.id ?? ''
-      sourceLabel = matched ? translateCategoryName(matched, t) : parsed.source_hint.trim()
-      setPendingFinanceCategoryName(matched ? '' : parsed.source_hint.trim())
+      if (matched) {
+        resolvedId = matched.id
+      } else {
+        const name = parsed.source_hint.trim()
+        if (name) {
+          const res = await createCategory({ name, icon: 'target', color: MODULE_COLORS.finance, kind: 'discretionary' })
+          if (res.ok) {
+            const created = useFinanceStore.getState().categories.find((c) => c.name.trim().toLowerCase() === name.toLowerCase())
+            resolvedId = created?.id ?? ''
+          }
+        }
+      }
     } else if (parsed.source === 'habits') {
-      setPendingFinanceCategoryName('')
       const hint = parsed.source_hint.toLowerCase()
       const matched = habits.find((h) => {
         const name = h.name.toLowerCase()
         return name === hint || name.includes(hint) || hint.includes(name)
       }) ?? habits[0]
       resolvedId = matched?.id ?? ''
-      sourceLabel = matched?.name ?? ''
     } else if (parsed.source === 'journals') {
-      setPendingFinanceCategoryName('')
       const hint = parsed.source_hint.toLowerCase()
       const matched = JOURNAL_TAGS.find((tag) => {
         const label = (tagLabels[tag] ?? tag).toLowerCase()
         return tag === hint || label === hint || label.includes(hint) || hint.includes(label)
       }) ?? 'all'
       resolvedId = matched
-      sourceLabel = tagLabels[matched] ?? matched
-    } else {
-      setPendingFinanceCategoryName('')
-      resolvedId = ''
-      sourceLabel = t.goal_source_reminder
     }
-    setSourceId(resolvedId)
+
+    // Smart Entry fills a single measure; the user can add more before saving.
+    setMeasures([{ key: uuid(), kind: parsed.source, sourceId: resolvedId, targetText: targetDisplay }])
     setSmartText('')
     setHasSmartReview(true)
-
-    // Pop up cross-module suggestions immediately from a draft (unsaved) goal.
-    // Skip when editing (would create a duplicate) or when AI is unavailable —
-    // then the user just reviews the filled form and taps Save.
-    const canCoach = parsed.source === 'reminders' || resolvedId || (parsed.source === 'finance' && sourceLabel.trim())
-    if (editingId || !isAiAvailable() || !canCoach) return
-    const target = Number(targetDisplay.replace(',', '.')) || 0
-    const { binding, targetType, unit } = goalMeta(parsed.source, resolvedId, currency)
-    const nowIso = new Date().toISOString()
-    const draft: GoalWithProgress = {
-      id: 'draft',
-      user_id: null,
-      title: parsed.title,
-      description: parsed.description || null,
-      target_type: targetType,
-      target_value: target,
-      unit,
-      start_date: `${parsed.start_date}T00:00:00.000Z`,
-      due_date: parsed.due_date ? `${parsed.due_date}T23:59:59.999Z` : null,
-      metric_binding: JSON.stringify(binding),
-      status: 'active',
-      created_at: nowIso,
-      updated_at: nowIso,
-      deleted_at: null,
-      synced_at: null,
-      binding,
-      progress: { current: 0, target, percent: 0, label: `0 / ${target}`, sourceLabel },
-    }
-    setCoachGoal(draft)
-    setShowCoach(true)
   }
 
   const handleSmartParse = async (override?: string) => {
     const input = (override ?? smartText).trim()
     if (!input || parsing) return
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (!isAiAvailable()) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
     if (override) setSmartText(override)
     setParsing(true)
     try {
@@ -342,8 +344,8 @@ export function GoalFormScreen() {
         journalTags: JOURNAL_TAGS,
         currency,
       })
-      if (!parsed) { Alert.alert(t.ai_error, t.parse_failed); return }
-      applyParsedGoal(parsed)
+      if (!parsed) { Alert.alert(t.goal_unsupported_title, t.goal_unsupported_msg); return }
+      await applyParsedGoal(parsed)
     } catch {
       Alert.alert(t.ai_error, t.parse_failed)
     } finally {
@@ -351,57 +353,58 @@ export function GoalFormScreen() {
     }
   }
 
-  const sourceHint = sourceKind === 'finance'
-    ? t.goal_source_finance_hint
-    : sourceKind === 'habits'
-    ? t.goal_source_habit_hint
-    : sourceKind === 'journals'
-    ? t.goal_source_journal_hint
-    : t.goal_source_reminder_hint
-  const accentColor = sourceKind === 'finance'
-    ? MODULE_COLORS.finance
-    : sourceKind === 'habits'
-    ? MODULE_COLORS.habits
-    : sourceKind === 'journals'
-    ? MODULE_COLORS.journal
-    : MODULE_COLORS.tasks
-  const recommendedSources = [
-    { key: 'finance' as const, label: t.goal_source_finance, icon: MODULE_ICONS.finance, color: MODULE_COLORS.finance, target: '' },
-    { key: 'habits' as const, label: t.goal_source_habit, icon: MODULE_ICONS.habits, color: MODULE_COLORS.habits, target: '100' },
-  ]
-  const moreSources = [
-    { key: 'journals' as const, label: t.goal_source_journal, icon: MODULE_ICONS.journal, color: MODULE_COLORS.journal, target: '10' },
-    { key: 'reminders' as const, label: t.goal_source_reminder, icon: MODULE_ICONS.tasks, color: MODULE_COLORS.tasks, target: '10' },
-  ]
-  const renderSourceButton = (item: typeof recommendedSources[number] | typeof moreSources[number]) => {
-    const active = sourceKind === item.key
+  const firstMeasure = measures[0]
+  const accentColor = firstMeasure ? COLOR_BY_KIND[firstMeasure.kind] : MODULE_COLORS.analysis
+  const reviewMetric = firstMeasure ? measureLabel(firstMeasure) : ''
+  const reviewTarget = firstMeasure && firstMeasure.targetText.trim()
+    ? `${firstMeasure.targetText.trim()} ${measureUnitLabel(firstMeasure)}`
+    : ''
+
+  const renderMeasure = (m: DraftMeasure) => {
+    const color = COLOR_BY_KIND[m.kind]
+    const isCount = measureIsCount(m)
     return (
-      <Pressable
-        key={item.key}
-        onPress={() => { setSourceKind(item.key); setSourceId(''); setTargetText(item.target); setPendingFinanceCategoryName('') }}
-        style={[styles.segmentBtn, { backgroundColor: active ? item.color : theme.bg.elevated, borderColor: active ? item.color : theme.border.subtle }]}
-      >
-        <Feather name={item.icon} size={14} color={active ? '#fff' : item.color} />
-        <Text style={[styles.segmentText, { color: active ? '#fff' : theme.text.secondary }]} numberOfLines={1}>{item.label}</Text>
-      </Pressable>
+      <View key={m.key} style={[styles.measureCard, { backgroundColor: theme.bg.elevated, borderColor: color + '40' }]}>
+        <View style={styles.measureHeader}>
+          <View style={[styles.measureIcon, { backgroundColor: color + '1F' }]}>
+            <Feather name={MODULE_ICONS[MODULE_BY_KIND[m.kind]]} size={15} color={color} />
+          </View>
+          <View style={styles.measureHeaderText}>
+            <Text style={[styles.measureModule, { color: theme.text.muted }]} numberOfLines={1}>
+              {m.kind === 'finance' ? t.goal_source_finance : m.kind === 'habits' ? t.goal_source_habit : m.kind === 'journals' ? t.goal_source_journal : t.goal_source_reminder}
+            </Text>
+            <Text style={[styles.measureName, { color: theme.text.primary }]} numberOfLines={1}>{measureLabel(m) || '—'}</Text>
+          </View>
+          <Pressable onPress={() => removeMeasure(m.key)} hitSlop={8} style={styles.measureRemove} accessibilityRole="button" accessibilityLabel={t.delete}>
+            <Feather name="x" size={18} color={theme.text.muted} />
+          </Pressable>
+        </View>
+
+        <View style={styles.measureTargetRow}>
+          <TextInput
+            value={m.targetText}
+            onChangeText={(v) => updateMeasure(m.key, { targetText: v })}
+            placeholder={m.kind === 'finance' ? currency : '10'}
+            placeholderTextColor={theme.text.muted}
+            keyboardType={isCount ? 'number-pad' : 'decimal-pad'}
+            style={[styles.measureTargetInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
+          />
+          <Text style={[styles.measureUnit, { color: theme.text.muted }]}>{measureUnitLabel(m)}</Text>
+        </View>
+        {m.kind === 'finance' ? (
+          <Text style={[styles.measureHint, { color: theme.text.muted }]}>{t.goal_finance_semantics}</Text>
+        ) : null}
+      </View>
     )
   }
-  const selectedSourceLabel = sourceKind === 'finance'
-    ? pendingFinanceCategoryName.trim()
-      ? `${pendingFinanceCategoryName.trim()} (${t.new_category})`
-      : sources.find((s) => s.id === sourceId)?.label ?? ''
-    : sourceKind === 'habits'
-    ? sources.find((s) => s.id === sourceId)?.label ?? ''
-    : sourceKind === 'journals'
-    ? sources.find((s) => s.id === sourceId)?.label ?? ''
-    : t.goal_source_reminder
-  const targetSummary = targetText.trim()
-    ? `${targetText.trim()} ${sourceKind === 'finance' ? currency : isCount ? t.goal_count_type : '%'}`
-    : ''
 
   return (
     <>
-    <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+    {/* KeyboardAvoidingView keeps the focused input above the keyboard. Explicit
+        Android 'height' behavior is required because edge-to-edge (app.json)
+        disables the OS auto-resize. */}
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.bg.primary }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
       <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <View style={styles.cardHeader}>
           <View style={[styles.cardIcon, { backgroundColor: theme.brand.primary + '1F' }]}>
@@ -431,7 +434,7 @@ export function GoalFormScreen() {
               accessibilityLabel={t.send}
               style={[styles.smartSend, { backgroundColor: parsing || !smartText.trim() ? theme.border.strong : theme.brand.primary }]}
             >
-              {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
+              {parsing ? <ActivityIndicator size="small" color={theme.brand.onPrimary} /> : <Feather name="send" size={16} color={theme.brand.onPrimary} />}
             </Pressable>
           </View>
         </View>
@@ -446,8 +449,8 @@ export function GoalFormScreen() {
           </View>
           {[
             [t.goals, title],
-            [t.goal_primary_metric, selectedSourceLabel],
-            [t.goal_target, targetSummary],
+            [t.goal_primary_metric, reviewMetric],
+            [t.goal_target, reviewTarget],
             [t.goal_due_date, dueDate || t.goal_no_due_date],
           ].map(([label, value]) => value ? (
             <View key={label} style={styles.reviewRow}>
@@ -475,48 +478,26 @@ export function GoalFormScreen() {
         multiline
       />
 
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.goal_primary_metric}</Text>
-      <Text style={[styles.sourceGroupLabel, { color: theme.text.muted }]}>{t.goal_recommended_sources}</Text>
-      <View style={styles.segment}>
-        {recommendedSources.map(renderSourceButton)}
-      </View>
-      <Text style={[styles.sourceGroupLabel, { color: theme.text.muted }]}>{t.goal_more_sources}</Text>
-      <View style={styles.segment}>
-        {moreSources.map(renderSourceButton)}
-      </View>
-      <View style={[styles.explainBox, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
-        <Feather name="link-2" size={15} color={accentColor} />
-        <View style={styles.explainCopy}>
-          <Text style={[styles.explainText, { color: theme.text.secondary }]}>{sourceHint}</Text>
-          <Text style={[styles.explainSubtext, { color: theme.text.muted }]}>{t.goal_primary_metric_hint}</Text>
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.goal_measures}</Text>
+      {measures.length === 0 ? (
+        <View style={[styles.explainBox, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+          <Feather name="link-2" size={15} color={MODULE_COLORS.analysis} />
+          <View style={styles.explainCopy}>
+            <Text style={[styles.explainText, { color: theme.text.secondary }]}>{t.goal_select_modules_hint}</Text>
+            <Text style={[styles.explainSubtext, { color: theme.text.muted }]}>{t.goal_primary_metric_hint}</Text>
+          </View>
         </View>
-      </View>
-
-      <View style={styles.sourceGrid}>
-        {sources.map((source) => {
-          const active = sourceId === source.id
-          return (
-            <Pressable
-              key={source.id}
-              onPress={() => { setSourceId(source.id); setPendingFinanceCategoryName('') }}
-              style={[styles.sourceChip, { backgroundColor: active ? source.color : theme.bg.elevated, borderColor: active ? source.color : theme.border.subtle }]}
-            >
-              <Text style={[styles.sourceText, { color: active ? '#fff' : theme.text.secondary }]} numberOfLines={1}>{source.label}</Text>
-            </Pressable>
-          )
-        })}
-      </View>
-
-      <Text style={[styles.label, { color: theme.text.muted }]}>{t.goal_target}</Text>
-      <TextInput
-        value={targetText}
-        onChangeText={setTargetText}
-        placeholder={sourceKind === 'finance' ? currency : isCount ? '10' : '100'}
-        placeholderTextColor={theme.text.muted}
-        keyboardType={isCount ? 'number-pad' : 'decimal-pad'}
-        style={[styles.input, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.elevated }]}
-      />
-      <Text style={[styles.hint, { color: theme.text.muted }]}>{sourceKind === 'finance' ? t.goal_amount_type : sourceKind === 'habits' ? t.goal_rate_type : t.goal_count_type}</Text>
+      ) : (
+        measures.map(renderMeasure)
+      )}
+      <Pressable
+        onPress={() => setShowMetricPicker(true)}
+        style={[styles.addMeasureBtn, { borderColor: MODULE_COLORS.analysis + '66' }]}
+        accessibilityRole="button"
+      >
+        <Feather name="plus" size={16} color={MODULE_COLORS.analysis} />
+        <Text style={[styles.addMeasureText, { color: MODULE_COLORS.analysis }]}>{t.goal_add_measure}</Text>
+      </Pressable>
 
       <View style={styles.dateRow}>
         <View style={styles.dateField}>
@@ -577,16 +558,14 @@ export function GoalFormScreen() {
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{editingId ? t.update : t.save}</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingView>
 
-    {coachGoal ? (
-      <GoalCoachSheet
-        visible={showCoach}
-        goal={coachGoal}
-        onClose={() => setShowCoach(false)}
-        persistBeforeApply={persistGoalFromForm}
-        onApplied={onCoachApplied}
-      />
-    ) : null}
+    <MetricPickerSheet
+      visible={showMetricPicker}
+      existing={measures.map((m) => `${m.kind}:${m.sourceId}`)}
+      onClose={() => setShowMetricPicker(false)}
+      onConfirm={handleMeasuresSelected}
+    />
     </>
   )
 }
@@ -636,12 +615,21 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
   textarea: { minHeight: 88, textAlignVertical: 'top' },
   segment: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  segmentBtn: { flexBasis: '47%', flexGrow: 1, minHeight: 44, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing[3], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2] },
+  segmentBtn: { flexBasis: '47%', flexGrow: 1, minHeight: 40, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing[3], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2] },
   segmentText: { fontSize: 12, fontWeight: '700' },
-  sourceGroupLabel: { marginTop: -spacing[1], fontSize: 12, fontWeight: '700', letterSpacing: 0.2 },
-  sourceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  sourceChip: { maxWidth: '48%', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
-  sourceText: { fontSize: 12, fontWeight: '700' },
+  measureCard: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], gap: spacing[3] },
+  measureHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  measureIcon: { width: 34, height: 34, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  measureHeaderText: { flex: 1, gap: 2 },
+  measureModule: { fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
+  measureName: { fontSize: 15, fontWeight: '700' },
+  measureRemove: { width: 30, height: 30, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  measureTargetRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  measureTargetInput: { flex: 1, borderWidth: 1, borderRadius: radius.md, padding: spacing[3], fontSize: 15 },
+  measureUnit: { fontSize: 13, fontWeight: '700', minWidth: 44 },
+  measureHint: { fontSize: 12, lineHeight: 17 },
+  addMeasureBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], borderWidth: 1, borderStyle: 'dashed', borderRadius: radius.md, minHeight: 48 },
+  addMeasureText: { fontSize: 14, fontWeight: '700' },
   hint: { fontSize: 12, lineHeight: 18 },
   explainBox: { borderWidth: 1, borderRadius: radius.md, padding: spacing[3], flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
   explainCopy: { flex: 1, gap: 2 },

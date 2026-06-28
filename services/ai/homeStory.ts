@@ -1,5 +1,6 @@
 import { chatCompletion, isAiAvailable } from './openai'
-import { withUserContext } from './userContextPrompt'
+import { withUserContext, type UserMemoryDomain } from './userContextPrompt'
+import { useSettingsStore } from '@store/settingsStore'
 
 export type HomeStorySnapshot = {
   language: string
@@ -28,6 +29,16 @@ export function buildHomeStoryFallback(snapshot: HomeStorySnapshot): string {
 export async function generateHomeStoryLine(snapshot: HomeStorySnapshot): Promise<string> {
   if (!isAiAvailable()) throw new Error('NO_BACKEND')
 
+  const memoryQuery = [
+    snapshot.focus,
+    snapshot.money,
+    snapshot.habits,
+    snapshot.tasks,
+    snapshot.journal,
+    snapshot.goal ?? '',
+    ...snapshot.risks,
+  ].filter(Boolean).join(' ')
+
   const systemPrompt = [
     `Reply in ${snapshot.language} only.`,
     'You are a calm personal coach speaking on the home screen of a life app.',
@@ -35,11 +46,18 @@ export async function generateHomeStoryLine(snapshot: HomeStorySnapshot): Promis
     'Lead with a risk when one is present. Use the provided facts and the user memory only — never invent numbers, tasks, or goals.',
     'Speak to the person directly and kindly. No judgement, no markdown, no lists. Maximum 36 words.',
   ].join(' ')
+  const memoryDomains: UserMemoryDomain[] | undefined = useSettingsStore.getState().hideJournals
+    ? ['finance', 'habits', 'tasks', 'goals', 'profile']
+    : undefined
 
   const content = await chatCompletion([
     {
       role: 'system',
-      content: withUserContext(systemPrompt),
+      content: withUserContext(systemPrompt, {
+        query: memoryQuery,
+        domains: memoryDomains,
+        maxEntries: 5,
+      }),
     },
     {
       role: 'user',

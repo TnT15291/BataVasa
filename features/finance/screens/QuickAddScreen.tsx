@@ -28,7 +28,7 @@ import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { parseSmartEntry, extractAmount } from '@services/ai/smartEntry'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { centsToDisplay, displayToCents } from '@services/ai/aiLanguage'
 import { useSettingsStore } from '@store/settingsStore'
 import { DateRow } from '@components/DateRow'
@@ -56,8 +56,7 @@ export function QuickAddScreen() {
   const currency = useSettingsStore((s) => s.currency)
   const language = useSettingsStore((s) => s.language)
   const locationAccess = useSettingsStore((s) => s.locationAccess)
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
-  const [hasApiKey, setHasApiKey] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState(isAiAvailable())
   const categories = useCategories()
   const allTxs = useTransactions()
   const { create, update, remove, restore } = useFinanceActions()
@@ -120,10 +119,6 @@ export function QuickAddScreen() {
         }
   } | null>(null)
   const [confirmBusy, setConfirmBusy] = useState(false)
-
-  useEffect(() => {
-    getProviderKey(aiProvider).then((key) => setHasApiKey(!!key))
-  }, [aiProvider])
 
   useEffect(() => {
     if (!editingTx || prefilled) return
@@ -292,7 +287,7 @@ export function QuickAddScreen() {
         applyParsedToForm(payload)
       }
     } catch (e: any) {
-      if (e?.message === 'NO_API_KEY') {
+      if (e?.message === 'NO_BACKEND') {
         Alert.alert(t.no_api_key, t.no_api_key_msg)
       } else {
         Alert.alert(t.ai_error, e?.message ?? 'Unknown error')
@@ -469,7 +464,7 @@ export function QuickAddScreen() {
           onInputFocus={() => { if (!hasApiKey) router.push('/ai-settings') }}
           headerRight={!hasApiKey ? (
             <Pressable onPress={() => router.push('/ai-settings')} style={styles.setupRow}>
-              <Text style={{ color: theme.text.muted, fontSize: 12 }}>{t.setup_ai_first}</Text>
+              <Text style={{ color: theme.text.muted, fontSize: 12 }}>{t.no_api_key}</Text>
               <Feather name="arrow-right" size={14} color={theme.text.muted} />
             </Pressable>
           ) : undefined}

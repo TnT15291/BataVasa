@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS finance_plan_item (
   recurrence   TEXT        NOT NULL DEFAULT 'monthly'
                           CHECK (recurrence IN ('monthly','once')),
   applies_month TEXT,
+  reminder_id  TEXT,
   status       TEXT        NOT NULL DEFAULT 'confirmed'
                           CHECK (status IN ('confirmed','expected')),
   active       SMALLINT    NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
@@ -111,6 +112,7 @@ CREATE TABLE IF NOT EXISTS finance_plan_item (
 ALTER TABLE finance_plan_item ADD COLUMN IF NOT EXISTS recurrence TEXT NOT NULL DEFAULT 'monthly'
   CHECK (recurrence IN ('monthly','once'));
 ALTER TABLE finance_plan_item ADD COLUMN IF NOT EXISTS applies_month TEXT;
+ALTER TABLE finance_plan_item ADD COLUMN IF NOT EXISTS reminder_id TEXT;
 ALTER TABLE finance_plan_item ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "users own their finance plan items" ON finance_plan_item;
 CREATE POLICY "users own their finance plan items" ON finance_plan_item
@@ -162,6 +164,7 @@ CREATE TABLE IF NOT EXISTS habit (
   target_per_period  INTEGER     NOT NULL DEFAULT 1,
   schedule_days      TEXT,
   notification_times TEXT,
+  identity           TEXT,
   location_lat       REAL,
   location_lng       REAL,
   location_label     TEXT,
@@ -269,9 +272,11 @@ CREATE TABLE IF NOT EXISTS goal (
   target_type    TEXT        NOT NULL CHECK (target_type IN ('amount','rate','count')),
   target_value   REAL        NOT NULL CHECK (target_value > 0),
   unit           TEXT        NOT NULL,
+  direction      TEXT        NOT NULL DEFAULT 'reach' CHECK (direction IN ('reach','cap')),
   start_date     TIMESTAMPTZ NOT NULL,
   due_date       TIMESTAMPTZ,
   metric_binding TEXT        NOT NULL,
+  measures       TEXT,
   status         TEXT        NOT NULL DEFAULT 'active'
                               CHECK (status IN ('active','paused','done','archived')),
   created_at     TIMESTAMPTZ NOT NULL,
@@ -279,6 +284,9 @@ CREATE TABLE IF NOT EXISTS goal (
   deleted_at     TIMESTAMPTZ,
   synced_at      TIMESTAMPTZ
 );
+ALTER TABLE goal ADD COLUMN IF NOT EXISTS direction TEXT NOT NULL DEFAULT 'reach';
+-- v27: goals can track multiple measures (JSON array; first mirrors legacy cols)
+ALTER TABLE goal ADD COLUMN IF NOT EXISTS measures TEXT;
 ALTER TABLE goal ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "users own their goals" ON goal;
 CREATE POLICY "users own their goals" ON goal
@@ -357,6 +365,7 @@ ALTER TABLE finance_debt
 
 ALTER TABLE habit               ADD COLUMN IF NOT EXISTS schedule_days      TEXT;
 ALTER TABLE habit               ADD COLUMN IF NOT EXISTS notification_times TEXT;
+ALTER TABLE habit               ADD COLUMN IF NOT EXISTS identity           TEXT;
 ALTER TABLE habit_log           ADD COLUMN IF NOT EXISTS skipped SMALLINT NOT NULL DEFAULT 0;
 ALTER TABLE journal             ADD COLUMN IF NOT EXISTS is_important SMALLINT NOT NULL DEFAULT 0;
 ALTER TABLE journal             ADD COLUMN IF NOT EXISTS tags TEXT;

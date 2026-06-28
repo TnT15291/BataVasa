@@ -7,9 +7,9 @@ import { useTheme, getCardStyle, type Theme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
 import { useTranslation } from '@services/i18n'
 import { useSettingsStore } from '@store/settingsStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { generateCrossModuleInsights } from '@services/ai/crossModuleInsight'
-import { useFinanceBootstrap, useTransactions, useCategories, useDebts } from '@features/finance/hooks/useFinance'
+import { useFinanceBootstrap, useTransactions, useCategories, useDebts, usePlanItems } from '@features/finance/hooks/useFinance'
 import { useHabitsBootstrap, useHabits } from '@features/habits/hooks/useHabits'
 import { useJournalsBootstrap, useJournals } from '@features/journals/hooks/useJournals'
 import { useRemindersBootstrap, useReminders } from '@features/reminders/hooks/useReminders'
@@ -33,16 +33,17 @@ export function AnalysisScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { t } = useTranslation()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
   const language = useSettingsStore((s) => s.language)
   const currency = useSettingsStore((s) => s.currency)
   const cycleStartDay = useSettingsStore((s) => s.financeCycleStartDay)
   const countPlannedIncome = useSettingsStore((s) => s.safeToSpendCountPlannedIncome)
   const countCarryOver = useSettingsStore((s) => s.safeToSpendCarryOver)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
 
   const transactions = useTransactions()
   const categories = useCategories()
   const debts = useDebts()
+  const planItems = usePlanItems()
   const habits = useHabits()
   const journals = useJournals()
   const reminders = useReminders()
@@ -64,12 +65,8 @@ export function AnalysisScreen() {
   const [loading, setLoading] = useState(false)
 
   const run = useCallback(async () => {
-    const key = await getProviderKey(aiProvider)
-    if (!key) {
-      Alert.alert(t.no_api_key, t.no_api_key_msg, [
-        { text: t.go_to_settings, onPress: () => router.push('/ai-settings') },
-        { text: t.cancel, style: 'cancel' },
-      ])
+    if (!isAiAvailable()) {
+      Alert.alert(t.no_api_key, t.no_api_key_msg)
       return
     }
 
@@ -80,7 +77,7 @@ export function AnalysisScreen() {
       // analysis still works without them if the load fails.
       const logsResult = await listRecentLogs(30)
       const habitLogs = logsResult.ok ? logsResult.value : []
-      const text = await generateCrossModuleInsights({ transactions, categories, habits, journals, habitLogs, reminders })
+      const text = await generateCrossModuleInsights({ transactions, categories, habits, journals, habitLogs, reminders, planItems, debts })
       setResult(text)
     } catch (e: any) {
       if (e?.message === 'NO_DATA') {
@@ -91,7 +88,7 @@ export function AnalysisScreen() {
     } finally {
       setLoading(false)
     }
-  }, [aiProvider, transactions, categories, habits, journals, reminders, t, router])
+  }, [transactions, categories, habits, journals, reminders, planItems, debts, t])
 
   const moduleCount = [
     transactions.length > 0,
@@ -135,13 +132,14 @@ export function AnalysisScreen() {
       const d = parseISO(j.occurred_at)
       return d >= from30 && d <= today
     })
-    const moodEntries = last30Journals.filter((j) => j.mood !== null)
+    const moodEntries = hideJournals ? [] : last30Journals.filter((j) => j.mood !== null)
     const avgMood = moodEntries.length > 0
       ? moodEntries.reduce((s, j) => s + (j.mood ?? 0), 0) / moodEntries.length
       : null
     const safeToSpend = calculateSafeToSpend({
       transactions,
       categories,
+      planItems,
       debts,
       currency: reportCurrency,
       fxRates,
@@ -152,7 +150,7 @@ export function AnalysisScreen() {
     })
 
     return { totalExpense, topCat, bestStreak, journalCount: last30Journals.length, avgMood, safeToSpend: safeToSpend.safeToSpend }
-  }, [transactions, categories, debts, habits, journals, reportCurrency, fxRates, cycleStartDay, countPlannedIncome, countCarryOver, amountInReportCurrency])
+  }, [transactions, categories, planItems, debts, habits, journals, reportCurrency, fxRates, cycleStartDay, countPlannedIncome, countCarryOver, amountInReportCurrency, hideJournals])
 
   const comparison = useMemo(() => {
     // Compare like-for-like: month-to-date vs the SAME elapsed window last month.
@@ -177,6 +175,7 @@ export function AnalysisScreen() {
     }
 
     const avgMoodIn = (from: Date, to: Date) => {
+      if (hideJournals) return null
       const moods = journals.filter((j) => {
         const d = parseISO(j.occurred_at)
         return d >= from && d <= to && j.mood !== null
@@ -199,7 +198,7 @@ export function AnalysisScreen() {
       hasFinance: thisExp > 0 || lastExp > 0,
       hasMood: thisAvgMood !== null || lastAvgMood !== null,
     }
-  }, [transactions, journals, categories, amountInReportCurrency])
+  }, [transactions, journals, categories, amountInReportCurrency, hideJournals])
 
   const hasData = moduleCount > 0
   const hasComparison = comparison.hasFinance || comparison.hasMood
@@ -268,7 +267,9 @@ export function AnalysisScreen() {
                   label={t.nav_journal}
                   value={
                     highlights.journalCount > 0
-                      ? `${highlights.journalCount} ${t.report_entries}${highlights.avgMood ? `  ·  ${highlights.avgMood.toFixed(1)} ★` : ''}`
+                      ? hideJournals
+                        ? t.hide_journals_locked_count.replace('{{count}}', String(highlights.journalCount))
+                        : `${highlights.journalCount} ${t.report_entries}${highlights.avgMood ? `  ·  ${highlights.avgMood.toFixed(1)} ★` : ''}`
                       : '—'
                   }
                   theme={theme}
@@ -354,9 +355,9 @@ export function AnalysisScreen() {
           ]}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={theme.brand.onPrimary} />
           ) : (
-            <Text style={styles.btnText}>{result ? t.refresh : t.analysis_generate}</Text>
+            <Text style={[styles.btnText, { color: theme.brand.onPrimary }]}>{result ? t.refresh : t.analysis_generate}</Text>
           )}
         </Pressable>
       </View>

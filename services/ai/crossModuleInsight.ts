@@ -1,11 +1,14 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, fmtAI } from './aiLanguage'
 import { withUserContext } from './userContextPrompt'
+import { aiCategoryName, isDebtCategory, localizedShortWeekdays } from './financeFormat'
+import { calculateSafeToSpend } from '@features/finance/services'
 import { subDays } from 'date-fns'
-import type { Transaction, Category } from '@features/finance/types'
+import type { Transaction, Category, PlanItem, Debt } from '@features/finance/types'
 import type { Habit, HabitLog } from '@features/habits/types'
 import type { Journal } from '@features/journals/types'
 import type { Reminder } from '@features/reminders/types'
+import { useSettingsStore } from '@store/settingsStore'
 
 type HabitWithStats = Habit & { todayCount: number; streak: number }
 
@@ -17,6 +20,10 @@ type CrossModuleInput = {
   // Optional richer data: enables habit↔mood↔spending↔task correlations.
   habitLogs?: HabitLog[]
   reminders?: Reminder[]
+  // Plan items + debts so safe-to-spend uses the SAME formula as the UI
+  // (cycle/plan/savings aware), not a naive month income−expense.
+  planItems?: PlanItem[]
+  debts?: Debt[]
 }
 
 type DayStat = {
@@ -27,29 +34,6 @@ type DayStat = {
   journalCount: number
   remindersDue: number
   remindersDone: number
-}
-
-function calculatePromptSafeToSpend(input: {
-  transactions: Transaction[]
-  categories: Category[]
-  currency: string
-}): { safeToSpend: number } {
-  const now = new Date()
-  const month = now.getMonth()
-  const year = now.getFullYear()
-  let income = 0
-  let expense = 0
-  for (const tx of input.transactions) {
-    if (tx.currency !== input.currency) continue
-    const d = new Date(tx.occurred_at)
-    if (d.getMonth() !== month || d.getFullYear() !== year) continue
-    if (tx.amount_cents > 0) {
-      income += tx.amount_cents
-      continue
-    }
-    expense += Math.abs(tx.amount_cents)
-  }
-  return { safeToSpend: Math.max(0, income - expense) }
 }
 
 function dayMood(d: DayStat): number | null {
@@ -274,7 +258,7 @@ function spendTimingBlock(txs: Transaction[], currency: string): string | null {
     .map((s) => `${s.label}: ${fmtAI(s.total, currency)} (${s.count} tx)`)
   if (slotLines.length >= 2) lines.push(`By time of day:\n  ${slotLines.join('\n  ')}`)
 
-  const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const WD = localizedShortWeekdays()
   const wdEntries = Array.from(weekdays.entries()).sort((a, b) => b[1].total - a[1].total)
   if (wdEntries.length >= 3) {
     const top = wdEntries[0]!
@@ -322,28 +306,50 @@ function buildSummary(input: CrossModuleInput, currency: string): string {
   const cutoff = subDays(new Date(), 30).toISOString()
   const recentTxs = transactions.filter((t) => t.occurred_at >= cutoff)
   const recentJournals = journals.filter((j) => j.occurred_at >= cutoff)
+  const hideJournals = useSettingsStore.getState().hideJournals
+  const catMap = new Map(categories.map((c) => [c.id, c]))
+  // Spending-behavior analysis excludes debt-book movement (lending/borrowing) so
+  // a loan counterparty never reads as a "spender"; totals below still count it.
+  const spendTxs = recentTxs.filter((t) => !isDebtCategory(catMap.get(t.category_id)))
 
   const sections: string[] = []
 
   // Finance summary
   if (recentTxs.length > 0) {
-    const catMap = new Map(categories.map((c) => [c.id, c]))
     let income = 0, expense = 0
     const catTotals = new Map<string, number>()
     for (const tx of recentTxs) {
-      const name = catMap.get(tx.category_id)?.name ?? 'Other'
+      const cat = catMap.get(tx.category_id)
       const abs = Math.abs(tx.amount_cents)
       if (tx.amount_cents > 0) income += abs
       else {
         expense += abs
-        catTotals.set(name, (catTotals.get(name) ?? 0) + abs)
+        if (!isDebtCategory(cat)) {
+          const name = aiCategoryName(cat)
+          catTotals.set(name, (catTotals.get(name) ?? 0) + abs)
+        }
       }
     }
     const topCats = Array.from(catTotals.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([name, amt]) => `  ${name}: ${fmtAI(amt, currency)}`)
-    const safe = calculatePromptSafeToSpend({ transactions, categories, currency })
+    // Single source of truth: the same cycle/plan/savings-aware formula the Home
+    // and Finance screens use, so the AI never quotes a different "safe to spend"
+    // than the UI. Storage currency + no FX (the rest of this block is storage
+    // currency too); cycle/income/carry-over settings come from the user's store.
+    const s = useSettingsStore.getState()
+    const safe = calculateSafeToSpend({
+      transactions,
+      categories,
+      planItems: input.planItems ?? [],
+      debts: input.debts ?? [],
+      currency,
+      fxRates: null,
+      cycleStartDay: s.financeCycleStartDay,
+      countPlannedIncome: s.safeToSpendCountPlannedIncome,
+      countCarryOver: s.safeToSpendCarryOver,
+    })
     sections.push(`FINANCE (last 30 days):\n  Income: ${fmtAI(income, currency)} | Expense: ${fmtAI(expense, currency)} | Net cash: ${fmtAI(income - expense, currency)} | Safe to spend: ${fmtAI(safe.safeToSpend, currency)}\n  Top spending categories:\n${topCats.join('\n')}`)
   }
 
@@ -359,16 +365,20 @@ function buildSummary(input: CrossModuleInput, currency: string): string {
 
   // Journal summary
   if (recentJournals.length > 0) {
-    const withMood = recentJournals.filter((j) => j.mood != null)
-    const avgMood = withMood.length > 0
-      ? (withMood.reduce((s, j) => s + (j.mood ?? 0), 0) / withMood.length).toFixed(1)
-      : 'N/A'
-    const importantCount = recentJournals.filter((j) => j.is_important === 1).length
-    const snippets = recentJournals.slice(0, 4).map((j) => {
-      const moodTag = j.mood != null ? `[mood:${j.mood}] ` : ''
-      return `  ${j.occurred_at.split('T')[0]}: ${moodTag}${j.content.slice(0, 120).replace(/\n+/g, ' ')}`
-    })
-    sections.push(`JOURNALS (${recentJournals.length} entries, avg mood: ${avgMood}/5, important: ${importantCount}):\n${snippets.join('\n')}`)
+    if (hideJournals) {
+      sections.push(`JOURNALS (last 30 days): ${recentJournals.length} entries. Journal privacy is enabled; content, mood, tags, and important flags are hidden.`)
+    } else {
+      const withMood = recentJournals.filter((j) => j.mood != null)
+      const avgMood = withMood.length > 0
+        ? (withMood.reduce((s, j) => s + (j.mood ?? 0), 0) / withMood.length).toFixed(1)
+        : 'N/A'
+      const importantCount = recentJournals.filter((j) => j.is_important === 1).length
+      const snippets = recentJournals.slice(0, 4).map((j) => {
+        const moodTag = j.mood != null ? `[mood:${j.mood}] ` : ''
+        return `  ${j.occurred_at.split('T')[0]}: ${moodTag}${j.content.slice(0, 120).replace(/\n+/g, ' ')}`
+      })
+      sections.push(`JOURNALS (${recentJournals.length} entries, avg mood: ${avgMood}/5, important: ${importantCount}):\n${snippets.join('\n')}`)
+    }
   }
 
   // Reminders summary
@@ -378,7 +388,7 @@ function buildSummary(input: CrossModuleInput, currency: string): string {
     sections.push(`REMINDERS/TASKS (last 30 days): ${recentReminders.length} due, ${done} completed (${Math.round((done / recentReminders.length) * 100)}%)`)
   }
 
-  const dayStats = buildDayStats(recentTxs, recentJournals, reminders, cutoff)
+  const dayStats = buildDayStats(spendTxs, hideJournals ? [] : recentJournals, reminders, cutoff)
 
   // Cross-module correlation block
   const corr = correlationBlock(dayStats, currency)
@@ -389,10 +399,10 @@ function buildSummary(input: CrossModuleInput, currency: string): string {
   if (habitImpact) sections.push(`HABIT IMPACT (kept vs missed days, last 30 days):\n${habitImpact}`)
 
   // When and around which activities the money goes
-  const timing = spendTimingBlock(recentTxs, currency)
+  const timing = spendTimingBlock(spendTxs, currency)
   if (timing) sections.push(`SPENDING TIMING:\n${timing}`)
 
-  const activity = activitySpendBlock(recentJournals, dayStats, cutoff, currency)
+  const activity = hideJournals ? null : activitySpendBlock(recentJournals, dayStats, cutoff, currency)
   if (activity) sections.push(`SPENDING BY JOURNAL ACTIVITY:\n${activity}`)
 
   return sections.join('\n\n')
@@ -404,12 +414,17 @@ export async function generateCrossModuleInsights(input: CrossModuleInput): Prom
 
   const language = getAILanguage()
   const currency = getAICurrency()
+  const hideJournals = useSettingsStore.getState().hideJournals
   const summary = buildSummary(input, currency)
 
   return chatCompletion([
     {
       role: 'system',
-      content: withUserContext(`You are a holistic personal life assistant. CRITICAL: Reply in ${language} ONLY. ALL headings and content MUST be in ${language}. Be concise, specific, empathetic, and non-judgmental. Use short markdown sections (## heading).`),
+      content: withUserContext(`You are a holistic personal life assistant. CRITICAL: Reply in ${language} ONLY. ALL headings and content MUST be in ${language}; translate any English labels in the data (category names, weekday names, section labels) — never echo them. Do NOT use emojis. Be concise, specific, empathetic, and non-judgmental. Use short markdown sections (## heading).`, {
+        query: summary,
+        domains: hideJournals ? ['finance', 'habits', 'tasks', 'goals', 'profile'] : ['finance', 'habits', 'journals', 'tasks', 'goals', 'profile'],
+        maxEntries: 10,
+      }),
     },
     {
       role: 'user',
@@ -417,13 +432,13 @@ export async function generateCrossModuleInsights(input: CrossModuleInput): Prom
 
 ${summary}
 
-Write 5-6 ## sections in ${language}. Cover:
-1. Tổng kết tháng (key highlights across all modules)
-2. Tác động của thói quen (from HABIT IMPACT: for each habit compared, explain what happens when it is kept vs missed — mood, whether spending rises or falls unusually, whether tasks get forgotten or other habits get skipped. Flag any spending change marked "notable")
-3. Khi nào và lúc làm gì bạn tiêu nhiều/ít nhất (from SPENDING TIMING and SPENDING BY JOURNAL ACTIVITY: which time of day, weekday, and journaled activities coincide with the highest and lowest spending)
-4. Pattern đáng chú ý khác (other cross-module connections between finance, habits, journals, and tasks — e.g. spending↔mood from CROSS-MODULE PATTERNS)
-5. Điểm mạnh & điểm cần cải thiện (reference specific data points)
-6. 2-3 hành động ưu tiên (concrete recommendations that would improve finances AND mood, grounded in the correlations above)
+Write 5-6 ## sections, each heading in ${language}. Cover:
+1. Month at a glance (key highlights across all modules)
+2. Habit impact (from HABIT IMPACT: for each habit compared, explain what happens when it is kept vs missed — mood, whether spending rises or falls unusually, whether tasks get forgotten or other habits get skipped. Flag any spending change marked "notable")
+3. When and around which activities you spend the most/least (from SPENDING TIMING and SPENDING BY JOURNAL ACTIVITY: which time of day, weekday, and journaled activities coincide with the highest and lowest spending)
+4. Other notable patterns (other cross-module connections between finance, habits, journals, and tasks — e.g. spending↔mood from CROSS-MODULE PATTERNS)
+5. Strengths and areas to improve (reference specific data points)
+6. 2-3 priority actions (concrete recommendations that would improve finances AND mood, grounded in the correlations above)
 
 Skip a section gracefully if its data block is missing. Correlation is not causation — phrase findings as observations ("on days you kept X, spending was lower"), not verdicts.`,
     },

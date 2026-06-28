@@ -1,6 +1,20 @@
 import { create } from 'zustand'
 import * as svc from '@features/goals/services'
+import { getTranslations } from '@services/i18n'
+import { toast } from '@store/toastStore'
 import type { CreateGoalInput, GoalWithProgress, UpdateGoalInput } from '@features/goals/types'
+
+// Celebrate goals that flipped active → done between two snapshots (auto-complete
+// on reaching target, or a manual mark-done). First load has an empty `prev`, so
+// long-finished goals don't re-toast on app open.
+function celebrateNewlyCompleted(prev: GoalWithProgress[], next: GoalWithProgress[]): void {
+  const prevStatus = new Map(prev.map((g) => [g.id, g.status]))
+  for (const g of next) {
+    if (g.status === 'done' && prevStatus.get(g.id) === 'active') {
+      toast.success(getTranslations().goal_completed_toast.replace('{{title}}', g.title))
+    }
+  }
+}
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -26,6 +40,7 @@ export const useGoalsStore = create<GoalsState>((set, get) => ({
 
   async loadGoals() {
     if (get().loadState === 'loading') return
+    const prev = get().goals
     set({ loadState: 'loading' })
     const r = await svc.loadGoals()
     if (!r.ok) {
@@ -33,6 +48,7 @@ export const useGoalsStore = create<GoalsState>((set, get) => ({
       return
     }
     set({ goals: r.value, loadState: 'ready', lastError: null })
+    celebrateNewlyCompleted(prev, r.value)
   },
 
   async loadGoal(id) {
@@ -52,12 +68,16 @@ export const useGoalsStore = create<GoalsState>((set, get) => ({
   },
 
   async updateGoal(input) {
+    const prevStatus = get().goals.find((g) => g.id === input.id)?.status
     const r = await svc.updateGoal(input)
     if (!r.ok) return { ok: false, error: r.error.message }
     set((s) => ({
       goals: s.goals.map((g) => g.id === r.value.id ? r.value : g),
       selectedGoal: s.selectedGoal?.id === r.value.id ? r.value : s.selectedGoal,
     }))
+    if (r.value.status === 'done' && prevStatus === 'active') {
+      toast.success(getTranslations().goal_completed_toast.replace('{{title}}', r.value.title))
+    }
     return { ok: true }
   },
 

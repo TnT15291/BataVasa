@@ -97,6 +97,8 @@ export type PlanItem = {
   due_day: number
   recurrence?: PlanItemRecurrence | null
   applies_month?: string | null
+  // Linked reminder that fires on the due day (expense bills only).
+  reminder_id?: string | null
   status: PlanItemStatus
   active: number
   created_at: string

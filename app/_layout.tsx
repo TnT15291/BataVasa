@@ -21,6 +21,7 @@ import { usePasswordRecoveryLink } from '@features/auth/usePasswordRecoveryLink'
 import { useGoogleAuthCallback } from '@features/auth/useGoogleAuthCallback'
 import { startSyncWorker, drainQueue } from '@services/sync'
 import { syncWeeklyReviewNotification } from '@services/proactiveNotifications'
+import { syncAnniversaryNotifications } from '@services/anniversaryNotifications'
 import { useNotificationRouting } from '@features/notifications/useNotificationRouting'
 import { BiometricLockScreen } from '@/components/BiometricLockScreen'
 import { ToastHost } from '@/components/Toast'
@@ -66,6 +67,8 @@ export default function RootLayout() {
       .then(() => { void useContextStore.getState().loadContext() })
       // Reconcile the opt-in weekly-review notification with saved settings.
       .then(() => { void syncWeeklyReviewNotification() })
+      // Reconcile upcoming journal-anniversary notifications ("on this day").
+      .then(() => { void syncAnniversaryNotifications() })
       .then(() => { stopSync = startSyncWorker() })
       .then(() => setReady(true))
       .catch((e) => setError(String(e)))
@@ -93,6 +96,8 @@ export default function RootLayout() {
         // Re-stamp the weekly-review notification with a fresh teaser from the
         // latest data each time the app is opened.
         void syncWeeklyReviewNotification()
+        // Re-schedule upcoming anniversaries from the latest important entries.
+        void syncAnniversaryNotifications()
       }
     })
     return () => sub.remove()

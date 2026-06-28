@@ -1,11 +1,12 @@
 import { format, isSameDay, subDays } from 'date-fns'
 import { getAICurrency, getAILanguage, fmtAI } from './aiLanguage'
-import { withUserContext } from './userContextPrompt'
+import { withUserContext, type UserMemoryDomain } from './userContextPrompt'
 import type { Category, Transaction } from '@features/finance/types'
 import type { Habit } from '@features/habits/types'
 import type { Journal } from '@features/journals/types'
 import type { Reminder } from '@features/reminders/types'
 import type { GoalWithProgress } from '@features/goals/types'
+import { useSettingsStore } from '@store/settingsStore'
 
 type HabitForAssistant = Habit & {
   streak?: number
@@ -129,6 +130,7 @@ export function buildAssistantContext(input: BuildAssistantContextInput): string
   const activeJournals = input.journals.filter((j) => !j.deleted_at)
   const journal7 = activeJournals.filter((j) => inLastDays(j.occurred_at, now, 7))
   const journal30 = activeJournals.filter((j) => inLastDays(j.occurred_at, now, 30))
+  const hideJournals = useSettingsStore.getState().hideJournals
   const moods = journal30.map((j) => j.mood).filter((m): m is number => m !== null)
   const tagCounts = new Map<string, number>()
   for (const journal of journal30) {
@@ -161,11 +163,27 @@ export function buildAssistantContext(input: BuildAssistantContextInput): string
     .map((r) => `${r.title} (${formatDateTime(eventTime(r).toISOString())})`)
     .join('; ')
 
-  const activeGoals = (input.goals ?? []).filter((g) => !g.deleted_at && g.status === 'active')
+  const allGoals = (input.goals ?? []).filter((g) => !g.deleted_at)
+  const activeGoals = allGoals.filter((g) => g.status === 'active')
+  const completedGoals = allGoals.filter((g) => g.status === 'done')
+  const pausedGoals = allGoals.filter((g) => g.status === 'paused')
   const goalLines = activeGoals
     .sort((a, b) => a.progress.percent - b.progress.percent)
     .slice(0, 6)
-    .map((g) => `${g.title}: ${g.progress.percent}% (${g.progress.label}) via ${financeGoalSource(g, catMap)}`)
+    .map((g) => {
+      const note = g.progress.note ? `; note: ${g.progress.note}` : ''
+      return `${g.title}: ${g.progress.percent}% (${g.progress.label}) via ${financeGoalSource(g, catMap)}${note}`
+    })
+    .join('; ')
+  const completedGoalLines = completedGoals
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, 4)
+    .map((g) => `${g.title}: ${g.progress.percent}% (${g.progress.label})`)
+    .join('; ')
+  const pausedGoalLines = pausedGoals
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, 4)
+    .map((g) => `${g.title}: ${g.progress.percent}% (${g.progress.label})`)
     .join('; ')
 
   return [
@@ -173,29 +191,39 @@ export function buildAssistantContext(input: BuildAssistantContextInput): string
     `FINANCE: 30d income ${fmtAI(income30, currency)}, 30d total outflow ${fmtAI(expense30, currency)}, 30d regular expense ${fmtAI(regularExpense30, currency)}, 30d savings set-aside ${fmtAI(setAside30, currency)}, 7d total outflow ${fmtAI(expense7, currency)}, 7d regular expense ${fmtAI(regularExpense7, currency)}, 7d savings set-aside ${fmtAI(setAside7, currency)}, review transactions ${reviewTxs.length}. Top regular expense categories: ${topFinance || 'none'}. Top savings funds: ${topSavingsFunds || 'none'}. Largest recent money moves: ${largestTxs || 'none'}. Needs review: ${reviewTxs.slice(0, 5).join('; ') || 'none'}.`,
     `TASKS: open ${openReminders.length}, today ${today.length}, overdue ${overdue.length}, inbox ${inbox.length}, high priority open ${openReminders.filter((r) => r.priority === 'high').length}. Upcoming: ${upcoming || 'none'}. Overdue list: ${overdueList || 'none'}.`,
     `HABITS: active ${activeHabits.length}, due today ${dueHabits.length}, done today ${doneHabits.length}. Still open today: ${missedHabits || 'none'}. Best streaks: ${habitLeaders || 'none'}.`,
-    `JOURNALS: 7d entries ${journal7.length}, 30d entries ${journal30.length}, 30d avg mood ${moods.length > 0 ? (moods.reduce((s, m) => s + m, 0) / moods.length).toFixed(1) : 'n/a'}, important 30d ${journal30.filter((j) => j.is_important === 1).length}. Top tags: ${topEntries(tagCounts, 6).map(([tag, count]) => `${tag}:${count}`).join('; ') || 'none'}. Recent snippets: ${journalSnippets || 'none'}.`,
-    `GOALS: active ${activeGoals.length}. Lowest progress first: ${goalLines || 'none'}.`,
+    hideJournals
+      ? `JOURNALS: 7d entries ${journal7.length}, 30d entries ${journal30.length}. Journal privacy is enabled; content, mood, tags, and important flags are hidden.`
+      : `JOURNALS: 7d entries ${journal7.length}, 30d entries ${journal30.length}, 30d avg mood ${moods.length > 0 ? (moods.reduce((s, m) => s + m, 0) / moods.length).toFixed(1) : 'n/a'}, important 30d ${journal30.filter((j) => j.is_important === 1).length}. Top tags: ${topEntries(tagCounts, 6).map(([tag, count]) => `${tag}:${count}`).join('; ') || 'none'}. Recent snippets: ${journalSnippets || 'none'}.`,
+    `GOALS: active ${activeGoals.length}, completed ${completedGoals.length}, paused ${pausedGoals.length}. Active lowest progress first: ${goalLines || 'none'}. Completed: ${completedGoalLines || 'none'}. Paused: ${pausedGoalLines || 'none'}.`,
   ].join('\n')
 }
 
-export function buildAssistantSystemPrompt(ctx: string): string {
+export function buildAssistantSystemPrompt(ctx: string, memoryQuery = ''): string {
   const language = getAILanguage()
   const today = format(new Date(), 'yyyy-MM-dd')
+  const memoryDomains: UserMemoryDomain[] | undefined = useSettingsStore.getState().hideJournals
+    ? ['finance', 'habits', 'tasks', 'goals', 'profile']
+    : undefined
   return withUserContext(`You are BataVasa's smart personal assistant. BataVasa tracks Finance, Tasks, Habits, Journals, and Goals.
 CRITICAL: Reply in ${language} ONLY. Never switch to another language.
 
 Today is ${today}.
 
-Use the user's data context below as ground truth. You can answer questions about spending, budgets, review items, tasks, habits, journal mood/tags, goals, and cross-module patterns. When a LONG-TERM block is present, use it to compare the user across years (e.g. this year vs previous years) and describe how they are growing toward a better version of themselves. Do not invent records, amounts, dates, or trends that are not in the context. If the context is insufficient, say what data is missing and give the best next step.
+Use the user's data context below as ground truth. You can answer questions about spending, budgets, review items, tasks, habits, journal counts/mood/tags when available, goals, and cross-module patterns. When a LONG-TERM block is present, use it to compare the user across years (e.g. this year vs previous years) and describe how they are growing toward a better version of themselves. Do not invent records, amounts, dates, or trends that are not in the context. If the context is insufficient, say what data is missing and give the best next step.
 
 BataVasa domain rules:
 - Finance category kind "savings" means a fund/envelope. A negative transaction in a savings category is money set aside into that fund, not ordinary consumption.
 - Because the app does not maintain positive fund balances yet, "chi cho quy" / "chi cho quỹ" is modeled as an expense-like outflow. For a savings goal measured by that finance category, those set-aside outflows increase goal progress.
 - Separate regular expenses from savings set-aside when advising about spending. Do not scold set-aside fund contributions as wasteful spending.
 - Each goal has one primary measured source. Suggestions from AI are optional next steps; they are not extra progress sources unless the user explicitly creates or changes the measured source.
+- Finance goal progress counts only the relevant money direction for its category/source. If a goal line includes a note about skipped foreign-currency groups, mention that the progress may be incomplete rather than treating it as the full total.
 
 User data context:
 ${ctx}
 
-Be concise, practical, specific, and non-judgmental. When useful, mention the exact module and the number/date/amount you used.`)
+Be concise, practical, specific, and non-judgmental. When useful, mention the exact module and the number/date/amount you used.`, {
+    query: memoryQuery,
+    domains: memoryDomains,
+    maxEntries: 8,
+  })
 }

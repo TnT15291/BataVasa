@@ -14,14 +14,17 @@ import { useTranslation } from '@services/i18n'
 import { getDateFnsLocale } from '@services/locale'
 import { hapticSaveSuccess } from '@services/haptics'
 import { notifySaved, toast } from '@store/toastStore'
-import { getProviderKey } from '@services/ai/openai'
+import { isAiAvailable } from '@services/ai/openai'
 import { parseHabitLog } from '../aiParser'
 import { VoiceButton } from '@components/VoiceButton'
 import { ConfirmEntrySheet, type ConfirmField } from '@components/ConfirmEntrySheet'
 import { Button, Card, TextField } from '@components/ui'
 import { useSettingsStore } from '@store/settingsStore'
+import { useGoalLinkInbox } from '@store/goalLinkInbox'
 import { requestNotificationPermission } from '@services/notifications'
 import { useHabitsBootstrap, useHabits, useHabitActions } from '../hooks/useHabits'
+import { GoalBadge } from '@features/goals/components/GoalBadge'
+import { buildImplementationIntention } from '../services'
 import type { Cadence } from '../types'
 import { MODULE_COLORS } from '@design/moduleColors'
 
@@ -42,11 +45,10 @@ export function HabitFormScreen() {
   const { t } = useTranslation()
   const habits = useHabits()
   const { createHabit, updateHabit, deleteHabit, restoreHabit } = useHabitActions()
-  const aiProvider = useSettingsStore((s) => s.aiProvider)
   const aiAutoConfirm = useSettingsStore((s) => s.aiAutoConfirm)
   const language = useSettingsStore((s) => s.language)
 
-  const params = useLocalSearchParams<{ id?: string; prefill?: string }>()
+  const params = useLocalSearchParams<{ id?: string; prefill?: string; linkToGoal?: string }>()
   const editingId = typeof params.id === 'string' ? params.id : null
   const editingHabit = useMemo(
     () => (editingId ? habits.find((h) => h.id === editingId) ?? null : null),
@@ -61,6 +63,7 @@ export function HabitFormScreen() {
   const [scheduleDays, setScheduleDays] = useState<number[]>([1, 2, 3, 4, 5])
   const [target, setTarget] = useState('1')
   const [notificationTimes, setNotificationTimes] = useState<string[]>([])
+  const [identity, setIdentity] = useState('')
   const [showTimePicker, setShowTimePicker] = useState(false)
   const [pickerDate, setPickerDate] = useState(new Date())
   const [submitting, setSubmitting] = useState(false)
@@ -86,6 +89,7 @@ export function HabitFormScreen() {
       .filter((v) => Number.isInteger(v) && v >= 0 && v <= 6))
     setTarget(String(editingHabit.target_per_period))
     setNotificationTimes(editingHabit.notification_times ? JSON.parse(editingHabit.notification_times) : [])
+    setIdentity(editingHabit.identity ?? '')
     setPrefilled(true)
   }, [editingHabit, prefilled])
 
@@ -157,13 +161,20 @@ export function HabitFormScreen() {
       ? (scheduleDays.length > 0 ? scheduleDays.join(',') : WEEKDAY_VALUES.join(','))
       : null
     const notification_times = notificationTimes.length > 0 ? JSON.stringify(notificationTimes) : null
+    const identityValue = identity.trim() || null
     const res = isEditing
-      ? await updateHabit({ id: editingId!, name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days, notification_times })
-      : await createHabit({ name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days, notification_times })
+      ? await updateHabit({ id: editingId!, name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days, notification_times, identity: identityValue })
+      : await createHabit({ name: trimmed, icon, color, cadence, target_per_period: targetNum, schedule_days, notification_times, identity: identityValue })
     setSubmitting(false)
     if (!res.ok) { Alert.alert(t.could_not_save, res.error ?? ''); return }
     void hapticSaveSuccess()
     notifySaved(t, useSettingsStore.getState().syncHabits)
+    // Opened from the goal form to create a habit for a goal — hand the new id
+    // back so the still-mounted goal form attaches it as a measure.
+    if (!isEditing && params.linkToGoal === '1') {
+      const newId = (res as { id?: string }).id
+      if (newId) useGoalLinkInbox.getState().push({ kind: 'habits', id: newId })
+    }
     router.back()
   }
 
@@ -186,8 +197,7 @@ export function HabitFormScreen() {
   const handleSmartParse = async (override?: string) => {
     const input = (override ?? smartText).trim()
     if (!input || parsing) return
-    const key = await getProviderKey(aiProvider)
-    if (!key) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
+    if (!isAiAvailable()) { Alert.alert(t.no_api_key, t.no_api_key_msg); return }
     if (override) setSmartText(override)
     setParsing(true)
     try {
@@ -227,6 +237,7 @@ export function HabitFormScreen() {
       target_per_period: parseInt(target, 10) || 1,
       schedule_days,
       notification_times,
+      identity: identity.trim() || null,
     })
     setConfirmBusy(false)
     if (res.ok) {
@@ -245,6 +256,17 @@ export function HabitFormScreen() {
     setSmartText('')
     setConfirmSheet(null)
   }
+
+  // Atomic Habits implementation intention — live "When/where I will X" preview
+  // composed from the name + first notification time + (existing) location.
+  const implIntention = buildImplementationIntention(
+    {
+      name,
+      notification_times: notificationTimes.length > 0 ? JSON.stringify(notificationTimes) : null,
+      location_label: editingHabit?.location_label ?? null,
+    },
+    t
+  )
 
   return (
     <KeyboardAvoidingView
@@ -283,7 +305,7 @@ export function HabitFormScreen() {
               disabled={parsing || !smartText.trim()}
               style={[styles.smartSend, { backgroundColor: parsing || !smartText.trim() ? theme.border.strong : theme.brand.primary }]}
             >
-              {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
+              {parsing ? <ActivityIndicator size="small" color={theme.brand.onPrimary} /> : <Feather name="send" size={16} color={theme.brand.onPrimary} />}
             </Pressable>
           </View>
         </View>
@@ -299,6 +321,18 @@ export function HabitFormScreen() {
         autoFocus={!isEditing}
       />
 
+      {/* Identity (Atomic Habits — vote for who you're becoming) */}
+      <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_identity_label}</Text>
+      <TextField
+        value={identity}
+        onChangeText={setIdentity}
+        placeholder={t.habit_identity_placeholder}
+        containerStyle={{ backgroundColor: theme.bg.elevated, borderColor: theme.border.strong }}
+      />
+      {isEditing ? (
+        <GoalBadge variant="button" module="habits" id={editingId} title={identity.trim() || name.trim()} />
+      ) : null}
+
       {/* Icon */}
       <Text style={[styles.label, { color: theme.text.muted }]}>{t.habit_icon}</Text>
       <View style={styles.grid}>
@@ -308,6 +342,8 @@ export function HabitFormScreen() {
             <Pressable
               key={ic}
               onPress={() => setIcon(ic)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
               style={[styles.iconBtn, {
                 backgroundColor: selected ? theme.brand.primary + '14' : theme.bg.elevated,
                 borderColor: selected ? theme.brand.primary : theme.border.subtle,
@@ -326,6 +362,9 @@ export function HabitFormScreen() {
           <Pressable
             key={`${c}-${index}`}
             onPress={() => setColor(c)}
+            accessibilityRole="button"
+            accessibilityLabel={`${t.category_color} ${index + 1}`}
+            accessibilityState={{ selected: color === c }}
             style={[styles.colorBtn, { backgroundColor: c, borderColor: color === c ? theme.text.primary : 'transparent' }]}
           />
         ))}
@@ -340,12 +379,14 @@ export function HabitFormScreen() {
             <Pressable
               key={c}
               onPress={() => setCadence(c)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               style={[styles.cadenceBtn, {
                 backgroundColor: active ? theme.brand.primary : theme.bg.elevated,
                 borderColor: active ? theme.brand.primary : theme.border.subtle,
               }]}
             >
-              <Text style={{ color: active ? '#fff' : theme.text.secondary, fontSize: 13, fontWeight: '600' }}>
+              <Text style={{ color: active ? theme.brand.onPrimary : theme.text.secondary, fontSize: 13, fontWeight: '600' }}>
                 {cadenceLabel(c)}
               </Text>
             </Pressable>
@@ -363,12 +404,14 @@ export function HabitFormScreen() {
                 <Pressable
                   key={day.value}
                   onPress={() => toggleScheduleDay(day.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                   style={[styles.weekdayBtn, {
                     backgroundColor: active ? theme.brand.primary : theme.bg.elevated,
                     borderColor: active ? theme.brand.primary : theme.border.subtle,
                   }]}
                 >
-                  <Text style={[styles.weekdayText, { color: active ? '#fff' : theme.text.secondary }]}>
+                  <Text style={[styles.weekdayText, { color: active ? theme.brand.onPrimary : theme.text.secondary }]}>
                     {day.label}
                   </Text>
                 </Pressable>
@@ -454,12 +497,22 @@ export function HabitFormScreen() {
                 onPress={() => confirmTimePicker(pickerDate)}
                 style={[styles.modalConfirm, { backgroundColor: theme.brand.primary }]}
               >
-                <Text style={styles.modalConfirmText}>{t.save}</Text>
+                <Text style={[styles.modalConfirmText, { color: theme.brand.onPrimary }]}>{t.save}</Text>
               </Pressable>
             </Pressable>
           </Pressable>
         </Modal>
       )}
+
+      {implIntention ? (
+        <View style={[styles.intentionCard, { backgroundColor: theme.brand.primary + '0F', borderColor: theme.brand.primary + '33' }]}>
+          <View style={styles.intentionHeader}>
+            <Feather name="target" size={14} color={theme.brand.primary} />
+            <Text style={[styles.intentionLabel, { color: theme.brand.primary }]}>{t.impl_intention_label}</Text>
+          </View>
+          <Text style={[styles.intentionText, { color: theme.text.primary }]}>{implIntention}</Text>
+        </View>
+      ) : null}
 
     </ScrollView>
 
@@ -544,6 +597,10 @@ const styles = StyleSheet.create({
   targetValue: { fontSize: 24, fontWeight: '700', minWidth: 40, textAlign: 'center' },
   primaryButton: { minHeight: 52 },
   emptyNote: { fontSize: 13, fontStyle: 'italic' },
+  intentionCard: { borderRadius: radius.md, borderWidth: 1, padding: spacing[3], gap: spacing[1] },
+  intentionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  intentionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  intentionText: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
   timeChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   timeChip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   timeChipText: { fontSize: 13, fontWeight: '600' },

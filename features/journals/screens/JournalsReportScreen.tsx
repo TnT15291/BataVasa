@@ -18,6 +18,7 @@ import { getDateFnsLocale } from '@services/locale'
 import { track } from '@services/analytics'
 import { EmptyState } from '@components/ui'
 import { MODULE_COLORS } from '@design/moduleColors'
+import { MOOD_EMOJI_BY_SCORE } from '@design/moods'
 import { useJournalsBootstrap, useJournals } from '../hooks/useJournals'
 
 type Period = 'weekly' | 'monthly' | 'yearly' | 'custom'
@@ -56,14 +57,13 @@ function StatCard({
   )
 }
 
-const MOOD_EMOJI = ['', '😢', '😕', '😐', '😊', '😄']
-
 export function JournalsReportScreen() {
   useJournalsBootstrap()
   const theme = useTheme()
   const { t } = useTranslation()
   const journals = useJournals()
   const language = useSettingsStore((s) => s.language)
+  const hideJournals = useSettingsStore((s) => s.hideJournals)
   const dfLocale = getDateFnsLocale(language)
   const [period, setPeriod] = useState<Period>('monthly')
   const [anchorDate, setAnchorDate] = useState(new Date())
@@ -123,6 +123,9 @@ export function JournalsReportScreen() {
     if (filtered.length === 0) {
       return { entries: 0, avgMood: null, moodCounts: new Map<number, number>(), trend: null, importantCount: 0, importantEntries: [] }
     }
+    if (hideJournals) {
+      return { entries: filtered.length, avgMood: null, moodCounts: new Map<number, number>(), trend: null, importantCount: 0, importantEntries: [] }
+    }
 
     const withMood = filtered.filter((j) => j.mood != null)
     const avgMood = withMood.length > 0
@@ -150,7 +153,7 @@ export function JournalsReportScreen() {
       .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
 
     return { entries: filtered.length, avgMood, moodCounts, trend, importantCount: importantEntries.length, importantEntries: importantEntries.slice(0, 5) }
-  }, [getRange, journals])
+  }, [getRange, journals, hideJournals])
 
   const prevStats = useMemo(() => {
     if (period === 'custom') return null
@@ -163,6 +166,9 @@ export function JournalsReportScreen() {
     const fromIso = prevFrom.toISOString()
     const toIso = prevTo.toISOString()
     const prevJournals = journals.filter((j) => j.occurred_at >= fromIso && j.occurred_at <= toIso)
+    if (hideJournals) {
+      return { entries: prevJournals.length, avgMood: null, importantCount: 0 }
+    }
     const withMood = prevJournals.filter((j) => j.mood != null)
     const avgMood = withMood.length > 0
       ? withMood.reduce((s, j) => s + (j.mood ?? 0), 0) / withMood.length
@@ -172,7 +178,7 @@ export function JournalsReportScreen() {
       avgMood,
       importantCount: prevJournals.filter((j) => (j.is_important ?? 0) === 1).length,
     }
-  }, [period, anchorDate, journals])
+  }, [period, anchorDate, journals, hideJournals])
 
   const calcDelta = percentDelta
 
@@ -180,7 +186,10 @@ export function JournalsReportScreen() {
   const exportSummary = async () => {
     if (!stats || !range) return
     track('report_generated', { module: 'journals', kind: period, item_count: stats.entries })
-    await Share.share({ message: JSON.stringify({ module: 'journals', period, range: range.label, stats: { entries: stats.entries, avgMood: stats.avgMood, trend: stats.trend } }, null, 2), title: 'batavasa-journals-report.json' })
+    const exportStats = hideJournals
+      ? { entries: stats.entries }
+      : { entries: stats.entries, avgMood: stats.avgMood, trend: stats.trend }
+    await Share.share({ message: JSON.stringify({ module: 'journals', period, range: range.label, stats: exportStats }, null, 2), title: 'batavasa-journals-report.json' })
   }
 
   const TABS: { key: Period; label: string }[] = [
@@ -260,28 +269,32 @@ export function JournalsReportScreen() {
                 delta={prevStats ? calcDelta(stats.entries, prevStats.entries) : undefined}
                 theme={theme}
               />
-              <StatCard
-                label={t.report_avg_mood}
-                value={stats.avgMood != null ? `${MOOD_EMOJI[Math.round(stats.avgMood)]} ${stats.avgMood.toFixed(1)}` : '—'}
-                delta={stats.avgMood != null && prevStats?.avgMood != null
-                  ? calcDelta(Math.round(stats.avgMood * 10), Math.round(prevStats.avgMood * 10))
-                  : undefined}
-                theme={theme}
-              />
-              <StatCard
-                label={t.report_mood_trend}
-                value={stats.trend === 'up' ? '↑' : stats.trend === 'down' ? '↓' : stats.trend === 'stable' ? '→' : '—'}
-                theme={theme}
-              />
-              <StatCard
-                label={t.report_important}
-                value={String(stats.importantCount)}
-                delta={prevStats ? calcDelta(stats.importantCount, prevStats.importantCount) : undefined}
-                theme={theme}
-              />
+              {!hideJournals ? (
+                <>
+                  <StatCard
+                    label={t.report_avg_mood}
+                    value={stats.avgMood != null ? `${MOOD_EMOJI_BY_SCORE[Math.round(stats.avgMood)] ?? ''} ${stats.avgMood.toFixed(1)}` : '—'}
+                    delta={stats.avgMood != null && prevStats?.avgMood != null
+                      ? calcDelta(Math.round(stats.avgMood * 10), Math.round(prevStats.avgMood * 10))
+                      : undefined}
+                    theme={theme}
+                  />
+                  <StatCard
+                    label={t.report_mood_trend}
+                    value={stats.trend === 'up' ? '↑' : stats.trend === 'down' ? '↓' : stats.trend === 'stable' ? '→' : '—'}
+                    theme={theme}
+                  />
+                  <StatCard
+                    label={t.report_important}
+                    value={String(stats.importantCount)}
+                    delta={prevStats ? calcDelta(stats.importantCount, prevStats.importantCount) : undefined}
+                    theme={theme}
+                  />
+                </>
+              ) : null}
             </View>
 
-            {stats.moodCounts.size > 0 && (
+            {!hideJournals && stats.moodCounts.size > 0 && (
               <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
                 <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.journal_mood_label}</Text>
                 {[5, 4, 3, 2, 1].map((m) => {
@@ -290,7 +303,7 @@ export function JournalsReportScreen() {
                   const pct = Math.round((cnt / stats.entries) * 100)
                   return (
                     <View key={m} style={styles.moodRow}>
-                      <Text style={styles.moodEmoji}>{MOOD_EMOJI[m]}</Text>
+                      <Text style={styles.moodEmoji}>{MOOD_EMOJI_BY_SCORE[m] ?? ''}</Text>
                       <View style={[styles.moodBar, { backgroundColor: theme.bg.secondary }]}>
                         <View style={[styles.moodFill, { width: `${pct}%` as any, backgroundColor: theme.brand.primary }]} />
                       </View>
@@ -300,7 +313,7 @@ export function JournalsReportScreen() {
                 })}
               </View>
             )}
-            {stats.importantEntries.length > 0 && (
+            {!hideJournals && stats.importantEntries.length > 0 && (
               <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
                 <Text style={[styles.cardTitle, { color: theme.text.secondary }]}>{t.report_important_events}</Text>
                 {stats.importantEntries.map((entry) => (

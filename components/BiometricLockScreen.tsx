@@ -83,7 +83,7 @@ function styles(theme: ReturnType<typeof useTheme>) {
       borderRadius: 12,
     },
     buttonText: {
-      color: '#fff',
+      color: theme.brand.onPrimary,
       fontSize: 16,
       fontWeight: '600',
     },

@@ -73,7 +73,7 @@ export function SmartEntryCard({
             style={[styles.send, { backgroundColor: sendDisabled ? theme.border.strong : theme.brand.primary }]}
             accessibilityRole="button"
           >
-            {parsing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
+            {parsing ? <ActivityIndicator size="small" color={theme.brand.onPrimary} /> : <Feather name="send" size={16} color={theme.brand.onPrimary} />}
           </Pressable>
         </View>
       </View>

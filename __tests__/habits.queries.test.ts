@@ -2,6 +2,7 @@ const mockDb = {
   runAsync: jest.fn(),
   getFirstAsync: jest.fn(),
   getAllAsync: jest.fn(),
+  withTransactionAsync: jest.fn(async (cb: () => Promise<void>) => { await cb() }),
 }
 
 jest.mock('../database/core/db', () => ({
@@ -9,14 +10,12 @@ jest.mock('../database/core/db', () => ({
 }))
 
 import {
-  countLogsForDate,
   exportHabitsData,
   getHabit,
-  getLogForDate,
   insertHabit,
   insertHabitLog,
   listHabits,
-  listLogCountsByDate,
+  listLogRowsInRange,
   listLogsForHabit,
   softDeleteHabit,
   softDeleteHabitLog,
@@ -35,6 +34,7 @@ const baseHabit: Habit = {
   target_per_period: 1,
   schedule_days: null,
   notification_times: null,
+  identity: null,
   location_lat: null,
   location_lng: null,
   location_label: null,
@@ -97,16 +97,16 @@ describe('habit queries', () => {
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM habit WHERE user_id = ?', ['user-1'])
   })
 
-  it('inserts, soft-deletes, lists, and counts habit logs', async () => {
-    mockDb.getFirstAsync.mockResolvedValueOnce({ cnt: 2 }).mockResolvedValueOnce(baseLog)
-    mockDb.getAllAsync.mockResolvedValueOnce([baseLog]).mockResolvedValueOnce([{ date: '2026-01-02', count: 2 }])
+  it('inserts, soft-deletes, lists, and reads habit logs by instant range', async () => {
+    const rangeRows = [{ occurred_at: '2026-01-02T08:00:00.000Z', skipped: 0 }]
+    mockDb.getAllAsync.mockResolvedValueOnce([baseLog]).mockResolvedValueOnce(rangeRows)
 
     await insertHabitLog(baseLog)
     await softDeleteHabitLog('log-1', '2026-01-03T00:00:00.000Z')
     await expect(listLogsForHabit('habit-1')).resolves.toEqual([baseLog])
-    await expect(countLogsForDate('habit-1', '2026-01-02')).resolves.toBe(2)
-    await expect(getLogForDate('habit-1', '2026-01-02')).resolves.toBe(baseLog)
-    await expect(listLogCountsByDate('habit-1', '2026-01-01', '2026-01-07')).resolves.toEqual([{ date: '2026-01-02', count: 2 }])
+    await expect(
+      listLogRowsInRange('habit-1', '2026-01-01T00:00:00.000Z', '2026-01-08T00:00:00.000Z')
+    ).resolves.toEqual(rangeRows)
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO habit_log'),

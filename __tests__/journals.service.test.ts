@@ -36,6 +36,7 @@ jest.mock('../services/logger', () => ({
 import * as q from '../database/journals/queries'
 import { createJournal, updateJournal, deleteJournal, loadJournals, wipeAllJournals, exportAllJournals } from '../features/journals/services'
 import type { Journal } from '../features/journals/types'
+import { useSettingsStore } from '../store/settingsStore'
 
 const mockQ = q as jest.Mocked<typeof q>
 
@@ -56,7 +57,10 @@ const baseJournal: Journal = {
   synced_at: null,
 }
 
-beforeEach(() => jest.resetAllMocks())
+beforeEach(() => {
+  jest.resetAllMocks()
+  useSettingsStore.setState({ hideJournals: false })
+})
 
 describe('createJournal', () => {
   it('creates a journal and returns it', async () => {
@@ -219,6 +223,21 @@ describe('exportAllJournals', () => {
       const parsed = JSON.parse(result.value)
       expect(parsed.exported_at).toBeDefined()
       expect(parsed.journals).toHaveLength(1)
+    }
+  })
+
+  it('exports only journal count when hidden journal privacy is enabled', async () => {
+    useSettingsStore.setState({ hideJournals: true })
+    mockQ.exportJournalsData.mockResolvedValue([baseJournal])
+
+    const result = await exportAllJournals()
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const parsed = JSON.parse(result.value)
+      expect(parsed.journals_hidden).toBe(true)
+      expect(parsed.journal_count).toBe(1)
+      expect(result.value).not.toContain(baseJournal.content)
     }
   })
 

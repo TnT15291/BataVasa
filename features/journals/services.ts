@@ -6,6 +6,7 @@ import { nowIso } from '@db/core/db'
 import * as q from '@db/journals/queries'
 import { enqueue } from '@db/sync/queue'
 import { track } from '@services/analytics'
+import { useSettingsStore } from '@store/settingsStore'
 import {
   CreateJournalInputSchema,
   UpdateJournalInputSchema,
@@ -30,7 +31,8 @@ export async function createJournal(
       id: uuid(),
       user_id: getCurrentUserId(),
       content: data.content,
-      mood: data.mood ?? 3,
+      // No mood selected → store null (not neutral=3) so it stays out of avg-mood math.
+      mood: data.mood ?? null,
       is_important: data.is_important ?? 0,
       tags: data.tags ?? null,
       occurred_at: data.occurred_at,
@@ -144,6 +146,9 @@ export async function wipeAllJournals(): Promise<Result<{ deleted: number }, App
 export async function exportAllJournals(): Promise<Result<string, AppError>> {
   try {
     const journals = await q.exportJournalsData(getCurrentUserId())
+    if (useSettingsStore.getState().hideJournals) {
+      return ok(JSON.stringify({ exported_at: new Date().toISOString(), journals_hidden: true, journal_count: journals.length }, null, 2))
+    }
     return ok(JSON.stringify({ exported_at: new Date().toISOString(), journals }, null, 2))
   } catch (e) {
     logger.error(MODULE, 'exportAllJournals failed', { error: String(e) })

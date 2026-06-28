@@ -157,7 +157,7 @@ export function AIMemoryScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.kindChipText, { color: active ? '#FFFFFF' : theme.text.secondary }]}>
+                <Text style={[styles.kindChipText, { color: active ? theme.brand.onPrimary : theme.text.secondary }]}>
                   {kindLabel(k)}
                 </Text>
               </Pressable>
@@ -185,9 +185,9 @@ export function AIMemoryScreen() {
             style={[styles.primaryBtn, { backgroundColor: theme.brand.primary, opacity: !content.trim() || busy ? 0.5 : 1 }]}
           >
             {busy ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={theme.brand.onPrimary} size="small" />
             ) : (
-              <Text style={styles.primaryBtnText}>{editingId ? t.ai_memory_update : t.ai_memory_add}</Text>
+              <Text style={[styles.primaryBtnText, { color: theme.brand.onPrimary }]}>{editingId ? t.ai_memory_update : t.ai_memory_add}</Text>
             )}
           </Pressable>
         </View>
