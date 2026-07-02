@@ -1,6 +1,6 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-06-25.
+> Single source of truth for project status. Last updated: 2026-07-02.
 
 ## Overall
 
@@ -70,6 +70,7 @@
 - Skip/rest days are separated from completions in reports, shown in heatmap/history, and excluded from completion rate.
 - Habit report export includes deleted habit definitions so historical skip logs can still display meaningful names. Missing historical names fall back to `deleted_habit`, not a UUID.
 - Reports use calendar date selection.
+- Atomic Habits selective enhancements: "never miss twice" nudge appears when a scheduled habit was missed yesterday and is still open today; optional identity field is stored on habits and surfaced as completion encouragement.
 
 ### Journals
 
@@ -181,8 +182,8 @@ Work in this order:
    - **DONE MVP:** Weekly Life Review: flagship cross-module weekly report using deterministic metrics plus AI explanation.
    - **DONE MVP:** Context memory layer: user goals/preferences/facts available to AI prompts and review summaries.
    - **DONE MVP:** M37 Proactive weekly insights: opt-in weekly local notification → deep-links to Weekly Life Review.
-   - **Habit selective enhancements**: ship 1-2 calm improvements, starting with never-miss-twice and/or identity field. **← next**
-   - **M21 Backup/restore file UI**: trust-building recovery flow on top of existing local/export foundations.
+   - **DONE MVP:** Habit selective enhancements: "never miss twice" nudge plus optional identity field.
+   - **M21 Backup/restore file UI**: trust-building recovery flow on top of existing local/export foundations. **← next**
 3. **Beta-close verification**
    - Sync is verified working.
    - Verify Google Auth on device/emulator.
@@ -209,6 +210,7 @@ Work in this order:
    - **DONE MVP:** Finance recurring bills/subscriptions detection with reminder prefill.
    - **DONE MVP:** Reminder calendar view.
    - **DONE MVP:** Habit strength score.
+   - **DONE MVP:** Habit selective enhancements: "never miss twice" nudge and optional identity field.
    - **DONE MVP:** Journal tag/activity chips.
    - Remaining: continue hardening and visual QA before beta close.
 7. **UI polish follow-up**
@@ -510,14 +512,14 @@ BataVasa's habits module should **embody the 4 Laws** rather than re-implement e
 
 | ✅ Do (High Leverage) | 🟡 Conditional | ❌ Skip (Not a Feature) |
 |---|---|---|
-| **"Never miss twice"** — auto-adjust notification if user consistently misses by reschedule + gentle nudge | **Habit stacking** ("After [cue habit] → do [new habit]") — only if user explicitly links | "2-minute rule" → coaching tip, not a feature |
-| **Identity-based framing** — optional text field "I am a…" — surface in insights + Weekly Review | **Numeric habits** (reps, duration) — v2+, opt-in, mutable | "Environment design" → user responsibility, not gamified |
+| **DONE MVP: "Never miss twice"** — gentle nudge when yesterday was missed and today is still open | **Habit stacking** ("After [cue habit] → do [new habit]") — only if user explicitly links | "2-minute rule" → coaching tip, not a feature |
+| **DONE MVP: Identity-based framing** — optional text field surfaced as completion encouragement | **Numeric habits** (reps, duration) — v2+, opt-in, mutable | "Environment design" → user responsibility, not gamified |
 | **Implementation intention** — auto-compose from habit name + notification time + optional location → clear "When & Where" statement | **Habit scorecard** → just a journal template | "Temptation bundling" → user choice, not coded |
 
 #### 3 Priorities (If Time Allows Before Beta Closes)
 
-1. **"Never miss twice"** — adjust reminder logic; low cost, high impact.
-2. **Identity field** — 1 optional text input; transforms insight tone from "you completed 5/7" to "you're living as someone who [identity]."
+1. **DONE MVP: "Never miss twice"** — gentle row nudge; no automatic rescheduling yet.
+2. **DONE MVP: Identity field** — optional text input stored on the habit and used for completion encouragement.
 3. **Implementation intention statement** — auto-generate from habit + time + location (data already exists) → display as a reminder preview or in weekly review.
 
 #### Guardrails
@@ -537,15 +539,15 @@ BataVasa's habits module should **embody the 4 Laws** rather than re-implement e
 
 ### Implementation Sequence (Before Closing Beta)
 
-Current status: Global Search and Goals MVP are now DONE at MVP scope. Continue with Weekly Life Review next.
+Current status: Global Search, Goals, Weekly Life Review, memory, proactive weekly insights, and Habit selective enhancements are now DONE at MVP scope. Continue with Backup/Restore file UI next.
 
 1. **Global Search (M38) — DONE MVP**: grouped search across the 4 modules plus Goals.
 2. **Goals MVP — DONE MVP**: manual goals with finance category amount and habit completion-rate progress.
 3. **Weekly Life Review — DONE MVP** — flagship differentiator (leverages goals + existing insights).
 4. **Context memory layer — DONE MVP** — `user_context` memories injected into all generative AI prompts.
 5. **Proactive notifications — DONE MVP** — opt-in weekly local notification → deep-link to Weekly Life Review.
-6. **Habits selective enhancements** — ship 1–2 (never-miss-twice, identity). Observe, then iterate. **← next**
-7. **Backup/Restore file UI** — low risk, trust-building. ~1 week.
+6. **Habits selective enhancements — DONE MVP**: "never miss twice" nudge + optional identity field. Observe, then iterate.
+7. **Backup/Restore file UI** — low risk, trust-building. ~1 week. **← next**
 8. **Close beta gate** — full verification, coverage pass, real-device visual QA, fresh screenshots, and release-readiness smoke test.
 
 ---
