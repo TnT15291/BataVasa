@@ -557,6 +557,7 @@ export const ja: Translations = {
   auth_error_same_password: '新しいパスワードは現在のものと異なる必要があります。',
   auth_error_invalid_email: '有効なメールアドレスを入力してください。',
   auth_error_oauth_config: 'Google サインインが正しく設定されていません。Google と Supabase の設定を確認してください。',
+  auth_error_google_expo_go: 'Google サインインには開発ビルドまたはプレビュービルドが必要です。Expo Go ではこのネイティブサインインを実行できません。',
   auth_error_generic: 'エラーが発生しました。もう一度お試しください。',
   error_title_generic: 'エラーが発生しました',
   error_button_try_again: '再試行',

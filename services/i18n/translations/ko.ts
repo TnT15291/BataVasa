@@ -555,6 +555,7 @@ export const ko: Translations = {
   auth_error_same_password: '새 비밀번호는 기존 비밀번호와 달라야 합니다.',
   auth_error_invalid_email: '올바른 이메일 주소를 입력하세요.',
   auth_error_oauth_config: 'Google 로그인이 올바르게 설정되지 않았습니다. Google 및 Supabase 설정을 확인하세요.',
+  auth_error_google_expo_go: 'Google 로그인에는 개발 빌드 또는 프리뷰 빌드가 필요합니다. Expo Go에서는 이 네이티브 로그인 흐름을 실행할 수 없습니다.',
   auth_error_generic: '문제가 발생했습니다. 다시 시도하세요.',
   error_title_generic: '문제가 발생했습니다',
   error_button_try_again: '다시 시도',

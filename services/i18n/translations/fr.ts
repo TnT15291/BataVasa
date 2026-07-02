@@ -557,6 +557,7 @@ export const fr: Translations = {
   auth_error_same_password: 'Le nouveau mot de passe doit être différent de l’actuel.',
   auth_error_invalid_email: 'Veuillez saisir une adresse e-mail valide.',
   auth_error_oauth_config: "La connexion Google n'est pas configurée correctement. Vérifiez les paramètres Google et Supabase.",
+  auth_error_google_expo_go: "La connexion Google nécessite une build de développement ou de prévisualisation. Expo Go ne peut pas exécuter ce flux de connexion native.",
   auth_error_generic: 'Une erreur est survenue. Veuillez réessayer.',
   error_title_generic: 'Une erreur est survenue',
   error_button_try_again: 'Réessayer',

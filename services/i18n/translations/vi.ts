@@ -574,6 +574,7 @@ export const vi = {
   auth_error_same_password: 'Mật khẩu mới phải khác mật khẩu hiện tại.',
   auth_error_invalid_email: 'Vui lòng nhập địa chỉ email hợp lệ.',
   auth_error_oauth_config: 'Đăng nhập Google chưa được cấu hình đúng. Kiểm tra cài đặt Google và Supabase.',
+  auth_error_google_expo_go: 'Đăng nhập Google cần bản development hoặc preview. Expo Go không chạy được luồng đăng nhập native này.',
   auth_error_generic: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
   error_title_generic: 'Đã có lỗi xảy ra',
   error_button_try_again: 'Thử lại',

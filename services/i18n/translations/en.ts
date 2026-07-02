@@ -557,6 +557,7 @@ export const en: Translations = {
   auth_error_same_password: 'New password must be different from your current one.',
   auth_error_invalid_email: 'Please enter a valid email address.',
   auth_error_oauth_config: 'Google sign-in is not configured correctly. Check Google and Supabase settings.',
+  auth_error_google_expo_go: 'Google sign-in needs a development or preview build. Expo Go cannot run this native sign-in flow.',
   auth_error_generic: 'Something went wrong. Please try again.',
   error_title_generic: 'Something went wrong',
   error_button_try_again: 'Try again',

@@ -557,6 +557,7 @@ export const zh: Translations = {
   auth_error_same_password: '新密码必须与当前密码不同。',
   auth_error_invalid_email: '请输入有效的邮箱地址。',
   auth_error_oauth_config: 'Google 登录配置不正确。请检查 Google 和 Supabase 设置。',
+  auth_error_google_expo_go: 'Google 登录需要开发版或预览版构建。Expo Go 无法运行此原生登录流程。',
   auth_error_generic: '出现错误，请重试。',
   error_title_generic: '出现错误',
   error_button_try_again: '重试',

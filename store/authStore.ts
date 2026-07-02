@@ -7,6 +7,7 @@ import { logger } from '@services/logger'
 import { track } from '@services/analytics'
 import { getTranslations } from '@services/i18n'
 import { localizeAuthError } from '@services/authErrors'
+import { isExpoGo } from '@services/expoGo'
 import { extractAuthParams, getGoogleAuthRedirectTo, getPasswordRecoveryRedirectTo } from '@services/authDeepLinks'
 import {
   isNativeGoogleAvailable,
@@ -163,6 +164,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async signInWithGoogle() {
     if (!supabase) return { ok: false }
+    if (Platform.OS !== 'web' && isExpoGo()) {
+      set({ busy: false, error: getTranslations().auth_error_google_expo_go })
+      return { ok: false }
+    }
     // Native on iOS/Android (system account picker → ID token, no browser
     // redirect); the OAuth browser flow remains the fallback for web and for
     // builds where no native Google client ID is configured.
