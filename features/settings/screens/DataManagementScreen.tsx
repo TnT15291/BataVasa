@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Alert, Share, ActivityIndicator } from 'react-native'
+import * as FileSystem from 'expo-file-system/legacy'
+import * as Sharing from 'expo-sharing'
 import { useLocalSearchParams } from 'expo-router'
 import { useTheme } from '@design/useTheme'
 import { spacing, radius } from '@design/tokens'
@@ -16,6 +18,7 @@ import { useJournalsStore } from '@store/journalsStore'
 import { useRemindersStore } from '@store/remindersStore'
 import { useGoalsStore } from '@store/goalsStore'
 import { useSettingsStore } from '@store/settingsStore'
+import { createBackupFile } from '@services/backup'
 
 type DataModule = 'finance' | 'habits' | 'journals' | 'reminders' | 'goals'
 
@@ -64,7 +67,7 @@ export function DataManagementScreen() {
   const syncJournals = useSettingsStore((s) => s.syncJournals)
   const syncReminders = useSettingsStore((s) => s.syncReminders)
   const syncGoals = useSettingsStore((s) => s.syncGoals)
-  const [busy, setBusy] = useState<'export' | 'delete' | null>(null)
+  const [busy, setBusy] = useState<'backup' | 'export' | 'delete' | null>(null)
 
   const configs = useMemo<Record<DataModule, ModuleConfig>>(() => ({
     finance: {
@@ -161,6 +164,33 @@ export function DataManagementScreen() {
     : 'finance'
   const config = configs[moduleKey]
 
+  const onBackup = async () => {
+    setBusy('backup')
+    try {
+      const r = await createBackupFile()
+      if (!r.ok) {
+        Alert.alert(t.could_not_save, r.error.message)
+        return
+      }
+      track('data_exported', { module: 'backup', item_count: r.value.recordCount })
+      const canShareFile = await Sharing.isAvailableAsync()
+      const uri = `${FileSystem.cacheDirectory}${r.value.fileName}`
+      await FileSystem.writeAsStringAsync(uri, r.value.json, { encoding: FileSystem.EncodingType.UTF8 })
+      if (canShareFile) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/json',
+          dialogTitle: t.backup_export_all,
+          UTI: 'public.json',
+        })
+      } else {
+        await Share.share({ message: r.value.json, title: r.value.fileName })
+      }
+      Alert.alert(t.backup_export_success.replace('{{count}}', String(r.value.recordCount)))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const onExport = async () => {
     setBusy('export')
     try {
@@ -209,6 +239,26 @@ export function DataManagementScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.bg.primary }} contentContainerStyle={styles.container}>
+      <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
+        <Text style={[styles.title, { color: theme.text.primary }]}>{t.backup_restore}</Text>
+        <Text style={[styles.body, { color: theme.text.muted }]}>{t.backup_restore_body}</Text>
+      </View>
+
+      <Pressable
+        onPress={onBackup}
+        disabled={busy != null}
+        style={({ pressed }) => [
+          styles.action,
+          { backgroundColor: pressed ? theme.bg.secondary : theme.bg.elevated, borderColor: theme.border.subtle },
+        ]}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.actionTitle, { color: theme.text.primary }]}>{t.backup_export_all}</Text>
+          <Text style={[styles.actionHint, { color: theme.text.muted }]}>{t.backup_export_all_hint}</Text>
+        </View>
+        {busy === 'backup' ? <ActivityIndicator color={theme.brand.primary} /> : <Text style={[styles.chevron, { color: theme.text.muted }]}>{'>'}</Text>}
+      </Pressable>
+
       <View style={[styles.card, { backgroundColor: theme.bg.elevated, borderColor: theme.border.subtle }]}>
         <Text style={[styles.title, { color: theme.text.primary }]}>{config.title}</Text>
         <Text style={[styles.body, { color: theme.text.muted }]}>{config.body}</Text>

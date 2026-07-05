@@ -319,6 +319,11 @@ export const en: Translations = {
   data_management_habits_body: 'Export habits and completion history as JSON, or permanently delete them from this device.',
   data_management_journals_body: 'Export journal entries as JSON, or permanently delete them from this device.',
   data_management_reminders_body: 'Export tasks as JSON, or permanently delete them from this device.',
+  backup_restore: 'Backup / Restore',
+  backup_restore_body: 'Create one backup file with finance, habits, journals, tasks, goals, and AI memory. Import restore will be added in the next pass.',
+  backup_export_all: 'Export Full Backup',
+  backup_export_all_hint: 'Save a single JSON file you can keep outside the app.',
+  backup_export_success: 'Backup file ready with {{count}} records.',
 
   // Daily Digest + Universal Add
   greeting_morning: 'Good morning',
@@ -334,8 +339,8 @@ export const en: Translations = {
   habits_card_subtitle: 'Track your good habits',
   coming_soon: 'Coming soon',
   universal_add_title: 'Quick Add',
-  universal_add_hint: 'Spent 50k on coffee, meeting reminder tomorrow 9am, gym every day…',
-  universal_add_examples: 'System will automatically classify into the right module',
+  universal_add_hint: 'Ex: Coffee 50k today; remind me tomorrow 9am to call mom; gym 3 times/week; felt focused after a walk; save 5M by Dec',
+  universal_add_examples: 'Write one clear item per sentence. Include amount, date/time, frequency, feeling, or goal deadline when relevant.',
   web_persistence_warning_title: 'Firefox web storage warning',
   web_persistence_warning_msg: 'Firefox may not persist local data on web. Use Chrome/Safari or the mobile app for important data.',
   classified_finance: 'Finance',

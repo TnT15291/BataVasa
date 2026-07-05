@@ -319,6 +319,11 @@ export const fr: Translations = {
   data_management_habits_body: 'Exportez habitudes et historique en JSON, ou supprimez-les définitivement de cet appareil.',
   data_management_journals_body: 'Exportez les entrées de journal en JSON, ou supprimez-les définitivement de cet appareil.',
   data_management_reminders_body: 'Exportez les tâches en JSON, ou supprimez-les définitivement de cet appareil.',
+  backup_restore: 'Sauvegarde / restauration',
+  backup_restore_body: 'Créez un fichier de sauvegarde avec finances, habitudes, journal, tâches, objectifs et mémoire IA. L’import de restauration sera ajouté au prochain passage.',
+  backup_export_all: 'Exporter la sauvegarde complète',
+  backup_export_all_hint: 'Enregistrez un seul fichier JSON à conserver hors de l’app.',
+  backup_export_success: 'Fichier de sauvegarde prêt avec {{count}} enregistrements.',
 
   // Daily Digest + Universal Add
   greeting_morning: 'Bonjour',
@@ -334,8 +339,8 @@ export const fr: Translations = {
   habits_card_subtitle: 'Suivez vos bonnes habitudes',
   coming_soon: 'Bientôt disponible',
   universal_add_title: 'Ajout rapide',
-  universal_add_hint: 'Dépensé 5€ café, rappel réunion demain 9h, gym chaque jour…',
-  universal_add_examples: 'Le système classe automatiquement dans le bon module',
+  universal_add_hint: 'Ex : Café 5€ aujourd’hui; rappelle-moi demain 9h d’appeler maman; sport 3 fois/semaine; je me suis senti concentré après une marche; économiser 500€ avant décembre',
+  universal_add_examples: 'Écrivez une idée claire par phrase. Ajoutez montant, date/heure, fréquence, émotion ou échéance d’objectif si utile.',
   web_persistence_warning_title: 'Avertissement de stockage Firefox',
   web_persistence_warning_msg: 'Firefox peut ne pas conserver les donnees locales sur le web. Utilisez Chrome/Safari ou l app mobile pour les donnees importantes.',
   classified_finance: 'Finances',

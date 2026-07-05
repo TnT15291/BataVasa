@@ -251,17 +251,14 @@ describe('parseUniversalEntry', () => {
     expect(result[0]?.missing).toContain('target')
   })
 
-  it('flags missing counterparty and due date on debt candidates instead of erroring', async () => {
+  it('ignores debt candidates in the global entry point', async () => {
     mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
       { confidence: 0.9, reason: 'debt', selectedByDefault: true, entry: {
         module: 'finance_debt', amount_cents: 500000, debt_direction: 'lent', counterparty: '', due_at: null, note: '',
       }},
     ]}))
     const result = await parseUniversalCandidates('cho vay 500k')
-    expect(result).toHaveLength(1)
-    expect(result[0]?.entry.module).toBe('finance_debt')
-    expect(result[0]?.missing).toContain('counterparty')
-    expect(result[0]?.missing).toContain('due_date')
+    expect(result).toEqual([])
   })
 
   it('falls back to the user text for reminders with no title and flags missing date', async () => {
@@ -355,7 +352,7 @@ describe('parseUniversalEntry', () => {
     }
   })
 
-  it('converts borrowing wording to debt candidate even when AI returns a normal finance entry', async () => {
+  it('does not convert borrowing wording to a global finance or debt candidate', async () => {
     mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
       { confidence: 0.9, reason: 'money', selectedByDefault: true, entry: {
         module: 'finance', amount_cents: -17000000, direction: 'expense',
@@ -363,13 +360,18 @@ describe('parseUniversalEntry', () => {
       }},
     ]}))
     const result = await parseUniversalCandidates('Vay anh Hung 17m ngay 19 tra')
-    expect(result).toHaveLength(1)
-    expect(result[0]?.entry).toMatchObject({
-      module: 'finance_debt',
-      amount_cents: 17000000,
-      debt_direction: 'borrowed',
-      counterparty: 'anh Hung',
-    })
+    expect(result).toEqual([])
+  })
+
+  it('ignores finance plan candidates in the global entry point', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({ candidates: [
+      { confidence: 0.9, reason: 'monthly plan', selectedByDefault: true, entry: {
+        module: 'finance_plan', amount_cents: 2000000, kind: 'expense',
+        name: 'Dining budget', category_hint: 'Dining Out', due_day: 1, recurrence: 'monthly', note: '',
+      }},
+    ]}))
+    const result = await parseUniversalCandidates('ngan sach an uong thang nay 2 trieu')
+    expect(result).toEqual([])
   })
 
   it('salary keyword maps to Salary category in income guard', async () => {

@@ -319,6 +319,11 @@ export const ja: Translations = {
   data_management_habits_body: '習慣と達成履歴を JSON でエクスポート、またはこの端末から完全に削除します。',
   data_management_journals_body: '日記を JSON でエクスポート、またはこの端末から完全に削除します。',
   data_management_reminders_body: 'タスクを JSON でエクスポート、またはこの端末から完全に削除します。',
+  backup_restore: 'バックアップ / 復元',
+  backup_restore_body: '財務、習慣、日記、タスク、目標、AI メモリを含む 1 つのバックアップファイルを作成します。復元用のインポートは次回追加します。',
+  backup_export_all: '完全バックアップをエクスポート',
+  backup_export_all_hint: 'アプリ外に保管できる単一の JSON ファイルとして保存します。',
+  backup_export_success: '{{count}} 件のレコードを含むバックアップファイルを作成しました。',
 
   // Daily Digest + Universal Add
   greeting_morning: 'おはようございます',
@@ -334,8 +339,8 @@ export const ja: Translations = {
   habits_card_subtitle: '良い習慣を追跡',
   coming_soon: '近日公開',
   universal_add_title: 'クイック追加',
-  universal_add_hint: 'コーヒー500円、明日9時ミーティングリマインダー、毎日ジム…',
-  universal_add_examples: 'システムが自動で適切なモジュールに分類します',
+  universal_add_hint: '例: 今日コーヒー500円; 明日9時に母へ電話するリマインダー; 週3回ジム; 散歩後に集中できた; 12月までに5万円貯める',
+  universal_add_examples: '1文に1件ずつ、はっきり書いてください。必要なら金額、日時、頻度、気持ち、目標期限を入れます。',
   web_persistence_warning_title: 'Firefox web storage warning',
   web_persistence_warning_msg: 'Firefox may not persist local data on web. Use Chrome/Safari or the mobile app for important data.',
   classified_finance: '財務',

@@ -319,6 +319,11 @@ export const ko: Translations = {
   data_management_habits_body: '습관과 완료 기록을 JSON으로 내보내거나 이 기기에서 영구 삭제합니다.',
   data_management_journals_body: '일기를 JSON으로 내보내거나 이 기기에서 영구 삭제합니다.',
   data_management_reminders_body: '할 일을 JSON으로 내보내거나 이 기기에서 영구 삭제합니다.',
+  backup_restore: '백업 / 복원',
+  backup_restore_body: '금융, 습관, 일기, 할 일, 목표, AI 메모리를 하나의 백업 파일로 만듭니다. 복원 가져오기는 다음 단계에서 추가됩니다.',
+  backup_export_all: '전체 백업 내보내기',
+  backup_export_all_hint: '앱 밖에 보관할 수 있는 단일 JSON 파일로 저장합니다.',
+  backup_export_success: '{{count}}개 기록이 포함된 백업 파일이 준비되었습니다.',
 
   // Daily Digest + Universal Add
   greeting_morning: '좋은 아침이에요',
@@ -334,8 +339,8 @@ export const ko: Translations = {
   habits_card_subtitle: '좋은 습관 추적',
   coming_soon: '곧 출시',
   universal_add_title: '빠른 추가',
-  universal_add_hint: '커피 5천원, 내일 9시 회의 알림, 매일 헬스…',
-  universal_add_examples: '시스템이 자동으로 올바른 모듈로 분류합니다',
+  universal_add_hint: '예: 오늘 커피 5천원; 내일 오전 9시 엄마에게 전화 알림; 주 3회 헬스; 산책 후 집중이 잘 됨; 12월까지 50만원 저축',
+  universal_add_examples: '한 문장에 한 가지씩 명확히 적어 주세요. 필요하면 금액, 날짜/시간, 빈도, 감정, 목표 기한을 넣으세요.',
   web_persistence_warning_title: 'Firefox web storage warning',
   web_persistence_warning_msg: 'Firefox may not persist local data on web. Use Chrome/Safari or the mobile app for important data.',
   classified_finance: '재정',

@@ -1,6 +1,7 @@
 const appJson = require('./app.json')
 
 const GOOGLE_PLUGIN = '@react-native-google-signin/google-signin'
+const ASSET_PLUGIN = 'expo-asset'
 const IOS_CLIENT_SUFFIX = '.apps.googleusercontent.com'
 
 function googleIosUrlScheme() {
@@ -21,6 +22,10 @@ const config = {
   plugins: (appJson.expo.plugins ?? []).filter((plugin) => {
     return Array.isArray(plugin) ? plugin[0] !== GOOGLE_PLUGIN : plugin !== GOOGLE_PLUGIN
   }),
+}
+
+if (!config.plugins.some((plugin) => Array.isArray(plugin) ? plugin[0] === ASSET_PLUGIN : plugin === ASSET_PLUGIN)) {
+  config.plugins.push(ASSET_PLUGIN)
 }
 
 const iosUrlScheme = googleIosUrlScheme()

@@ -336,6 +336,11 @@ export const vi = {
   data_management_habits_body: 'Xuất thói quen và lịch sử hoàn thành dạng JSON, hoặc xóa vĩnh viễn khỏi thiết bị này.',
   data_management_journals_body: 'Xuất nhật ký dạng JSON, hoặc xóa vĩnh viễn khỏi thiết bị này.',
   data_management_reminders_body: 'Xuất công việc dạng JSON, hoặc xóa vĩnh viễn khỏi thiết bị này.',
+  backup_restore: 'Sao lưu / khôi phục',
+  backup_restore_body: 'Tạo một file sao lưu gồm tài chính, thói quen, nhật ký, công việc, mục tiêu và bộ nhớ AI. Phần nhập để khôi phục sẽ được bổ sung ở lượt tiếp theo.',
+  backup_export_all: 'Xuất bản sao lưu đầy đủ',
+  backup_export_all_hint: 'Lưu một file JSON duy nhất để cất bên ngoài ứng dụng.',
+  backup_export_success: 'File sao lưu đã sẵn sàng với {{count}} bản ghi.',
 
   // Daily Digest + Universal Add
   greeting_morning: 'Chào buổi sáng',
@@ -351,8 +356,8 @@ export const vi = {
   habits_card_subtitle: 'Theo dõi thói quen tốt',
   coming_soon: 'Sắp ra mắt',
   universal_add_title: 'Thêm nhanh',
-  universal_add_hint: 'Tiêu 150k cafe, nhắc họp 9h sáng mai, tập gym mỗi ngày…',
-  universal_add_examples: 'Hệ thống sẽ tự phân loại vào đúng module',
+  universal_add_hint: 'VD: Cafe 50k hôm nay; nhắc gọi mẹ 9h sáng mai; tập gym 3 lần/tuần; hôm nay thấy tập trung sau khi đi bộ; tiết kiệm 5 triệu trước tháng 12',
+  universal_add_examples: 'Viết mỗi ý thành một câu rõ ràng. Thêm số tiền, ngày giờ, tần suất, cảm xúc hoặc hạn mục tiêu khi có.',
   web_persistence_warning_title: 'Canh bao luu tru tren Firefox',
   web_persistence_warning_msg: 'Firefox co the khong luu du lieu cuc bo tren web. Hay dung Chrome/Safari hoac app mobile cho du lieu quan trong.',
   classified_finance: 'Tài chính',

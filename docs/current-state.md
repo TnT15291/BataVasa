@@ -87,7 +87,8 @@
 - Daily Digest home with compact summary hero, unified Today Timeline read model, module cards, analysis entry, assistant entry, and safe-area-aware FAB.
 - Universal Add Sheet opens from the `+` button only. The direct quick-entry box was removed from the home screen.
 - Universal Add uses candidate-based parsing: AI can propose multiple module entries, the app validates them, and the user selects which candidates to save. Money + reflection can save as Finance + Journal after confirmation.
-- Smart-entry missing-field policy (2026-06-13, all smart windows): incomplete parses are never silently dropped or errored. Each `UniversalCandidate` carries `missing: MissingField[]`; cards show an amber "Còn thiếu: …" line and saving prompts "Bổ sung / Lưu với mặc định". Defaults: missing reminder/habit title → the user's own text; missing habit target → 1×; missing date → today/tomorrow 09:00; missing debt counterparty → "Không xác định" (`t.unknown_person`); missing reminder date → offer to save as unscheduled inbox item. Finance smart entry with no recognizable amount prompts specifically for the amount instead of a generic AI error.
+- Smart-entry missing-field policy (2026-06-13, all smart windows): incomplete parses are never silently dropped or errored. Each `UniversalCandidate` carries `missing: MissingField[]`; cards show an amber "Còn thiếu: …" line and saving prompts "Bổ sung / Lưu với mặc định". Defaults: missing reminder/habit title → the user's own text; missing habit target → 1×; missing date → today/tomorrow 09:00; missing reminder date → offer to save as unscheduled inbox item. Finance smart entry with no recognizable amount prompts specifically for the amount instead of a generic AI error.
+- Universal Add no longer parses finance plan or debt-book candidates from the home/global entry point; those stay in the Finance module's local flows.
 - Smart Entry lives inside add/edit forms for modules, not in list/dashboard screens.
 - Voice input remains available in form/add flows and force-confirms before save where applicable.
 - Voice microphone privacy prompt is shown only from voice buttons and can be dismissed permanently with "Do not show again".
@@ -183,14 +184,14 @@ Work in this order:
    - **DONE MVP:** Context memory layer: user goals/preferences/facts available to AI prompts and review summaries.
    - **DONE MVP:** M37 Proactive weekly insights: opt-in weekly local notification → deep-links to Weekly Life Review.
    - **DONE MVP:** Habit selective enhancements: "never miss twice" nudge plus optional identity field.
-   - **M21 Backup/restore file UI**: trust-building recovery flow on top of existing local/export foundations. **← next**
+   - **DONE MVP:** M21 Backup/restore file UI: one-file manual backup export from Settings → Data Management. Restore/import wizard remains a follow-up before public launch.
 3. **Beta-close verification**
    - Sync is verified working.
    - Verify Google Auth on device/emulator.
    - Verify password recovery on device/emulator.
    - Spot check email/password Auth on device/emulator.
    - Run smoke test for all 4 modules.
-   - Run a full smoke test of Global Search, Goals, Weekly Life Review, memory-aware AI, proactive notifications, and backup/restore.
+   - Run a full smoke test of Global Search, Goals, Weekly Life Review, memory-aware AI, proactive notifications, and backup export.
 4. **B5 coverage push**
    - Continue raising global coverage toward the 70% beta-close/public-launch target.
    - Prioritize high-risk remaining gaps in stores, service error paths, reports, and UI workflows.
@@ -391,9 +392,10 @@ These are table-stakes for "personal OS" — dull but critical.
 - **Problem:** Users only trust apps that survive device loss. "Sync to cloud" is implementation, but users think "backup."
 - **Current state:** 80% done — sync queue + Supabase remote + per-module `exportAllData()` exist. Missing:
   - **Cloud restore:** new device → login → pull from Supabase (sync infra exists; needs UX clarity + B1/B2 verification).
-  - **Manual file backup:** export all 4 modules as single file + import wizard for users skeptical of cloud.
-- **Implementation:** `services/backup.ts` orchestrates module exports/imports; Settings → Data Management → Backup/Restore.
-- **Scope:** medium-high risk (import versioning, deduplication, conflict resolution). Build during the beta-close sequence after sync verification is complete.
+  - **Manual file backup:** Settings → Data Management now exports one versioned JSON backup containing Finance, Habits, Journals, Reminders, Goals, and AI memory.
+  - **Restore follow-up:** import wizard still needs versioning, deduplication, and conflict-resolution UX before public launch.
+- **Implementation:** `services/backup.ts` orchestrates module exports; Settings → Data Management → Backup/Restore.
+- **Scope:** export MVP is low-medium risk and implemented; restore remains medium-high risk.
 
 ### LAYER 2 — The Brain (Insight → Action)
 
@@ -539,7 +541,7 @@ BataVasa's habits module should **embody the 4 Laws** rather than re-implement e
 
 ### Implementation Sequence (Before Closing Beta)
 
-Current status: Global Search, Goals, Weekly Life Review, memory, proactive weekly insights, and Habit selective enhancements are now DONE at MVP scope. Continue with Backup/Restore file UI next.
+Current status: Global Search, Goals, Weekly Life Review, memory, proactive weekly insights, Habit selective enhancements, and Backup/Restore file export are now DONE at MVP scope. Continue with beta-close verification next.
 
 1. **Global Search (M38) — DONE MVP**: grouped search across the 4 modules plus Goals.
 2. **Goals MVP — DONE MVP**: manual goals with finance category amount and habit completion-rate progress.
@@ -547,7 +549,7 @@ Current status: Global Search, Goals, Weekly Life Review, memory, proactive week
 4. **Context memory layer — DONE MVP** — `user_context` memories injected into all generative AI prompts.
 5. **Proactive notifications — DONE MVP** — opt-in weekly local notification → deep-link to Weekly Life Review.
 6. **Habits selective enhancements — DONE MVP**: "never miss twice" nudge + optional identity field. Observe, then iterate.
-7. **Backup/Restore file UI** — low risk, trust-building. ~1 week. **← next**
+7. **DONE MVP:** Backup/Restore file export UI — low risk, trust-building. Restore/import wizard remains follow-up.
 8. **Close beta gate** — full verification, coverage pass, real-device visual QA, fresh screenshots, and release-readiness smoke test.
 
 ---
@@ -660,7 +662,7 @@ Use `npx tsc --noEmit` after code changes. Use `npm run test:ci` before release 
   - Verification: `npx tsc --noEmit` clean; 476 tests across 31 suites pass.
 - 2026-06-13 follow-up pass (dual notifications, smart-entry missing fields):
   - Reminders now schedule a second notification at the event time when `advance_minutes > 0` (early warning + at-deadline ping). Covers debts, recurring bills, and manual reminders.
-  - Smart entry across modules: missing fields prompt the user ("Bổ sung / Lưu với mặc định") instead of silent drops or validation errors. `universalEntry.ts` tracks `missing` per candidate; `aiParser.ts` (reminders) falls back title→input text and flags missing dates; missing reminder date can save to the unscheduled inbox; missing debt counterparty saves as "Không xác định"; finance smart entry without an amount asks for the amount specifically.
+  - Smart entry across modules: missing fields prompt the user ("Bổ sung / Lưu với mặc định") instead of silent drops or validation errors. `universalEntry.ts` tracks `missing` per candidate; `aiParser.ts` (reminders) falls back title→input text and flags missing dates; missing reminder date can save to the unscheduled inbox; finance smart entry without an amount asks for the amount specifically. Debt-book and finance-plan parsing are kept in Finance-local flows, not Universal Add.
   - Fixed debt counterparty extractor leaving the verb "vay" as a person name for inputs like "cho vay 500k".
   - 16 new i18n keys ×6 languages (`smart_missing_*`, `field_*`, `unknown_person`, `reminder_save_inbox`).
   - Verification: `npx tsc --noEmit` clean; 463 tests across 31 suites pass.

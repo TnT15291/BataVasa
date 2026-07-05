@@ -319,6 +319,11 @@ export const zh: Translations = {
   data_management_habits_body: '将习惯和完成历史导出为 JSON，或从此设备永久删除。',
   data_management_journals_body: '将日记导出为 JSON，或从此设备永久删除。',
   data_management_reminders_body: '将任务导出为 JSON，或从此设备永久删除。',
+  backup_restore: '备份 / 恢复',
+  backup_restore_body: '创建一个包含财务、习惯、日记、任务、目标和 AI 记忆的备份文件。恢复导入将在下一轮加入。',
+  backup_export_all: '导出完整备份',
+  backup_export_all_hint: '保存一个可在应用外保管的 JSON 文件。',
+  backup_export_success: '备份文件已准备好，包含 {{count}} 条记录。',
 
   // Daily Digest + Universal Add
   greeting_morning: '早上好',
@@ -334,8 +339,8 @@ export const zh: Translations = {
   habits_card_subtitle: '追踪良好习惯',
   coming_soon: '即将推出',
   universal_add_title: '快速添加',
-  universal_add_hint: '花了50元买咖啡，明天9点会议提醒，每天健身…',
-  universal_add_examples: '系统将自动分类到对应模块',
+  universal_add_hint: '例：今天咖啡50元；明天9点提醒我给妈妈打电话；每周健身3次；散步后感觉很专注；12月前存5000元',
+  universal_add_examples: '每句话写一件清楚的事。相关时加入金额、日期时间、频率、感受或目标截止日期。',
   web_persistence_warning_title: 'Firefox web storage warning',
   web_persistence_warning_msg: 'Firefox may not persist local data on web. Use Chrome/Safari or the mobile app for important data.',
   classified_finance: '财务',

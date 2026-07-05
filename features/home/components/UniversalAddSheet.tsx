@@ -998,7 +998,7 @@ const styles = StyleSheet.create({
   sheetHint: { fontSize: 14, lineHeight: 20 },
   input: {
     borderWidth: 1, borderRadius: radius.md,
-    padding: spacing[3], fontSize: 16, minHeight: 92, textAlignVertical: 'top',
+    padding: spacing[3], fontSize: 16, fontWeight: '400', minHeight: 92, textAlignVertical: 'top',
   },
   analyzeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: spacing[2] },
   analyzeBtn: { flex: 1, paddingVertical: spacing[4], borderRadius: radius.md, alignItems: 'center' },

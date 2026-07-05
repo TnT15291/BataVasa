@@ -450,8 +450,7 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
     // Without an amount there is no transaction to record — not a finance candidate at all.
     if (!amount || amount <= 0) return null
     if (localAmount === null && !textHasAmountToken(originalText) && !textHasFinanceSignal(originalText)) return null
-    if (hasDebtIntent(originalText)) return normalizeDebtEntry(entry, now, localAmount, originalText)
-    if (hasMonthlyPlanIntent(originalText)) return normalizeFinancePlanEntry(entry, localAmount, originalText)
+    if (hasDebtIntent(originalText) || hasMonthlyPlanIntent(originalText)) return null
     const missing: MissingField[] = []
     if (!String(entry.category_hint || '').trim()) missing.push('category')
     if (!entry.occurred_at) missing.push('date')
@@ -476,13 +475,9 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
     return { entry: normalized, missing }
   }
 
-  if (entry.module === 'finance_plan' || entry.intent === 'plan_item') {
-    return normalizeFinancePlanEntry(entry, localAmount, originalText)
-  }
+  if (entry.module === 'finance_plan' || entry.intent === 'plan_item') return null
 
-  if (entry.module === 'finance_debt' || entry.intent === 'debt') {
-    return normalizeDebtEntry(entry, now, localAmount, originalText)
-  }
+  if (entry.module === 'finance_debt' || entry.intent === 'debt') return null
 
   if (entry.module === 'reminder') {
     const missing: MissingField[] = []
@@ -597,12 +592,11 @@ IMPORTANT: All datetime values MUST use the user's timezone offset (UTC${tzOffse
 
 Classification rules:
 - finance: mentions one-time money/amount/spent/bought/received/sold/chi/mua/tieu/thu. Do not invent an amount; if the user did not write a money amount or clear finance intent, do not return finance.
-- finance_plan: this-cycle budgets, planned income/expense, recurring bills, safe-to-spend planning (thang nay, hang thang, moi thang, dinh ky, monthly, recurring, budget)
-- finance_debt: mentions borrowing or lending money (Vietnamese: vay cua, vay anh Hung, cho ... vay, di vay, muon cua)
 - reminder: mentions future time/date + task/meeting/appointment/hop/nhac/lich/remind
 - habits: recurring behavior goal without specific time (exercise/eat/sleep/read/thoi quen/tap/uong)
 - journal: reflection/diary/memory/feeling without action items (vui/buon/cam thay/toi thay/nho/cam xuc/ghi lai/ky niem). Feeling text without money is journal, not finance.
 - goals: explicit personal target/goal with a desired outcome over time (muc tieu, dat muc, phan dau, goal, target, save X by date)
+- Planned finance items, monthly budgets/bills, and debt book entries are handled only inside the Finance module. Do not return candidates for finance_plan or finance_debt from this global entry point.
 - For goals.source="habits", target_value is completion-rate percent, usually 100 for a completed goal. Never use distance/time/quantity literals like 5km, 30 min, or 10 pages as target_value.
 - MULTIPLE TRANSACTIONS: If the input contains multiple separate finance events (e.g. "ăn cơm 15k và uống nước 20k", "coffee 30k and taxi 50k"), return ONE finance candidate PER transaction, each with its own amount_cents, category_hint, and merchant. Do NOT merge them or pick only the first.
 - If the input clearly contains both a financial event and a personal feeling/reflection, also add a journal candidate.
@@ -616,8 +610,6 @@ Return this JSON shape:
 {"candidates":[{"confidence":0.0-1.0,"reason":"short reason","selectedByDefault":true|false,"entry":<one entry>}]}
 
 Finance entry: {"module":"finance","amount_cents":<positive int>,"direction":"expense|income","category_hint":"<english category name>","merchant":"<verbatim from input, or ''>","note":"<verbatim from input, or ''>","occurred_at":"<ISO datetime with UTC${tzOffset} offset>"}
-Finance plan entry: {"module":"finance_plan","amount_cents":<positive int>,"kind":"expense|income","name":"<short planned item name>","category_hint":"<english category name or ''>","due_day":<1-31>,"recurrence":"once|monthly","note":"<verbatim from input, or ''>"}
-Debt entry: {"module":"finance_debt","amount_cents":<positive int>,"debt_direction":"lent|borrowed","counterparty":"<person name>","due_at":"<ISO datetime with UTC${tzOffset} offset or null>","note":"<verbatim from input, or ''>"}
 Reminder entry: {"module":"reminder","title":"<verbatim from input, or short extracted task>","remind_at":"<ISO datetime with UTC${tzOffset} offset>","recurrence":"none|daily|weekly|monthly","note":"<verbatim from input, or ''>"}
 Habits entry: {"module":"habits","title":"<habit name>","frequency":"daily|weekly|custom","target_per_period":<integer 1-99, e.g. 5 for "5 times per day">}
 Journal entry: {"module":"journal","content":"<full text>","mood":<integer 1-5 inferred from emotion, or null>}
@@ -674,39 +666,7 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
 
     const hasFinance = candidates.some((c) => c.entry.module === 'finance')
     const hasJournal = candidates.some((c) => c.entry.module === 'journal')
-    const hasDebt = candidates.some((c) => c.entry.module === 'finance_debt')
-    const hasPlan = candidates.some((c) => c.entry.module === 'finance_plan')
     const hasGoal = candidates.some((c) => c.entry.module === 'goals')
-
-    if (localAmount !== null && hasMonthlyPlanIntent(text) && !hasPlan) {
-      const normalized = normalizeFinancePlanEntry({ kind: textHasIncomeSignal(text) ? 'income' : 'expense' }, localAmount, text)
-      if (normalized) {
-        candidates.push({
-          id: candidateId(normalized.entry),
-          entry: normalized.entry,
-          confidence: 0.84,
-          reason: 'Detected monthly finance plan',
-          selectedByDefault: true,
-          missing: normalized.missing,
-        })
-      }
-    }
-
-    if (localAmount !== null && hasDebtIntent(text) && !hasDebt) {
-      const entry: DebtEntry = {
-        module: 'finance_debt',
-        amount_cents: localAmount,
-        debt_direction: debtDirectionFromText(text),
-        counterparty: extractCounterpartyFromDebtText(text),
-        due_at: extractDebtDueAt(text, now),
-        occurred_at: extractDateFromText(text).toISOString(),
-        note: '',
-      }
-      const missing: MissingField[] = []
-      if (!entry.counterparty) missing.push('counterparty')
-      if (!entry.due_at) missing.push('due_date')
-      candidates.push({ id: candidateId(entry), entry, confidence: 0.86, reason: 'Detected debt book entry', selectedByDefault: true, missing })
-    }
 
     if (localAmount !== null && textHasFinanceSignal(text) && !hasFinance && textHasIncomeSignal(text)) {
       const entry: FinanceEntry = {
