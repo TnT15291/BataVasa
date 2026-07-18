@@ -40,12 +40,15 @@ etc.) or `AI_MODEL` overrides it.
 The keys live in Supabase, never in the app bundle. One-time setup:
 
 ```bash
-# 1. Deploy the two functions (JWT verification is on by default, so only
+# 1. Apply docs/supabase-setup.sql. This creates consume_ai_quota and its
+#    private hourly usage table.
+
+# 2. Deploy the two functions (JWT verification is on by default, so only
 #    signed-in users can call them; each also re-checks the user inside).
 supabase functions deploy ai-chat
 supabase functions deploy ai-transcribe
 
-# 2. Set the provider keys used by plan routing.
+# 3. Set the provider keys used by plan routing.
 #    Default routing: free -> Groq, pro -> DeepSeek.
 supabase secrets set GROQ_API_KEY=gsk_...
 supabase secrets set DEEPSEEK_API_KEY=sk-...
@@ -83,8 +86,10 @@ Remove the key or set `"plan":"free"` to return the user to the free route.
   app surfaces a generic AI error.
 - **Never** put these keys in `.env.local`, `eas.json`, or any `EXPO_PUBLIC_*`
   variable — those ship to the client bundle and would be extractable.
-- Cost control lives at the function boundary: only authenticated users pass, and
-  you can add per-user rate limiting inside the function later.
+- Cost control lives at the function boundary. Chat is limited to 60 requests and
+  300,000 input characters per user/hour; transcription is limited to 20 requests
+  and 100 MiB per user/hour. Individual chat prompts, output tokens, and audio
+  files are also bounded. Change limits only together with cost monitoring.
 
 ## Prompt Contract
 
@@ -152,8 +157,8 @@ Implemented or present in code:
 - Prefer aggregate or anonymized data for insights.
 - Journal content is highly sensitive; only send it for explicit journal insight
   flows.
-- Managed AI mode, if introduced later, must update the privacy policy because
-  data would route through BataVasa-operated infrastructure.
+- The privacy policy must stay aligned with managed routing and the active
+  third-party providers.
 
 ## Feature Gating
 
@@ -172,22 +177,10 @@ instead of relying on a blank chat screen. Current quick prompt categories:
 - habit improvement;
 - recent journal patterns.
 
-## Future Managed AI Mode
-
-Current app model is BYO key. A managed-key subscription model is future work and
-must not embed provider secrets in the client.
-
-Required future pieces:
-
-- Supabase Edge Function or equivalent authenticated proxy.
-- Usage metering and per-user quotas.
-- Abuse protection and prompt caching.
-- Updated privacy policy and provider data-processing review.
-- Store-compliant subscription/IAP plan if AI access is sold in-app.
-
 ## Cost Controls
 
-Recommended rules for future hardening:
+Current controls include authenticated proxies, persistent hourly quotas, and
+payload limits. Further hardening options:
 
 - Cache insights by `(user_id, module, kind, period, data_hash)`.
 - Truncate old records before prompt construction.

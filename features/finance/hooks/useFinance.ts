@@ -39,11 +39,12 @@ export function useFinanceActions() {
   const update = useFinanceStore((s) => s.updateTransaction)
   const remove = useFinanceStore((s) => s.deleteTransaction)
   const restore = useFinanceStore((s) => s.restoreTransaction)
+  const linkTransactionToPlanItem = useFinanceStore((s) => s.linkTransactionToPlanItem)
   const refresh = useFinanceStore((s) => s.loadTransactions)
   const loadMore = useFinanceStore((s) => s.loadMoreTransactions)
   const hasMore = useFinanceStore((s) => s.txHasMore)
   const loadingMore = useFinanceStore((s) => s.txLoadingMore)
-  return { create, update, remove, restore, refresh, loadMore, hasMore, loadingMore }
+  return { create, update, remove, restore, linkTransactionToPlanItem, refresh, loadMore, hasMore, loadingMore }
 }
 
 export function usePlanItemActions() {

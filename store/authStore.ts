@@ -19,26 +19,32 @@ import { useFinanceStore } from './financeStore'
 import { useRemindersStore } from './remindersStore'
 import { useHabitsStore } from './habitsStore'
 import { useJournalsStore } from './journalsStore'
+import { useGoalsStore } from './goalsStore'
+import { useContextStore } from './contextStore'
 
 const MODULE = 'auth.store'
 
 // Reload module caches from SQLite after sign-in (auth state change → re-load,
 // per docs/security.md#authentication).
-function reloadAllStores() {
+export function reloadAllStores() {
   void useFinanceStore.getState().loadCategories()
   void useFinanceStore.getState().loadTransactions()
   void useRemindersStore.getState().loadReminders()
   void useHabitsStore.getState().loadHabits()
   void useJournalsStore.getState().loadJournals()
+  void useGoalsStore.getState().loadGoals()
+  void useContextStore.getState().loadContext()
 }
 
 // Sign-out clears in-memory state but NEVER touches SQLite (data stays for next
 // sign-in on this device; explicit "Delete all data" is the only hard delete).
-function clearAllStores() {
+export function clearAllStores() {
   useFinanceStore.setState({ transactions: [], categories: [] })
   useRemindersStore.setState({ reminders: [] })
   useHabitsStore.setState({ habits: [] })
   useJournalsStore.setState({ journals: [] })
+  useGoalsStore.setState({ goals: [], selectedGoal: null, loadState: 'idle', lastError: null })
+  useContextStore.setState({ entries: [], loadState: 'idle', lastError: null })
 }
 
 type AuthState = {

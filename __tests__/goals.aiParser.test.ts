@@ -87,4 +87,21 @@ describe('parseGoalEntry supported goal boundary', () => {
 
     await expect(parseGoalEntry('some unsupported custom metric', opts)).resolves.toBeNull()
   })
+
+  it('does not shift date-only fields backward when AI includes the local timezone offset', async () => {
+    mockChat.mockResolvedValueOnce(JSON.stringify({
+      title: 'Save 5000 USD',
+      description: '',
+      source: 'finance',
+      source_hint: 'Emergency Fund',
+      target_value: 5000,
+      start_date: '2026-07-05T00:00:00+07:00',
+      due_date: '2026-08-01T00:00:00+07:00',
+    }))
+
+    await expect(parseGoalEntry('save 5000 USD by August', opts)).resolves.toMatchObject({
+      start_date: '2026-07-05',
+      due_date: '2026-08-01',
+    })
+  })
 })

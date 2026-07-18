@@ -319,8 +319,8 @@ export const fr: Translations = {
   data_management_habits_body: 'Exportez habitudes et historique en JSON, ou supprimez-les définitivement de cet appareil.',
   data_management_journals_body: 'Exportez les entrées de journal en JSON, ou supprimez-les définitivement de cet appareil.',
   data_management_reminders_body: 'Exportez les tâches en JSON, ou supprimez-les définitivement de cet appareil.',
-  backup_restore: 'Sauvegarde / restauration',
-  backup_restore_body: 'Créez un fichier de sauvegarde avec finances, habitudes, journal, tâches, objectifs et mémoire IA. L’import de restauration sera ajouté au prochain passage.',
+  backup_restore: 'Exporter une sauvegarde',
+  backup_restore_body: 'Créez un fichier de sauvegarde avec finances, habitudes, journal, tâches, objectifs et mémoire IA. L’importation et la restauration ne sont pas encore disponibles.',
   backup_export_all: 'Exporter la sauvegarde complète',
   backup_export_all_hint: 'Enregistrez un seul fichier JSON à conserver hors de l’app.',
   backup_export_success: 'Fichier de sauvegarde prêt avec {{count}} enregistrements.',
@@ -763,6 +763,7 @@ export const fr: Translations = {
 
   // Monthly plan — paid status
   plan_paid: 'Payé',
+  plan_pay_action: 'Payer',
 
   // Debt book
   amount: 'Montant',

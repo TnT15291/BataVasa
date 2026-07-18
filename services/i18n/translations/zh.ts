@@ -319,8 +319,8 @@ export const zh: Translations = {
   data_management_habits_body: '将习惯和完成历史导出为 JSON，或从此设备永久删除。',
   data_management_journals_body: '将日记导出为 JSON，或从此设备永久删除。',
   data_management_reminders_body: '将任务导出为 JSON，或从此设备永久删除。',
-  backup_restore: '备份 / 恢复',
-  backup_restore_body: '创建一个包含财务、习惯、日记、任务、目标和 AI 记忆的备份文件。恢复导入将在下一轮加入。',
+  backup_restore: '导出备份',
+  backup_restore_body: '创建一个包含财务、习惯、日记、任务、目标和 AI 记忆的备份文件。目前尚不支持导入和恢复。',
   backup_export_all: '导出完整备份',
   backup_export_all_hint: '保存一个可在应用外保管的 JSON 文件。',
   backup_export_success: '备份文件已准备好，包含 {{count}} 条记录。',
@@ -763,6 +763,7 @@ export const zh: Translations = {
 
   // Monthly plan — paid status
   plan_paid: '已支付',
+  plan_pay_action: '支付',
 
   // Debt book
   amount: '金额',

@@ -336,8 +336,8 @@ export const vi = {
   data_management_habits_body: 'Xuất thói quen và lịch sử hoàn thành dạng JSON, hoặc xóa vĩnh viễn khỏi thiết bị này.',
   data_management_journals_body: 'Xuất nhật ký dạng JSON, hoặc xóa vĩnh viễn khỏi thiết bị này.',
   data_management_reminders_body: 'Xuất công việc dạng JSON, hoặc xóa vĩnh viễn khỏi thiết bị này.',
-  backup_restore: 'Sao lưu / khôi phục',
-  backup_restore_body: 'Tạo một file sao lưu gồm tài chính, thói quen, nhật ký, công việc, mục tiêu và bộ nhớ AI. Phần nhập để khôi phục sẽ được bổ sung ở lượt tiếp theo.',
+  backup_restore: 'Xuất bản sao lưu',
+  backup_restore_body: 'Tạo một file sao lưu gồm tài chính, thói quen, nhật ký, công việc, mục tiêu và bộ nhớ AI. Hiện chưa hỗ trợ nhập và khôi phục.',
   backup_export_all: 'Xuất bản sao lưu đầy đủ',
   backup_export_all_hint: 'Lưu một file JSON duy nhất để cất bên ngoài ứng dụng.',
   backup_export_success: 'File sao lưu đã sẵn sàng với {{count}} bản ghi.',
@@ -785,6 +785,7 @@ export const vi = {
 
   // Monthly plan — paid status
   plan_paid: 'Đã thanh toán',
+  plan_pay_action: 'Thanh toán',
 
   // Debt book (sổ nợ)
   amount: 'Số tiền',

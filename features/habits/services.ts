@@ -452,12 +452,12 @@ export async function skipHabit(
   try {
     const { fromIso, toIso } = localDayBoundsIso(dateStr)
     const existing = await q.getLatestLogInRange(habitId, fromIso, toIso)
-    if (existing) return ok(existing)
+    if (existing?.skipped === 1) return ok(existing)
     const log: HabitLog = {
       id: uuid(),
       habit_id: habitId,
       user_id: getCurrentUserId(),
-      occurred_at: new Date(`${dateStr}T12:00:00.000Z`).toISOString(),
+      occurred_at: new Date(`${dateStr}T12:00:00`).toISOString(),
       note: 'Skipped',
       skipped: 1,
       created_at: nowIso(),

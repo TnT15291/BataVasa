@@ -309,6 +309,21 @@ describe('skipHabit', () => {
     expect(mockQ.insertHabitLog).not.toHaveBeenCalled()
   })
 
+  it('creates a skip log when a partial completion already exists today', async () => {
+    mockQ.getLatestLogInRange.mockResolvedValue({
+      id: 'log-done', habit_id: baseHabit.id, user_id: null,
+      occurred_at: '2026-01-05T08:00:00.000Z', note: null, skipped: 0,
+      created_at: '2026-01-05T08:00:00.000Z', updated_at: '2026-01-05T08:00:00.000Z',
+      deleted_at: null, synced_at: null,
+    })
+    mockQ.insertHabitLog.mockResolvedValue(undefined as any)
+
+    const result = await skipHabit(baseHabit.id, '2026-01-05')
+
+    expect(result.ok).toBe(true)
+    expect(mockQ.insertHabitLog).toHaveBeenCalledWith(expect.objectContaining({ skipped: 1 }))
+  })
+
   it('returns DB_ERROR when insert throws', async () => {
     mockQ.getLatestLogInRange.mockResolvedValue(null)
     mockQ.insertHabitLog.mockRejectedValue(new Error('disk full'))

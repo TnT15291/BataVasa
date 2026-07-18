@@ -9,6 +9,7 @@ import { chatCompletion } from '../services/ai/openai'
 import { parseReminderEntry } from '../features/reminders/aiParser'
 import { parseHabitLog } from '../features/habits/aiParser'
 import { parseJournalEntry } from '../features/journals/aiParser'
+import { parseAIWallTime } from '../services/localTime'
 
 const mockChat = chatCompletion as jest.MockedFunction<typeof chatCompletion>
 
@@ -27,7 +28,7 @@ describe('parseReminderEntry', () => {
     expect(r).toEqual({
       title: 'Họp team',
       note: 'phòng A',
-      remind_at: '2026-05-21T09:00:00.000Z',
+      remind_at: parseAIWallTime('2026-05-21T09:00:00.000Z').toISOString(),
       advance_minutes: 30,
       recurrence: 'weekly',
       missing: [],
@@ -127,6 +128,17 @@ describe('parseHabitLog', () => {
 })
 
 describe('parseJournalEntry', () => {
+  it('sends device-local time and timezone to AI', async () => {
+    mockChat.mockResolvedValue(JSON.stringify({ content: 'ok', occurred_at: '2026-05-20T21:00:00+07:00' }))
+
+    await parseJournalEntry('hôm nay')
+
+    const messages = mockChat.mock.calls[0]?.[0]
+    const prompt = messages?.find((message) => message.role === 'user')?.content ?? ''
+    expect(prompt).toMatch(/Current local datetime: .*T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}/)
+    expect(prompt).toMatch(/User timezone: UTC[+-]\d{2}:\d{2}/)
+  })
+
   it('parses content with an in-range mood', async () => {
     mockChat.mockResolvedValue(JSON.stringify({
       content: 'Hôm nay mệt nhưng ổn',
@@ -139,7 +151,7 @@ describe('parseJournalEntry', () => {
       content: 'Hôm nay mệt nhưng ổn',
       mood: 3,
       is_important: 0,
-      occurred_at: '2026-05-20T21:00:00Z',
+      occurred_at: parseAIWallTime('2026-05-20T21:00:00Z').toISOString(),
     })
   })
 

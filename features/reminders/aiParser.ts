@@ -1,5 +1,6 @@
 import { chatCompletion } from '@services/ai/openai'
 import { getAILanguage } from '@services/ai/aiLanguage'
+import { getLocalTzOffset, parseAIWallTime, toLocalISOString } from '@services/localTime'
 
 export type ParsedReminder = {
   title: string
@@ -15,7 +16,8 @@ export type ParsedReminder = {
 
 export async function parseReminderEntry(text: string): Promise<ParsedReminder | null> {
   const language = getAILanguage()
-  const today = new Date().toISOString()
+  const localNow = toLocalISOString()
+  const tzOffset = getLocalTzOffset()
 
   const raw = await chatCompletion([
     {
@@ -26,7 +28,9 @@ export async function parseReminderEntry(text: string): Promise<ParsedReminder |
       role: 'user',
       content: `Parse this reminder: "${text}"
 
-Today's datetime: ${today}
+Current local datetime: ${localNow}
+User timezone: UTC${tzOffset}
+All datetime values MUST use the user's timezone offset (UTC${tzOffset}), not UTC. Example: "18:00" in the user's time -> "2026-05-18T18:00:00${tzOffset}".
 
 Look for phrases like "remind X min/hours/days before" or "nhắc trước X phút/giờ/ngày" and convert to advance_minutes.
 Examples: "nhắc trước 30 phút" → advance_minutes: 30, "nhắc trước 1 ngày" → advance_minutes: 1440, "nhắc trước 2 tiếng" → advance_minutes: 120.
@@ -52,13 +56,14 @@ Return JSON:
     if (!parsed.title) missing.push('title')
     if (!title) return null
     const remindAt = parsed.remind_at ? String(parsed.remind_at) : ''
-    if (!remindAt || isNaN(new Date(remindAt).getTime())) missing.push('date')
+    const parsedRemindAt = remindAt ? parseAIWallTime(remindAt) : null
+    if (!parsedRemindAt || isNaN(parsedRemindAt.getTime())) missing.push('date')
     const validRecurrence = ['none', 'daily', 'weekly', 'monthly']
     const advMins = Number(parsed.advance_minutes ?? 0)
     return {
       title,
       note: String(parsed.note ?? ''),
-      remind_at: missing.includes('date') ? '' : remindAt,
+      remind_at: missing.includes('date') ? '' : parsedRemindAt!.toISOString(),
       advance_minutes: isNaN(advMins) || advMins < 0 ? 0 : Math.round(advMins),
       recurrence: validRecurrence.includes(parsed.recurrence) ? parsed.recurrence : 'none',
       missing,

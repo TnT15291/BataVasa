@@ -319,8 +319,8 @@ export const ja: Translations = {
   data_management_habits_body: '習慣と達成履歴を JSON でエクスポート、またはこの端末から完全に削除します。',
   data_management_journals_body: '日記を JSON でエクスポート、またはこの端末から完全に削除します。',
   data_management_reminders_body: 'タスクを JSON でエクスポート、またはこの端末から完全に削除します。',
-  backup_restore: 'バックアップ / 復元',
-  backup_restore_body: '財務、習慣、日記、タスク、目標、AI メモリを含む 1 つのバックアップファイルを作成します。復元用のインポートは次回追加します。',
+  backup_restore: 'バックアップを書き出す',
+  backup_restore_body: '財務、習慣、日記、タスク、目標、AI メモリを含むバックアップファイルを作成します。インポートと復元はまだ利用できません。',
   backup_export_all: '完全バックアップをエクスポート',
   backup_export_all_hint: 'アプリ外に保管できる単一の JSON ファイルとして保存します。',
   backup_export_success: '{{count}} 件のレコードを含むバックアップファイルを作成しました。',
@@ -763,6 +763,7 @@ export const ja: Translations = {
 
   // Monthly plan — paid status
   plan_paid: '支払い済み',
+  plan_pay_action: '支払う',
 
   // Debt book
   amount: '金額',

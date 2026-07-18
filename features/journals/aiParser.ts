@@ -1,5 +1,6 @@
 import { chatCompletion } from '@services/ai/openai'
 import { getAILanguage } from '@services/ai/aiLanguage'
+import { getLocalTzOffset, parseAIWallTime, toLocalISOString } from '@services/localTime'
 
 export type ParsedJournal = {
   content: string
@@ -28,7 +29,8 @@ function inferMoodFromText(text: string): number | null {
 
 export async function parseJournalEntry(text: string): Promise<ParsedJournal | null> {
   const language = getAILanguage()
-  const today = new Date().toISOString()
+  const localNow = toLocalISOString()
+  const tzOffset = getLocalTzOffset()
 
   const raw = await chatCompletion([
     {
@@ -39,7 +41,9 @@ export async function parseJournalEntry(text: string): Promise<ParsedJournal | n
       role: 'user',
       content: `Parse this journal entry: "${text}"
 
-Today's datetime: ${today}
+Current local datetime: ${localNow}
+User timezone: UTC${tzOffset}
+All datetime values MUST use the user's timezone offset (UTC${tzOffset}), not UTC.
 
 Return JSON:
 {
@@ -62,7 +66,7 @@ Return JSON:
       content: String(parsed.content),
       mood: normalizedMood ?? inferMoodFromText(text),
       is_important: Number(parsed.is_important) === 1 ? 1 : 0,
-      occurred_at: String(parsed.occurred_at),
+      occurred_at: parseAIWallTime(String(parsed.occurred_at)).toISOString(),
     }
   } catch {
     return null

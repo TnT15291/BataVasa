@@ -1,5 +1,6 @@
 import { chatCompletion } from '@services/ai/openai'
 import { getAILanguage } from '@services/ai/aiLanguage'
+import { dateOnlyFromAI, localDateString, toLocalISOString, getLocalTzOffset } from '@services/localTime'
 import type { Category } from '@features/finance/types'
 import type { Habit } from '@features/habits/types'
 
@@ -33,13 +34,7 @@ function foldText(text: string): string {
 }
 
 function dateOnly(value: unknown): string | null {
-  if (!value) return null
-  const parsed = new Date(String(value))
-  if (Number.isNaN(parsed.getTime())) {
-    const raw = String(value).trim()
-    return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null
-  }
-  return parsed.toISOString().slice(0, 10)
+  return dateOnlyFromAI(value)
 }
 
 // Habit goals are always tracked by number of completed sessions (count). The
@@ -79,7 +74,9 @@ export async function parseGoalEntry(text: string, opts: ParseOptions): Promise<
   if (isUnsupportedGoal(text)) return null
 
   const language = getAILanguage()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateString()
+  const localNow = toLocalISOString()
+  const tzOffset = getLocalTzOffset()
   const categories = opts.categories.map((c) => `${c.name} (${c.kind})`).join(', ') || 'none'
   const habits = opts.habits.map((h) => h.name).join(', ') || 'none'
   const journalTags = opts.journalTags.join(', ')
@@ -94,6 +91,8 @@ export async function parseGoalEntry(text: string, opts: ParseOptions): Promise<
       content: `Parse this goal: "${text}"
 
 Today: ${today}
+Current local time: ${localNow}
+User timezone: UTC${tzOffset}
 Currency: ${opts.currency}
 Available finance categories: ${categories}
 Available habits: ${habits}

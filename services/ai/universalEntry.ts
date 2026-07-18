@@ -1,8 +1,9 @@
 import { chatCompletion } from './openai'
 import { centsToDisplay, getAILanguage, getAICurrency } from './aiLanguage'
-import { extractAmount, hasMultipleAmounts } from './smartEntry'
+import { extractAmount, hasMultipleAmounts, inferTransactionDirection } from './smartEntry'
 import { extractDateFromText } from '@services/dateParser'
 import { logger } from '@services/logger'
+import { dateOnlyFromAI, getLocalTzOffset, localDateString, parseAIWallTime, toLocalISOString } from '@services/localTime'
 import type { DebtDirection, PlanItemRecurrence } from '@features/finance/types'
 
 const MODULE = 'universalEntry'
@@ -100,33 +101,8 @@ export type UniversalCandidate = {
 
 type NormalizedEntry = { entry: UniversalEntry; missing: MissingField[] }
 
-function getLocalTzOffset(): string {
-  const offsetMin = -new Date().getTimezoneOffset()
-  const sign = offsetMin >= 0 ? '+' : '-'
-  const abs = Math.abs(offsetMin)
-  const hh = String(Math.floor(abs / 60)).padStart(2, '0')
-  const mm = String(abs % 60).padStart(2, '0')
-  return `${sign}${hh}:${mm}`
-}
-
-function toLocalISOString(d: Date): string {
-  const tzOffset = getLocalTzOffset()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${tzOffset}`
-  )
-}
-
 function fixReminderTimezone(isoStr: string): Date {
-  if (isoStr.endsWith('Z') || isoStr.endsWith('z')) {
-    const utc = new Date(isoStr)
-    const wallStr = isoStr.replace(/Z$/i, getLocalTzOffset())
-    const local = new Date(wallStr)
-    if (!isNaN(local.getTime())) return local
-    return utc
-  }
-  return new Date(isoStr)
+  return parseAIWallTime(isoStr)
 }
 
 function normalizeAIISOString(isoStr: string | undefined, fallback: Date): string {
@@ -343,11 +319,7 @@ function clampDueDay(value: unknown): number {
 }
 
 function dateOnly(value: unknown, fallback: string): string {
-  if (!value) return fallback
-  const parsed = new Date(String(value))
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10)
-  const raw = String(value).trim()
-  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : fallback
+  return dateOnlyFromAI(value, fallback) ?? fallback
 }
 
 function extractPlanNameFromText(text: string): string {
@@ -426,7 +398,7 @@ function normalizeGoalEntry(entry: any, now: Date, localAmount: number | null, o
     target = source === 'habits' ? 100 : 1
     missing.push('target')
   }
-  const today = now.toISOString().slice(0, 10)
+  const today = localDateString(now)
   return {
     entry: {
       module: 'goals',
@@ -456,7 +428,7 @@ function normalizeEntry(entry: any, now: Date, localAmount: number | null, origi
     if (!entry.occurred_at) missing.push('date')
     const aiMerchant = String(entry.merchant || '')
     const aiNote = String(entry.note || '')
-    const direction = entry.direction === 'income' ? 'income' : 'expense'
+    const direction = inferTransactionDirection(originalText) ?? (entry.direction === 'income' ? 'income' : 'expense')
     const normalized: FinanceEntry = {
       module: 'finance',
       amount_cents: Math.round(amount),
@@ -708,7 +680,7 @@ Common finance categories: Food & Groceries, Transport, Housing, Utilities, Heal
         source,
         source_hint: source === 'finance' ? 'Emergency Fund' : '',
         target_value: localAmount !== null && source === 'finance' ? centsToDisplay(localAmount, currency) : 100,
-        start_date: now.toISOString().slice(0, 10),
+        start_date: localDateString(now),
         due_date: null,
       }
       candidates.push({

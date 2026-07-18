@@ -12,9 +12,14 @@ import { useSettingsStore } from '@store/settingsStore'
 import { notifySaved, toast } from '@store/toastStore'
 import { hapticSaveSuccess } from '@services/haptics'
 import { centsToDisplay, displayToCents } from '@services/ai/aiLanguage'
-import { usePlanItemActions } from '../hooks/useFinance'
+import { parsePlanItemEntry } from '@services/ai/smartEntry'
+import { isAiAvailable } from '@services/ai/openai'
+import { SmartEntryCard } from '@components/ui/SmartEntryCard'
+import { CategoryPicker } from './CategoryPicker'
+import { useCategories, usePlanItemActions } from '../hooks/useFinance'
 import { getCurrentPlanMonth, parseAmountInput } from '../services'
-import type { PlanItem, PlanItemKind } from '../types'
+import { matchCategory } from '../i18n'
+import type { Category, PlanItem, PlanItemKind } from '../types'
 
 type Props = {
   visible: boolean
@@ -25,6 +30,7 @@ type Props = {
     kind?: PlanItemKind
     amount_cents?: number
     currency?: string
+    category_id?: string | null
     due_day?: number
     recurrence?: 'once' | 'monthly'
   } | null
@@ -39,13 +45,17 @@ export function PlanItemSheet({ visible, item, draft, onClose }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
   const currency = useSettingsStore((s) => s.currency)
+  const categories = useCategories()
   const { createPlanItem, updatePlanItem, deletePlanItem, restorePlanItem } = usePlanItemActions()
 
   const [name, setName] = useState('')
   const [kind, setKind] = useState<PlanItemKind>('expense')
   const [amountText, setAmountText] = useState('')
+  const [category, setCategory] = useState<Category | null>(null)
   const [dueDay, setDueDay] = useState(1)
   const [monthly, setMonthly] = useState(false)
+  const [smartText, setSmartText] = useState('')
+  const [parsing, setParsing] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const itemCurrency = item?.currency ?? draft?.currency ?? currency
@@ -54,6 +64,7 @@ export function PlanItemSheet({ visible, item, draft, onClose }: Props) {
     if (!visible) return
     setName(item?.name ?? draft?.name ?? '')
     setKind(item?.kind ?? draft?.kind ?? 'expense')
+    setCategory(categories.find((c) => c.id === (item?.category_id ?? draft?.category_id ?? null)) ?? null)
     setAmountText(item
       ? String(centsToDisplay(item.amount_cents, item.currency))
       : draft?.amount_cents
@@ -61,8 +72,44 @@ export function PlanItemSheet({ visible, item, draft, onClose }: Props) {
       : '')
     setDueDay(item?.due_day ?? draft?.due_day ?? new Date().getDate())
     setMonthly(item ? (item.recurrence ?? 'monthly') === 'monthly' : draft?.recurrence === 'monthly')
+    setSmartText('')
     setSaving(false)
-  }, [visible, item, draft, itemCurrency])
+  }, [visible, item, draft, itemCurrency, categories])
+
+  const categoryMatchesKind = (cat: Category, nextKind: PlanItemKind): boolean =>
+    nextKind === 'income' ? cat.kind === 'income' : cat.kind !== 'income'
+
+  const visibleCategories = categories.filter((c) => categoryMatchesKind(c, kind))
+
+  const onParseSmartEntry = async (override?: string) => {
+    const input = (override ?? smartText).trim()
+    if (!input || parsing) return
+    if (override) setSmartText(override)
+    if (!isAiAvailable()) {
+      Alert.alert(t.no_api_key, t.no_api_key_msg)
+      return
+    }
+    setParsing(true)
+    try {
+      const parsed = await parsePlanItemEntry(input, categories)
+      if (!parsed) {
+        Alert.alert(t.ai_error, t.smart_entry_hint)
+        return
+      }
+      setName(parsed.name)
+      setKind(parsed.kind)
+      setAmountText(String(centsToDisplay(parsed.amount_cents, itemCurrency)))
+      setDueDay(parsed.due_day)
+      setMonthly(parsed.recurrence === 'monthly')
+      const matched = matchCategory(categories, parsed.category_hint, t)
+      setCategory(matched && categoryMatchesKind(matched, parsed.kind) ? matched : null)
+      setSmartText('')
+    } catch (e: any) {
+      Alert.alert(t.ai_error, e?.message ?? t.smart_entry_hint)
+    } finally {
+      setParsing(false)
+    }
+  }
 
   const onSave = async () => {
     const trimmed = name.trim()
@@ -79,8 +126,8 @@ export function PlanItemSheet({ visible, item, draft, onClose }: Props) {
     const amount_cents = Math.round(displayToCents(amount, itemCurrency))
     const recurrence = monthly ? 'monthly' as const : 'once' as const
     const res = item
-      ? await updatePlanItem({ id: item.id, name: trimmed, kind, amount_cents, due_day: dueDay, recurrence, applies_month: monthly ? null : item.applies_month ?? getCurrentPlanMonth() })
-      : await createPlanItem({ name: trimmed, kind, amount_cents, currency: itemCurrency, due_day: dueDay, recurrence, applies_month: monthly ? null : getCurrentPlanMonth(), status: 'confirmed' })
+      ? await updatePlanItem({ id: item.id, name: trimmed, kind, amount_cents, category_id: category?.id ?? null, due_day: dueDay, recurrence, applies_month: monthly ? null : item.applies_month ?? getCurrentPlanMonth() })
+      : await createPlanItem({ name: trimmed, kind, amount_cents, currency: itemCurrency, category_id: category?.id ?? null, due_day: dueDay, recurrence, applies_month: monthly ? null : getCurrentPlanMonth(), status: 'confirmed' })
     setSaving(false)
     if (!res.ok) {
       Alert.alert(t.could_not_save, res.error ?? '')
@@ -128,6 +175,18 @@ export function PlanItemSheet({ visible, item, draft, onClose }: Props) {
             {item ? t.plan_edit_title : t.plan_add_title}
           </Text>
 
+          <SmartEntryCard
+            value={smartText}
+            onChangeText={setSmartText}
+            onSubmit={() => void onParseSmartEntry()}
+            onVoiceResult={(text) => void onParseSmartEntry(text)}
+            parsing={parsing}
+            placeholder={t.plan_name_placeholder}
+            module="finance_plan"
+            hint={t.monthly_plan_empty}
+            disabled={!isAiAvailable()}
+          />
+
           <TextInput
             value={name}
             onChangeText={setName}
@@ -144,7 +203,10 @@ export function PlanItemSheet({ visible, item, draft, onClose }: Props) {
               return (
                 <Pressable
                   key={k}
-                  onPress={() => setKind(k)}
+                  onPress={() => {
+                    setKind(k)
+                    if (category && !categoryMatchesKind(category, k)) setCategory(null)
+                  }}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: active }}
                   style={[styles.kindBtn, {
@@ -171,6 +233,17 @@ export function PlanItemSheet({ visible, item, draft, onClose }: Props) {
               style={[styles.amountInput, { color: theme.text.primary, borderColor: theme.border.strong, backgroundColor: theme.bg.primary }]}
             />
             <Text style={[styles.currency, { color: theme.text.muted }]}>{itemCurrency}</Text>
+          </View>
+
+          <View style={[styles.categoryBox, { borderColor: theme.border.subtle, backgroundColor: theme.bg.primary }]}>
+            <Text style={[styles.label, { color: theme.text.muted }]}>{t.category}</Text>
+            <CategoryPicker
+              categories={visibleCategories}
+              selectedId={category?.id ?? null}
+              onSelect={setCategory}
+              filterKind={kind === 'income' ? 'income' : undefined}
+              scrollEnabled={false}
+            />
           </View>
 
           <Text style={[styles.label, { color: theme.text.muted }]}>{t.plan_due_day_label}</Text>
@@ -282,6 +355,12 @@ const styles = StyleSheet.create({
   },
   currency: { fontSize: 13, fontWeight: '600' },
   label: { fontSize: 12, fontWeight: '600' },
+  categoryBox: {
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing[3],
+    gap: spacing[2],
+  },
   dayRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[4] },
   dayBtn: {
     width: 44,

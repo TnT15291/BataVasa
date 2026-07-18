@@ -25,6 +25,7 @@ const GROUP_COLORS = {
   pending: MODULE_COLORS.finance,
   later: MODULE_COLORS.tasks,
   done: MODULE_COLORS.habits,
+  skipped: MODULE_COLORS.analysis,
 }
 
 const capitalizeFirst = (text: string) => text ? text.charAt(0).toUpperCase() + text.slice(1) : text
@@ -167,15 +168,16 @@ export function HabitListScreen() {
 
   const doneCount = habits.filter((h) => h.dueToday !== false && h.todayCount >= h.target_per_period).length
   const totalCount = habits.filter((h) => h.dueToday !== false).length
-  const { pendingHabits, doneHabits, laterHabits, bestStreak, avgStrength } = useMemo(() => {
-    const pendingHabits = habits.filter((h) => h.dueToday !== false && h.todayCount < h.target_per_period)
-    const doneHabits = habits.filter((h) => h.dueToday !== false && h.todayCount >= h.target_per_period)
+  const { pendingHabits, doneHabits, skippedHabits, laterHabits, bestStreak, avgStrength } = useMemo(() => {
+    const pendingHabits = habits.filter((h) => h.dueToday !== false && !h.skippedToday && h.todayCount < h.target_per_period)
+    const doneHabits = habits.filter((h) => h.dueToday !== false && !h.skippedToday && h.todayCount >= h.target_per_period)
+    const skippedHabits = habits.filter((h) => h.dueToday !== false && h.skippedToday)
     const laterHabits = habits.filter((h) => h.dueToday === false)
     const bestStreak = habits.reduce((max, h) => Math.max(max, h.streak), 0)
     const avgStrength = habits.length > 0
       ? Math.round(habits.reduce((s, h) => s + h.strengthScore, 0) / habits.length)
       : 0
-    return { pendingHabits, doneHabits, laterHabits, bestStreak, avgStrength }
+    return { pendingHabits, doneHabits, skippedHabits, laterHabits, bestStreak, avgStrength }
   }, [habits])
 
   const renderGroup = (title: string, items: typeof habits, accent: string, compact = false) => {
@@ -314,6 +316,7 @@ export function HabitListScreen() {
 
           {renderGroup(t.reminder_upcoming, pendingHabits, GROUP_COLORS.pending)}
           {renderGroup(t.habit_not_scheduled, laterHabits, GROUP_COLORS.later)}
+          {renderGroup(t.habit_skipped_today, skippedHabits, GROUP_COLORS.skipped, true)}
           {renderGroup(t.habit_done_today, doneHabits, GROUP_COLORS.done, true)}
         </ScrollView>
       )}

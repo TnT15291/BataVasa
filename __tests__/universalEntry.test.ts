@@ -86,6 +86,42 @@ describe('parseUniversalEntry', () => {
     expect(parsed.find((c) => c.entry.module === 'journal')?.selectedByDefault).toBe(true)
   })
 
+  it('forces + amount to income regardless of AI direction', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({
+      module: 'finance', amount_cents: 100000, direction: 'expense',
+      category_hint: 'Other Income', merchant: '', note: '',
+      occurred_at: '2026-05-19T22:00:00+07:00',
+    }))
+
+    const parsed = await parseUniversalEntry('+100k')
+
+    expect(parsed).toMatchObject({ module: 'finance', amount_cents: 100000, direction: 'income' })
+  })
+
+  it('forces - amount to expense regardless of AI direction', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({
+      module: 'finance', amount_cents: 100000, direction: 'income',
+      category_hint: 'Shopping', merchant: '', note: '',
+      occurred_at: '2026-05-19T22:00:00+07:00',
+    }))
+
+    const parsed = await parseUniversalEntry('-100k')
+
+    expect(parsed).toMatchObject({ module: 'finance', amount_cents: 100000, direction: 'expense' })
+  })
+
+  it('forces Vietnamese income verbs to income regardless of AI direction', async () => {
+    mockedChatCompletion.mockResolvedValue(JSON.stringify({
+      module: 'finance', amount_cents: 100000, direction: 'expense',
+      category_hint: 'Other Income', merchant: '', note: '',
+      occurred_at: '2026-05-19T22:00:00+07:00',
+    }))
+
+    const parsed = await parseUniversalEntry('nhận 100k')
+
+    expect(parsed).toMatchObject({ module: 'finance', amount_cents: 100000, direction: 'income' })
+  })
+
   it('rejects hallucinated finance for emotion-only journal text', async () => {
     mockedChatCompletion.mockResolvedValue(JSON.stringify({
       candidates: [

@@ -319,8 +319,8 @@ export const ko: Translations = {
   data_management_habits_body: '습관과 완료 기록을 JSON으로 내보내거나 이 기기에서 영구 삭제합니다.',
   data_management_journals_body: '일기를 JSON으로 내보내거나 이 기기에서 영구 삭제합니다.',
   data_management_reminders_body: '할 일을 JSON으로 내보내거나 이 기기에서 영구 삭제합니다.',
-  backup_restore: '백업 / 복원',
-  backup_restore_body: '금융, 습관, 일기, 할 일, 목표, AI 메모리를 하나의 백업 파일로 만듭니다. 복원 가져오기는 다음 단계에서 추가됩니다.',
+  backup_restore: '백업 내보내기',
+  backup_restore_body: '금융, 습관, 일기, 할 일, 목표, AI 메모리를 하나의 백업 파일로 만듭니다. 가져오기와 복원은 아직 지원되지 않습니다.',
   backup_export_all: '전체 백업 내보내기',
   backup_export_all_hint: '앱 밖에 보관할 수 있는 단일 JSON 파일로 저장합니다.',
   backup_export_success: '{{count}}개 기록이 포함된 백업 파일이 준비되었습니다.',
@@ -761,6 +761,7 @@ export const ko: Translations = {
 
   // Monthly plan — paid status
   plan_paid: '결제 완료',
+  plan_pay_action: '결제',
 
   // Debt book
   amount: '금액',

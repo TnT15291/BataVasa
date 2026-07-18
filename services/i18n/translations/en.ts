@@ -319,8 +319,8 @@ export const en: Translations = {
   data_management_habits_body: 'Export habits and completion history as JSON, or permanently delete them from this device.',
   data_management_journals_body: 'Export journal entries as JSON, or permanently delete them from this device.',
   data_management_reminders_body: 'Export tasks as JSON, or permanently delete them from this device.',
-  backup_restore: 'Backup / Restore',
-  backup_restore_body: 'Create one backup file with finance, habits, journals, tasks, goals, and AI memory. Import restore will be added in the next pass.',
+  backup_restore: 'Backup Export',
+  backup_restore_body: 'Create one backup file with finance, habits, journals, tasks, goals, and AI memory. Import and restore are not available yet.',
   backup_export_all: 'Export Full Backup',
   backup_export_all_hint: 'Save a single JSON file you can keep outside the app.',
   backup_export_success: 'Backup file ready with {{count}} records.',
@@ -770,6 +770,7 @@ export const en: Translations = {
 
   // Monthly plan — paid status
   plan_paid: 'Paid',
+  plan_pay_action: 'Pay',
 
   // Debt book
   amount: 'Amount',

@@ -6,7 +6,7 @@ jest.mock('../services/ai/aiLanguage', () => ({
 }))
 
 import { chatCompletion } from '../services/ai/openai'
-import { hasMultipleAmounts, extractAmount, parseSmartEntry } from '../services/ai/smartEntry'
+import { hasMultipleAmounts, extractAmount, parsePlanItemEntry, parseSmartEntry } from '../services/ai/smartEntry'
 import type { Category } from '../features/finance/types'
 
 const mockChat = chatCompletion as jest.Mock
@@ -92,6 +92,43 @@ describe('parseSmartEntry', () => {
     expect(result?.category_hint).toBe('Shopping')
   })
 
+  it('treats a + amount as income even when AI says expense', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":100000,"direction":"expense","category_hint":"Other Income","merchant":"","note":""}')
+    const result = await parseSmartEntry('+100k', [
+      baseCategory,
+      { ...baseCategory, id: 'cat-income', name: 'Other Income', kind: 'income' },
+    ])
+    expect(result).toMatchObject({ intent: 'transaction', amount_cents: 100000, direction: 'income' })
+  })
+
+  it('treats a - amount as expense even when AI says income', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":100000,"direction":"income","category_hint":"Food","merchant":"","note":""}')
+    const result = await parseSmartEntry('-100k', [baseCategory])
+    expect(result).toMatchObject({ intent: 'transaction', amount_cents: 100000, direction: 'expense' })
+  })
+
+  it.each([
+    'thu 100k',
+    'thêm 100k',
+    'nhận 100k',
+    'cộng 100k',
+    'kiếm được 100k',
+    'kiếm 100k',
+  ])('treats "%s" as income even when AI says expense', async (text) => {
+    mockChat.mockResolvedValue('{"amount_cents":100000,"direction":"expense","category_hint":"Other Income","merchant":"","note":""}')
+    const result = await parseSmartEntry(text, [
+      baseCategory,
+      { ...baseCategory, id: 'cat-income', name: 'Other Income', kind: 'income' },
+    ])
+    expect(result).toMatchObject({ intent: 'transaction', amount_cents: 100000, direction: 'income' })
+  })
+
+  it('keeps "thêm khoản chi" as expense', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":100000,"direction":"income","category_hint":"Food","merchant":"","note":""}')
+    const result = await parseSmartEntry('thêm khoản chi 100k', [baseCategory])
+    expect(result).toMatchObject({ intent: 'transaction', direction: 'expense' })
+  })
+
   it('returns null when AI response has no JSON', async () => {
     mockChat.mockResolvedValue('Sorry, I cannot parse that.')
     const result = await parseSmartEntry('some text', [baseCategory])
@@ -138,14 +175,28 @@ describe('parseSmartEntry', () => {
     expect(result?.merchant).toBe('cafe')
   })
 
-  it('routes monthly spending wording to a plan item, not a transaction', async () => {
+  it('ignores monthly plan wording in the transaction smart entry', async () => {
     mockChat.mockResolvedValue('{"amount_cents":1000000,"direction":"expense","category_hint":"Food","merchant":"","note":""}')
     const result = await parseSmartEntry('Thêm khoản chi tiêu hằng tháng tiền điện 1tr', [baseCategory])
+    expect(result).toBeNull()
+  })
+
+  it('routes monthly spending wording to a plan item when explicitly enabled', async () => {
+    mockChat.mockResolvedValue('{"amount_cents":1000000,"direction":"expense","category_hint":"Food","merchant":"","note":""}')
+    const result = await parseSmartEntry('Thêm khoản chi tiêu hằng tháng tiền điện 1tr', [baseCategory], { includePlanItems: true })
     expect(result?.intent).toBe('plan_item')
-    if (result?.intent !== 'plan_item') throw new Error('Expected plan item')
-    expect(result.kind).toBe('expense')
-    expect(result.amount_cents).toBe(1000000)
-    expect(result.name).toContain('tiền điện')
+  })
+
+  it('parses local monthly plan smart entry', async () => {
+    mockChat.mockResolvedValue('{"intent":"plan_item","amount_cents":1000000,"kind":"expense","name":"tiền điện","category_hint":"Food","due_day":10,"recurrence":"monthly","note":""}')
+    const result = await parsePlanItemEntry('tiền điện 1tr ngày 10 hằng tháng', [baseCategory])
+    expect(result).toMatchObject({
+      intent: 'plan_item',
+      kind: 'expense',
+      amount_cents: 1000000,
+      due_day: 10,
+      recurrence: 'monthly',
+    })
   })
 
   it('routes borrowed money wording to debt book as borrowed', async () => {

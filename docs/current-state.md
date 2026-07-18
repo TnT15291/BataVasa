@@ -1,6 +1,8 @@
 # BataVasa Current State
 
-> Single source of truth for project status. Last updated: 2026-07-02.
+> Single source of truth for project status. Last updated: 2026-07-18.
+>
+> Latest full repository audit: `docs/repo-audit-2026-07-18.md`.
 
 ## Overall
 
@@ -10,7 +12,7 @@
 | Closed beta | Keep open until the beta-close scope below is finished |
 | Public launch | Blocked by beta-close scope, verification, tests, and store submission work |
 
-**Production score: 7/10.** Architecture, UX, sync, and business-logic coverage are strong enough for closed beta usage, but the beta should not be closed yet. The updated direction is to finish the assistant/differentiator layer first, then close beta, then move into store submission/public-launch work.
+**Production score: 6.5/10.** Architecture, UX, sync, and business logic are strong enough for closed beta usage. Managed-AI abuse controls and account-state isolation are now implemented, but public launch remains blocked by deploying/verifying those controls, native verification, coverage, restore UX, and store submission work.
 
 ## What Is Built
 
@@ -140,8 +142,10 @@ Code is implemented. Sync has been manually verified as working; Google Auth and
 Current test infrastructure is ready, but global coverage is still below the public-launch target.
 
 - Latest automated run on 2026-06-20: `npm test -- --runInBand` passed; `npx tsc --noEmit` clean.
-- Current status: 530 tests across 44 suites.
-- Current coverage: 70.08% statements / 64.04% branches / 71.81% functions / 72.41% lines.
+- Current status (2026-07-18): 635 tests across 53 suites; all passing.
+- Current coverage: 67.31% statements / 58.96% branches / 73.57% functions / 69.16% lines.
+- Managed-AI hardening now includes authenticated persistent hourly quotas, prompt/message/token limits, and audio request limits. Deployment requires reapplying `docs/supabase-setup.sql` and redeploying `ai-chat` plus `ai-transcribe`.
+- Auth transitions now reload and clear Goals and AI Context in addition to the original four modules; regression coverage protects account-state isolation.
 - Current CI floor: 37% statements / 35% branches / 31% functions / 39% lines.
 - Target before public launch: keep statements/functions/lines above 70% and continue raising branch coverage toward 70%.
 - Completed in this pass:

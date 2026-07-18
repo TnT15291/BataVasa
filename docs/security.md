@@ -17,6 +17,8 @@
   - native: Expo SecureStore;
   - web: localStorage fallback.
 - Auth state changes trigger app/store reload behavior.
+- Sign-out clears every user-scoped in-memory store, including Goals and AI
+  Context, while preserving the offline SQLite source of truth.
 
 ### Authorization
 
@@ -46,6 +48,11 @@
 
 ### AI Safeguards
 
+- AI provider keys are backend-managed Supabase secrets and never shipped in the client.
+- Chat and transcription proxies require a signed-in JWT.
+- Persistent per-user hourly quotas are enforced through `consume_ai_quota`.
+- Chat message count, prompt size, output tokens, transcription prompt, and audio
+  file size are bounded at the Edge Function boundary.
 - AI-parsed writes should show confirmation before saving unless the user has
   explicitly disabled confirmation.
 - Voice input must always confirm before saving.
@@ -63,7 +70,6 @@ These are production-hardening targets, not current shipped behavior:
 - Google OAuth sign-off on native builds.
 - Anonymous local mode with `device_id` to authenticated `user_id` migration.
 - Service-role account deletion Edge Function.
-- Server-mediated managed AI proxy.
 - Explicit cloud-to-local pull/merge conflict review.
 - Conflict log UI for journal content conflicts.
 

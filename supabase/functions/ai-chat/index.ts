@@ -12,8 +12,15 @@
 
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { PROVIDERS, resolveModel, resolveProvider } from '../_shared/providers.ts'
+import { consumeQuota } from '../_shared/quota.ts'
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+
+const MAX_MESSAGES = 50
+const MAX_PROMPT_CHARS = 100_000
+const MAX_OUTPUT_TOKENS = 2_000
+const CHAT_REQUESTS_PER_HOUR = 60
+const CHAT_CHARS_PER_HOUR = 300_000
 
 async function getUserPlan(req: Request): Promise<string> {
   const auth = req.headers.get('authorization') || ''
@@ -45,6 +52,18 @@ Deno.serve(async (req) => {
     if (!body || !Array.isArray(body.messages) || body.messages.length === 0) {
       return json({ error: 'messages required' }, 400)
     }
+    if (body.messages.length > MAX_MESSAGES || body.messages.some((message: unknown) => {
+      const value = message as Partial<ChatMessage>
+      return !['system', 'user', 'assistant'].includes(value?.role ?? '') || typeof value?.content !== 'string'
+    })) {
+      return json({ error: 'invalid messages' }, 400)
+    }
+    const promptChars = body.messages.reduce((sum: number, message: ChatMessage) => sum + message.content.length, 0)
+    if (promptChars > MAX_PROMPT_CHARS) return json({ error: 'prompt too large' }, 413)
+
+    const quota = await consumeQuota(req, 'chat', promptChars, CHAT_REQUESTS_PER_HOUR, CHAT_CHARS_PER_HOUR)
+    if (quota === 'denied') return json({ error: 'AI hourly quota exceeded' }, 429)
+    if (quota === 'unavailable') return json({ error: 'AI quota service unavailable' }, 503)
 
     const userPlan = await getUserPlan(req)
     const provider = resolveProvider(userPlan, body.provider)
@@ -71,7 +90,9 @@ Deno.serve(async (req) => {
         model,
         messages: body.messages as ChatMessage[],
         temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
-        max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : 1500,
+        max_tokens: typeof body.max_tokens === 'number'
+          ? Math.min(MAX_OUTPUT_TOKENS, Math.max(1, Math.floor(body.max_tokens)))
+          : 1500,
       }),
     })
 

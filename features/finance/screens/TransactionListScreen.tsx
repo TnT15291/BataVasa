@@ -94,7 +94,7 @@ export function TransactionListScreen() {
   const cats = useCategories()
   const planItems = usePlanItems()
   const debts = useDebts()
-  const { remove, restore, refresh, loadMore, hasMore, loadingMore } = useFinanceActions()
+  const { create, remove, restore, linkTransactionToPlanItem, refresh, loadMore, hasMore, loadingMore } = useFinanceActions()
   const { createPlanItem, deletePlanItem, restorePlanItem } = usePlanItemActions()
   const { deleteDebt, restoreDebt } = useDebtActions()
   const [refreshing, setRefreshing] = useState(false)
@@ -435,6 +435,42 @@ export function TransactionListScreen() {
     })
     if (!result.ok) Alert.alert(t.ai_error, result.error ?? t.no_transactions)
   }, [createPlanItem, t])
+
+  const fallbackCategoryForPlanItem = useCallback((item: PlanItem) => {
+    const linked = item.category_id ? catById.get(item.category_id) : null
+    if (linked) return linked
+    if (item.kind === 'income') return cats.find((c) => c.kind === 'income') ?? null
+    return cats.find((c) => c.name === 'Shopping') ?? cats.find((c) => c.kind !== 'income') ?? null
+  }, [catById, cats])
+
+  const payPlanItem = useCallback(async (item: PlanItem) => {
+    const category = fallbackCategoryForPlanItem(item)
+    if (!category) {
+      Alert.alert(t.pick_category, t.pick_category_msg)
+      return
+    }
+    const signed = item.kind === 'expense' ? -item.amount_cents : item.amount_cents
+    const tx = await create({
+      amount_cents: signed,
+      currency: item.currency,
+      category_id: category.id,
+      merchant: item.name,
+      note: t.monthly_plan,
+      occurred_at: new Date().toISOString(),
+      source: 'manual',
+      needs_review: 0,
+    })
+    if (!tx.ok || !tx.tx) {
+      Alert.alert(t.could_not_save, tx.error ?? '')
+      return
+    }
+    const linked = await linkTransactionToPlanItem(tx.tx.id, item.id)
+    if (!linked.ok) {
+      Alert.alert(t.could_not_save, linked.error ?? '')
+      return
+    }
+    toast.success(t.plan_match_settled_toast)
+  }, [create, fallbackCategoryForPlanItem, linkTransactionToPlanItem, t])
 
   const createBillReminder = (candidate: RecurringCandidate) => {
     router.push({
@@ -887,6 +923,23 @@ export function TransactionListScreen() {
                       </Text>
                     </View>
                     <AmountText cents={item.amount_cents} currency={item.currency} showSign={false} color={settled ? theme.text.muted : item.kind === 'income' ? theme.finance.income : theme.finance.expense} style={styles.recurringAmount} />
+                    {!settled ? (
+                      <Pressable
+                        onPress={() => void payPlanItem(item)}
+                        accessibilityRole="button"
+                        accessibilityLabel={t.pay_bill.replace('{{name}}', item.name)}
+                        style={({ pressed }) => [
+                          styles.planPayBtn,
+                          {
+                            backgroundColor: pressed ? MODULE_COLORS.finance + '22' : MODULE_COLORS.finance + '14',
+                            borderColor: MODULE_COLORS.finance + '66',
+                          },
+                        ]}
+                      >
+                        <Feather name="check" size={13} color={MODULE_COLORS.finance} />
+                        <Text style={[styles.planPayText, { color: MODULE_COLORS.finance }]}>{t.plan_pay_action}</Text>
+                      </Pressable>
+                    ) : null}
                   </Pressable>
                   </ReanimatedSwipeable>
                 )
@@ -1234,6 +1287,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  planPayBtn: {
+    minWidth: 44,
+    minHeight: 32,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[1],
+  },
+  planPayText: { fontSize: 12, fontWeight: '700' },
   planMoreRow: {
     minHeight: 44,
     flexDirection: 'row',

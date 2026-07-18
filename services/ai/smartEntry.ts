@@ -1,5 +1,6 @@
 import { chatCompletion } from './openai'
 import { getAILanguage, getAICurrency, getAmountRule } from './aiLanguage'
+import { localDateString, toLocalISOString, getLocalTzOffset } from '@services/localTime'
 import type { Category, DebtDirection, PlanItemKind, PlanItemRecurrence } from '@features/finance/types'
 
 export type ParsedTransactionEntry = {
@@ -35,6 +36,10 @@ export type ParsedEntry = (ParsedTransactionEntry | ParsedPlanItemEntry | Parsed
   direction?: 'expense' | 'income'
   category_hint?: string
   merchant?: string
+}
+
+type ParseSmartEntryOptions = {
+  includePlanItems?: boolean
 }
 
 const clampDueDay = (n: unknown): number => {
@@ -148,6 +153,25 @@ export function hasMultipleAmounts(text: string): boolean {
   return false
 }
 
+export function inferSignedAmountDirection(text: string): 'expense' | 'income' | null {
+  const match = text.match(/(?:^|\s)([+-])\s*(?=\d)/)
+  if (!match) return null
+  return match[1] === '+' ? 'income' : 'expense'
+}
+
+export function inferTransactionDirection(text: string): 'expense' | 'income' | null {
+  const signed = inferSignedAmountDirection(text)
+  if (signed) return signed
+
+  const normalized = normalizedText(text)
+  if (/\b(thu|nhan|cong|kiem|kiem duoc|luong|thuong)\b/.test(normalized)) return 'income'
+
+  const hasExpenseSignal = /\b(chi|chi tieu|mua|thanh toan|tra tien|tra no|ton)\b/.test(normalized)
+  if (hasExpenseSignal) return 'expense'
+  if (/\bthem\b/.test(normalized)) return 'income'
+  return null
+}
+
 // Deterministic amount extractor — AI is unreliable at arithmetic.
 // Handles: "50k", "1.5k", "1tr", "2 triệu", "1M", raw "50000".
 // Returns amount in the smallest currency unit appropriate to context.
@@ -184,7 +208,8 @@ export function extractAmount(text: string, currency: string): number | null {
 
 export async function parseSmartEntry(
   text: string,
-  categories: Category[]
+  categories: Category[],
+  options: ParseSmartEntryOptions = {}
 ): Promise<ParsedEntry | null> {
   const language = getAILanguage()
   const currency = getAICurrency()
@@ -192,11 +217,15 @@ export async function parseSmartEntry(
   const catList = categories.map((c) => c.name).join(', ')
   const localAmount = extractAmount(text, currency)
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = localDateString()
+  const localNow = toLocalISOString()
+  const tzOffset = getLocalTzOffset()
   const content = `Parse this finance input and return JSON:
 "${text}"
 
-Today's date: ${today}
+Today's local date: ${today}
+Current local time: ${localNow}
+User timezone: UTC${tzOffset}
 Active currency: ${currency}
 Amount rule: ${amountRule}
 ${localAmount !== null ? `Pre-computed amount_cents: ${localAmount} — USE THIS VALUE.` : ''}
@@ -205,15 +234,17 @@ Available categories (copy EXACTLY, do not translate): ${catList}
 Return ONLY valid JSON, no other text. Choose exactly one intent:
 1) Normal one-time transaction:
 {"intent":"transaction","amount_cents":<positive integer>,"direction":"<expense|income>","category_hint":"<must be one of the listed category names>","merchant":"<store name or empty>","note":"<note or empty>"}
-2) Planned income/expense item, not a transaction:
+${options.includePlanItems ? `2) Planned income/expense item, not a transaction:
 {"intent":"plan_item","amount_cents":<positive integer>,"kind":"<expense|income>","name":"<short planned item name>","category_hint":"<must be one of the listed category names or empty>","due_day":<1-31>,"recurrence":"<once|monthly>","note":"<note or empty>"}
-3) Debt book item:
+` : ''}
+${options.includePlanItems ? '3' : '2'}) Debt book item:
 {"intent":"debt","amount_cents":<positive integer>,"debt_direction":"<lent|borrowed>","counterparty":"<person name>","due_at":"<ISO datetime or null>","note":"<note or empty>"}
 
 Rules:
 - Default direction is expense unless income is clearly stated.
-- If the input says monthly / recurring / hang thang / moi thang / dinh ky / budget / ngan sach / thang nay, return intent "plan_item". Do NOT return a transaction for it.
-- For plan_item, use recurrence "monthly" only when the user explicitly says it repeats every month. Use "once" for "this month/thang nay" budgets or one-cycle planned income/expense.
+${options.includePlanItems
+  ? '- If the input says monthly / recurring / hang thang / moi thang / dinh ky / budget / ngan sach / thang nay, return intent "plan_item". Do NOT return a transaction for it.\n- For plan_item, use recurrence "monthly" only when the user explicitly says it repeats every month. Use "once" for "this month/thang nay" budgets or one-cycle planned income/expense.'
+  : '- Planned income/expense items, monthly budgets, recurring bills, and "thang nay/hang thang/moi thang/dinh ky/budget/ngan sach" wording are handled only inside the Monthly Plan screen. Do NOT return plan_item from this transaction entry point.'}
 - If the input says the user borrowed money from someone (Vietnamese: "vay cua", "vay anh Hung", "di vay", "muon cua"), return intent "debt" with debt_direction "borrowed". This is money coming in, not an expense.
 - If the input says the user lent money to someone (Vietnamese: "cho ... vay"), return intent "debt" with debt_direction "lent". This is money going out.
 - For debt due dates like "ngay 10 thang sau" or "ngay 19 tra", set due_at to the repayment date at 09:00 local time in ISO format. Do not use repayment dates as transaction occurred_at.
@@ -270,7 +301,7 @@ Rules:
         note: parsed.note ?? '',
       }
     }
-    if (parsed.intent === 'plan_item' || hasMonthlyPlanIntent(text)) {
+    if (options.includePlanItems && (parsed.intent === 'plan_item' || hasMonthlyPlanIntent(text))) {
       const kind = parsed.kind ?? (parsed.direction === 'income' ? 'income' : 'expense')
       return {
         intent: 'plan_item',
@@ -282,6 +313,9 @@ Rules:
         recurrence: parsed.recurrence === 'monthly' ? 'monthly' : inferPlanRecurrence(text),
         note: parsed.note ?? '',
       }
+    }
+    if (!options.includePlanItems && (parsed.intent === 'plan_item' || hasMonthlyPlanIntent(text))) {
+      return null
     }
     // Restore merchant/note from original text to guard against AI diacritic corruption.
     // If the AI output doesn't appear verbatim in the original: merchant → '' (optional),
@@ -298,12 +332,85 @@ Rules:
         }
       }
     }
+    const direction = inferTransactionDirection(text) ?? parsed.direction ?? 'expense'
     return {
       intent: 'transaction',
       amount_cents: parsed.amount_cents,
-      direction: parsed.direction ?? 'expense',
-      category_hint: sanitizeCategoryHintForDirection(parsed.direction ?? 'expense', parsed.category_hint ?? '', categories),
+      direction,
+      category_hint: sanitizeCategoryHintForDirection(direction, parsed.category_hint ?? '', categories),
       merchant: parsed.merchant ?? '',
+      note: parsed.note ?? '',
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function parsePlanItemEntry(
+  text: string,
+  categories: Category[]
+): Promise<ParsedPlanItemEntry | null> {
+  const language = getAILanguage()
+  const currency = getAICurrency()
+  const amountRule = getAmountRule(currency)
+  const catList = categories.map((c) => c.name).join(', ')
+  const localAmount = extractAmount(text, currency)
+  const today = localDateString()
+  const localNow = toLocalISOString()
+  const tzOffset = getLocalTzOffset()
+
+  const content = `Parse this monthly-plan input and return JSON:
+"${text}"
+
+Today's local date: ${today}
+Current local time: ${localNow}
+User timezone: UTC${tzOffset}
+Active currency: ${currency}
+Amount rule: ${amountRule}
+${localAmount !== null ? `Pre-computed amount_cents: ${localAmount} - USE THIS VALUE.` : ''}
+Available categories (copy EXACTLY, do not translate): ${catList}
+
+Return ONLY valid JSON:
+{"intent":"plan_item","amount_cents":<positive integer>,"kind":"<expense|income>","name":"<short planned item name>","category_hint":"<must be one of the listed category names or empty>","due_day":<1-31>,"recurrence":"<once|monthly>","note":"<note or empty>"}
+
+Rules:
+- This is for planned income/expense, recurring bills, expected income, and this-month budget items. Do NOT return a transaction or debt.
+- Default kind is expense unless income/salary/received is clearly stated.
+- Use recurrence "monthly" only when the user explicitly says it repeats every month. Use "once" for "this month/thang nay" budgets or one-cycle planned income/expense.
+- If no due day is stated, use today's day-of-month.
+- category_hint MUST be copied verbatim from the Available categories list above, or empty.
+- For expense plan items, never use an income category such as Salary, Freelance, Borrowing, or Other Income. If unsure, use Shopping.
+- name and note MUST be copied VERBATIM from the user input when possible.
+- Examples (VND): "tien dien 1tr ngay 10 hang thang" -> amount_cents 1000000, due_day 10, recurrence monthly.`
+
+  try {
+    const raw = await chatCompletion(
+      [
+        {
+          role: 'system',
+          content: `You are a JSON-only monthly finance plan parser. The user writes in ${language}. Always return valid JSON, nothing else.`,
+        },
+        { role: 'user', content },
+      ],
+      { temperature: 0.1, max_tokens: 300 }
+    )
+    const jsonStr = raw.match(/\{[\s\S]*\}/)?.[0]
+    if (!jsonStr) return null
+    const parsed = JSON.parse(jsonStr) as Partial<ParsedPlanItemEntry> & {
+      direction?: 'expense' | 'income'
+      note?: string
+    }
+    const amount = localAmount ?? parsed.amount_cents
+    if (!amount || amount <= 0) return null
+    const kind = parsed.kind ?? (parsed.direction === 'income' ? 'income' : 'expense')
+    return {
+      intent: 'plan_item',
+      amount_cents: amount,
+      kind,
+      name: parsed.name?.trim() || extractPlanNameFromText(text) || text.trim(),
+      category_hint: sanitizeCategoryHintForDirection(kind, parsed.category_hint ?? '', categories),
+      due_day: clampDueDay(parsed.due_day),
+      recurrence: parsed.recurrence === 'monthly' ? 'monthly' : inferPlanRecurrence(text),
       note: parsed.note ?? '',
     }
   } catch {

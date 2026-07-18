@@ -382,3 +382,56 @@ WHERE kind = 'savings'
 -- Remove retired fund columns/tables if they exist from older schema versions.
 ALTER TABLE finance_transaction DROP COLUMN IF EXISTS fund_id;
 DROP TABLE IF EXISTS finance_fund;
+
+-- ─── Managed AI usage quotas ────────────────────────────────────────────────
+-- Edge Functions call this RPC with the user's JWT. The SECURITY DEFINER
+-- function is the only write path; clients cannot read or mutate usage rows.
+CREATE TABLE IF NOT EXISTS ai_usage_hourly (
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('chat', 'transcribe')),
+  bucket_start TIMESTAMPTZ NOT NULL,
+  requests INTEGER NOT NULL DEFAULT 0,
+  units BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, kind, bucket_start)
+);
+
+ALTER TABLE ai_usage_hourly ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION consume_ai_quota(
+  p_kind TEXT,
+  p_units BIGINT,
+  p_request_limit INTEGER,
+  p_unit_limit BIGINT
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  accepted BOOLEAN := FALSE;
+BEGIN
+  IF auth.uid() IS NULL
+     OR p_kind NOT IN ('chat', 'transcribe')
+     OR p_units <= 0
+     OR p_request_limit <= 0
+     OR p_unit_limit <= 0
+     OR p_units > p_unit_limit THEN
+    RETURN FALSE;
+  END IF;
+
+  INSERT INTO ai_usage_hourly (user_id, kind, bucket_start, requests, units)
+  VALUES (auth.uid(), p_kind, date_trunc('hour', now()), 1, p_units)
+  ON CONFLICT (user_id, kind, bucket_start) DO UPDATE
+    SET requests = ai_usage_hourly.requests + 1,
+        units = ai_usage_hourly.units + EXCLUDED.units
+    WHERE ai_usage_hourly.requests < p_request_limit
+      AND ai_usage_hourly.units + EXCLUDED.units <= p_unit_limit
+  RETURNING TRUE INTO accepted;
+
+  RETURN COALESCE(accepted, FALSE);
+END;
+$$;
+
+REVOKE ALL ON ai_usage_hourly FROM anon, authenticated;
+REVOKE ALL ON FUNCTION consume_ai_quota(TEXT, BIGINT, INTEGER, BIGINT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION consume_ai_quota(TEXT, BIGINT, INTEGER, BIGINT) TO authenticated;

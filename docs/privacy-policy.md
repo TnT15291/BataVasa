@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-05-21
+Last updated: 2026-07-18
 
 BataVasa is a personal life organization app for finance tracking, reminders,
 journals, habits, and AI-assisted entry. This policy explains what data the app
@@ -14,14 +14,14 @@ BataVasa stores the data you create in the app, including:
 - Reminders, reminder notes, recurrence, and notification timing
 - Journal entries and optional mood/location metadata
 - Habits and habit completion history
-- App settings such as language, currency, sync toggles, theme, biometric lock,
-  and AI provider selection
+- Goals and AI memory entries that you explicitly create
+- App settings such as language, currency, sync toggles, theme, and biometric lock
 
 ## Local Storage
 
 BataVasa is offline-first. Your app data is stored locally on your device using
-SQLite. Authentication tokens and AI provider API keys are stored using secure
-device storage where available.
+SQLite. Authentication tokens are stored using secure device storage where
+available. AI provider API keys are not stored in the app.
 
 ## Cloud Sync
 
@@ -31,10 +31,16 @@ users can access only their own rows.
 
 ## AI Features
 
-BataVasa can send the text you submit for AI features to your selected AI
-provider, such as OpenAI, Groq, Gemini, or Ollama. The app uses your own provider
-API key when configured. Voice input is transcribed by the configured voice
-provider before the text is parsed into an entry.
+BataVasa sends the text you submit for AI features through authenticated Supabase
+Edge Functions to the AI provider configured by the publisher. Depending on the
+server configuration, that provider may be OpenAI, Groq, Gemini, DeepSeek,
+OpenRouter, or NVIDIA. Voice recordings submitted through voice input are sent
+through an authenticated transcription proxy to OpenAI or Groq.
+
+AI requests are metered per signed-in user to enforce hourly request and payload
+quotas. Usage records contain counters and time buckets, not prompt or journal
+content. Provider processing remains subject to the selected provider's terms
+and privacy practices.
 
 You should not enter highly sensitive secrets into AI prompts. BataVasa avoids
 analytics capture of sensitive content such as amounts, notes, merchant names,
@@ -61,8 +67,10 @@ Analytics events are allow-listed and scrubbed to avoid sensitive user data.
 ## Data Export and Deletion
 
 BataVasa includes per-module Data Management screens where you can export module
-data as JSON or delete data from the device. Cloud deletion follows the sync and
-backend rules configured for your Supabase project.
+data as JSON or delete data from the device. The full backup action currently
+exports a versioned JSON file; importing or restoring that file is not yet
+available. Cloud deletion follows the sync and backend rules configured for your
+Supabase project.
 
 ## Contact
 

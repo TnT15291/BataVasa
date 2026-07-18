@@ -7,6 +7,12 @@
 // Response: { text, segments } | { error }
 
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { consumeQuota } from '../_shared/quota.ts'
+
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024
+const MAX_PROMPT_CHARS = 2_000
+const TRANSCRIBE_REQUESTS_PER_HOUR = 20
+const TRANSCRIBE_BYTES_PER_HOUR = 100 * 1024 * 1024
 
 const OPENAI = {
   endpoint: 'https://api.openai.com/v1/audio/transcriptions',
@@ -30,8 +36,13 @@ Deno.serve(async (req) => {
     if (!(file instanceof File)) {
       return json({ error: 'file required' }, 400)
     }
+    if (file.size <= 0 || file.size > MAX_AUDIO_BYTES) return json({ error: 'audio file too large' }, 413)
     const language = (form.get('language') as string | null)?.slice(0, 2) || 'en'
-    const prompt = (form.get('prompt') as string | null) || ''
+    const prompt = ((form.get('prompt') as string | null) || '').slice(0, MAX_PROMPT_CHARS)
+
+    const quota = await consumeQuota(req, 'transcribe', file.size, TRANSCRIBE_REQUESTS_PER_HOUR, TRANSCRIBE_BYTES_PER_HOUR)
+    if (quota === 'denied') return json({ error: 'Transcription hourly quota exceeded' }, 429)
+    if (quota === 'unavailable') return json({ error: 'AI quota service unavailable' }, 503)
 
     // OpenAI Whisper preferred; Groq fallback.
     const openaiKey = Deno.env.get(OPENAI.keyEnv)
